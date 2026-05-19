@@ -1,8 +1,10 @@
-from flask import Blueprint
+from flask import Blueprint, render_template
+from app.models import Project
 
 main = Blueprint('main', __name__)
 
 @main.route('/')
 def index():
-    return '<h1>Project Tracker is running</h1>'
+    projects = Project.query.all()
+    return render_template('index.html', projects=projects)
 

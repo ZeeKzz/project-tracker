@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Project Tracker{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1>Projects</h1>
+    <p>{{ projects|length }} projects found</p>
+</div>
+
+<table class="project-table">
+    <thead>
+        <tr>
+            <th>Project</th>
+            <th>Client</th>
+            <th>Value</th>
+            <th>Status</th>
+            <th>Deadline</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for project in projects %}
+        <tr>
+            <td>{{ project.name }}</td>
+            <td>{{ project.client }}</td>
+            <td>£{{ "%.2f"|format(project.value) }}</td>
+            <td>
+                <span class="status status-{{ project.status|lower|replace(' ', '-') }}">
+                    {{ project.status }}
+                </span>
+            </td>
+            <td>{{ project.deadline.strftime('%d %b %Y') if project.deadline else '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device, initial-scale=1.0">
+        <title>{% block title %}Project Tracker{% endblock %}</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+
+    </head>
+    <body>
+       
+        <nav class="navbar">
+            <div class="nav-brand">
+                <a href="{{ url_for('main.index') }}">Project Tracker</a>
+            </div>
+
+            <ul class="nav-links">
+                <li><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+                <li><a href="#">Projects</a></li>
+                <li><a href="#">Login</a></li>
+            </ul>
+        </nav>
+
+        <main class = "main-content">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+
+        {% block content %}{% endblock %}
+        </main>
+
+        <footer class="footer">
+            <p>Project Tracker &copy; 2026</p>      
+        </footer>
+
+        <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    </body>
+</html>
