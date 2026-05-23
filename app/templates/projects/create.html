@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}New Project — Project Tracker{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1>New Project</h1>
+    <p>All fields are required unless stated otherwise.</p>
+</div>
+
+<form method="POST" action="{{ url_for('projects.create') }}" enctype="multipart/form-data" class="project-form">
+
+    <div class="form-section">
+        <h2 class="form-section-title">Project Details</h2>
+
+        <div class="form-group">
+            <label for="name">Project Name</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="cs_lead_id">Client Servicing Lead</label>
+                <select id="cs_lead_id" name="cs_lead_id" required>
+                    <option value="">Select CS Lead</option>
+                    {% for user in cs_users %}
+                    <option value="{{ user.id }}">{{ user.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="client">Client</label>
+                <input type="text" id="client" name="client" required>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="scope_id">Scope</label>
+                <select id="scope_id" name="scope_id" required>
+                    <option value="">Select Scope</option>
+                    {% for scope in scopes %}
+                    <option value="{{ scope.id }}">{{ scope.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="job_number">Job Number</label>
+                <input type="text" id="job_number" name="job_number" required>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="form-section-title">Design Requirements</h2>
+
+        <div class="form-group">
+            <label>Design Teams Required</label>
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="design_teams" value="3D">
+                    <span>3D</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="design_teams" value="Graphics">
+                    <span>Graphics</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="design_teams" value="Technical">
+                    <span>Technical</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Importance</label>
+            <div class="radio-group">
+                <label class="radio-label radio-green">
+                    <input type="radio" name="importance" value="low" required>
+                    <span>● Low</span>
+                </label>
+                <label class="radio-label radio-yellow">
+                    <input type="radio" name="importance" value="medium">
+                    <span>● Medium</span>
+                </label>
+                <label class="radio-label radio-red">
+                    <input type="radio" name="importance" value="urgent">
+                    <span>● Urgent</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="form-section-title">Dates & Value</h2>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="design_needed_by">Design Needed By</label>
+                <input type="date" id="design_needed_by" name="design_needed_by" required>
+            </div>
+
+            <div class="form-group">
+                <label for="execution_date">Execution Date</label>
+                <input type="date" id="execution_date" name="execution_date" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="value">Project Value (£)</label>
+            <input type="number" id="value" name="value" step="0.01" min="0" required>
+        </div>
+    </div>
+
+    <div class="form-section">
+        <h2 class="form-section-title">Brief</h2>
+
+        <div class="form-group">
+            <label for="brief_file">Brief File</label>
+            <input type="file" id="brief_file" name="brief_file" required>
+            <small class="form-hint">Any file type accepted. Max 32MB.</small>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <a href="{{ url_for('projects.index') }}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create Project</button>
+    </div>
+
+</form>
+
+{% endblock %}

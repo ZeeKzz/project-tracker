@@ -3,11 +3,14 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from app.models import User
+from app.decorators import role_required
 
 auth = Blueprint('auth', __name__)
 
 
 @auth.route('/register', methods=['GET', 'POST'])
+@login_required
+@role_required('admin')
 def register():
     if request.method == 'POST':
         name = request.form.get('name')
@@ -32,7 +35,7 @@ def register():
         db.session.add(new_user)
         db.session.commit()
 
-        flash('Account created successfully. Please log in.', 'success')
+        flash('Account created successfully.', 'success')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/register.html')

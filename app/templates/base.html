@@ -15,14 +15,26 @@
             </div>
 
             <ul class="nav-links">
-                <li><a href="{{ url_for('main.index') }}">Dashboard</a></li>
-                <li><a href="#">Projects</a></li>
                 {% if current_user.is_authenticated %}
-                    <li><a href="#">{{ current_user.name }}</a></li>
-                    <li><a href="{{ url_for('auth.logout') }}">Logout</a></li>
+
+                  <li><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+              
+                  {% if current_user.role == 'admin' %}
+                    <li><a href="#">Management</a></li>
+                    <li><a href="{{ url_for('auth.register') }}">Register User</a></li>
+                    {% endif %}
+
+                  {% if current_user.role in ['admin', 'cs'] %}
+                    <li><a href="#">CS Dashboard</a></li>
+                    {% endif %}
+
+                  <li><a href="{{ url_for('projects.index') }}">Projects</a></li>
+                  <li><a href="{{ url_for('auth.logout') }}">Logout ({{ current_user.name }})</a></li>
+
                 {% else %}
                     <li><a href="{{ url_for('auth.login') }}">Login</a></li>
-                {% endif %}
+            
+                    {% endif %}
             </ul>
         </nav>
 
