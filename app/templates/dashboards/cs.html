@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Vitamin Helix{% endblock %}
+
+{% block content %}
+
+<div class="page-container">
+
+    <div class="dashboard-header">
+        <h1 class="dashboard-greeting">Welcome, <span>{{ current_user.name.split()[0] }}</span></h1>
+        <div class="dashboard-actions" style="display: flex; gap: 1rem; align-items: center;">
+            <div class="dashboard-toggle">
+                <button type="button" id="btn-my-projects" class="toggle-btn active">My Projects</button>
+                <button type="button" id="btn-all-projects" class="toggle-btn">All Projects</button>
+            </div>
+            <a href="{{ url_for('projects.drafts') }}" class="btn-primary">Add New Project</a>
+        </div>
+    </div>
+
+    <!-- My Projects View - shown by default -->
+    <div id="my-projects-view" class="dashboard-view">
+
+        <div class="dashboard-section">
+            <h2 class="dashboard-section-title">My Projects</h2>
+
+            {% if projects %}
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Project Name</th>
+                            <th>Job Number</th>
+                            <th>Deadline</th>
+                            <th>Teams</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in projects %}
+                        {% set is_overdue = project.design_needed_by < today %} <tr
+                            class="clickable {% if is_overdue %}overdue{% endif %}"
+                            data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                            <td>{{ project.name }}</td>
+                            <td class="mono">{{ project.job_number }}</td>
+                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</td>
+                            <td>
+                                {% for team in project.design_teams_requested.split(',') %}
+                                <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
+                                {% endfor %}
+                            </td>
+                            </tr>
+                            {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">No projects yet. Click "Add New Project" to get started.</p>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- All Projects View - hidden by default -->
+    <div id="all-projects-view" class="dashboard-view hidden">
+
+        <div class="dashboard-section">
+            <h2 class="dashboard-section-title">All Projects</h2>
+
+            {% if all_projects %}
+            {% set current_cs = namespace(id=none) %}
+            {% for project in all_projects %}
+
+            {% if project.cs_lead_id != current_cs.id %}
+            {% set current_cs.id = project.cs_lead_id %}
+            {% if not loop.first %}
+            </tbody>
+            </table>
+        </div>
+        {% endif %}
+        <h3 class="dashboard-section-title" style="margin-top: 1.5rem; font-size: 1rem; color: var(--tangerine);">
+            {{ project.cs_lead.name }}
+        </h3>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Project Name</th>
+                        <th>Job Number</th>
+                        <th>Deadline</th>
+                        <th>Teams</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% endif %}
+
+                    {% set is_overdue = project.design_needed_by < today %} <tr
+                        class="clickable {% if is_overdue %}overdue{% endif %}"
+                        data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                        <td>{{ project.name }}</td>
+                        <td class="mono">{{ project.job_number }}</td>
+                        <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</td>
+                        <td>
+                            {% for team in project.design_teams_requested.split(',') %}
+                            <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
+                            {% endfor %}
+                        </td>
+                        </tr>
+
+                        {% if loop.last %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% endfor %}
+        {% else %}
+        <p class="empty-state">No projects in the system yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+
+</div>
+
+{% endblock %}

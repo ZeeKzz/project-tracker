@@ -1,135 +1,261 @@
 {% extends "base.html" %}
-
-{% block title %}New Project — Project Tracker{% endblock %}
+{% block title %}New Project — Vitamin Helix{% endblock %}
 
 {% block content %}
 
-<div class="page-header">
-    <h1>New Project</h1>
-    <p>All fields are required unless stated otherwise.</p>
+{# Pass customer and deliverable data to JavaScript as JSON #}
+<script>
+    const CUSTOMERS_BY_REGION = {{ customers_by_region | tojson }};
+</script>
+
+<div class="create-page">
+
+    {# ── Sticky Subheader ── #}
+    <div class="create-subheader">
+        <div class="create-subheader-left">
+            <a href="{{ url_for('projects.drafts') }}" class="btn btn--secondary">Back</a>
+        </div>
+        <div class="create-subheader-center">
+            <div class="completion-bar-track">
+                <div class="completion-bar-fill" id="completionBarFill"></div>
+            </div>
+            <span class="completion-label" id="completionLabel">0% Complete</span>
+        </div>
+        <div class="create-subheader-right">
+            <span class="autosave-status" id="autosaveStatus">—</span>
+        </div>
+    </div>
+
+    <div class="create-body">
+        <h2 class="create-section-title" id="pageTitle">Project Brief</h2>
+        {# ── Section 1: Project Basics ── #}
+        <div class="create-section" id="sectionBasics">
+            <h3 class="create-section-heading">Project Basics</h3>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Client / Brand</label>
+                    <select id="client_id" name="client_id" class="form-select">
+                        <option value="">— Select Client —</option>
+                        {% for client in clients %}
+                        <option value="{{ client.id }}" {% if draft and draft.client_id==client.id %}selected{% endif
+                            %}>
+                            {{ client.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn-add-inline" id="btnAddClient">
+                        + Add New Client
+                    </button>
+                    <div class="inline-add-form hidden" id="addClientForm">
+                        <input type="text" id="newClientName" placeholder="Client name" class="form-input">
+                        <button type="button" class="btn btn--primary btn--sm" id="confirmAddClient">Add</button>
+                        <button type="button" class="btn btn--secondary btn--sm" id="cancelAddClient">Cancel</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Project Name</label>
+                    <input type="text" id="project_name" name="project_name" class="form-input"
+                        value="{{ draft.name if draft and draft.name != 'Untitled Draft' else '' }}"
+                        placeholder="e.g. Ariel Summer 2026">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Client Servicing Lead</label>
+                    <select id="cs_lead_id" name="cs_lead_id" class="form-select">
+                        {% for user in cs_users %}
+                        <option value="{{ user.id }}" {% if draft and draft.cs_lead_id==user.id %}selected {% elif
+                            user.id==current_user.id %}selected{% endif %}>
+                            {{ user.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Job Number</label>
+                    <input type="text" id="job_number" name="job_number" class="form-input"
+                        value="{{ draft.job_number if draft and draft.job_number else '' }}"
+                        placeholder="e.g. VIT-2026-001">
+                    <span class="form-hint">Must be unique</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Teams Required</label>
+                <div class="form-check-group">
+                    <label class="form-check">
+                        <input type="checkbox" name="design_teams" value="3D" {% if draft and
+                            draft.design_teams_requested and '3D' in draft.design_teams_requested %} checked{% endif %}>
+                        <span>3D</span>
+                    </label>
+                    <label class="form-check">
+                        <input type="checkbox" name="design_teams" value="2D" {% if draft and
+                            draft.design_teams_requested and '2D' in draft.design_teams_requested %} checked{% endif %}>
+                        <span>2D</span>
+                    </label>
+                    <label class="form-check">
+                        <input type="checkbox" name="design_teams" value="Technical" {% if draft and
+                            draft.design_teams_requested and 'Technical' in draft.design_teams_requested %} checked{%
+                            endif %}>
+                        <span>Technical</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Briefing Date</label>
+                    <input type="date" id="briefing_date" name="briefing_date" class="form-input"
+                        value="{{ draft.briefing_date.isoformat() if draft and draft.briefing_date else '' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">First Output Deadline</label>
+                    <input type="date" id="first_output_deadline" name="first_output_deadline" class="form-input"
+                        value="{{ draft.first_output_deadline.isoformat() if draft and draft.first_output_deadline else '' }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Final Deadline</label>
+                    <input type="date" id="final_deadline" name="final_deadline" class="form-input"
+                        value="{{ draft.design_needed_by.isoformat() if draft and draft.design_needed_by else '' }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Installation Date</label>
+                    <input type="date" id="installation_date" name="installation_date" class="form-input"
+                        value="{{ draft.installation_date.isoformat() if draft and draft.installation_date else '' }}">
+                </div>
+            </div>
+
+        </div>
+        {# ── Section 2: Brief Type Selector ── #}
+        <div class="create-section" id="sectionBriefType">
+            <h3 class="create-section-heading">Brief Type</h3>
+            <p class="create-section-hint">
+                Select the type of brief for this project.
+                You can switch between types at any time — your inputs will be remembered.
+            </p>
+
+            <div class="brief-type-selector">
+                <button type="button" class="brief-type-btn" id="btnCCM" data-type="ccm">
+                    <span class="brief-type-label">C&amp;CM Brief</span>
+                </button>
+                <button type="button" class="brief-type-btn" id="btnStandard" data-type="standard">
+                    <span class="brief-type-label">Standard Brief</span>
+                </button>
+            </div>
+
+            <input type="hidden" id="brief_type" name="brief_type"
+                value="{{ draft.brief_type if draft and draft.brief_type else '' }}">
+        </div>
+
+        {# ── Section 3: C&CM Brief ── #}
+        <div class="create-section hidden" id="sectionCCM">
+            <h3 class="create-section-heading">C&amp;CM Brief</h3>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Urgency</label>
+                    <select id="urgency" name="urgency" class="form-select">
+                        <option value="">— Select —</option>
+                        <option value="normal" {% if draft and draft.urgency=='normal' %}selected{% endif %}>
+                            Normal
+                        </option>
+                        <option value="urgent" {% if draft and draft.urgency=='urgent' %}selected{% endif %}>
+                            Urgent
+                        </option>
+                        <option value="same_day" {% if draft and draft.urgency=='same_day' %}selected{% endif %}>
+                            Same Day
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Required Output</label>
+                    <select id="required_output" name="required_output" class="form-select">
+                        <option value="">— Select —</option>
+                        <option value="presentation" {% if draft and draft.required_output=='presentation' %}selected{%
+                            endif %}>
+                            Presentation
+                        </option>
+                        <option value="artwork" {% if draft and draft.required_output=='artwork' %}selected{% endif %}>
+                            Artwork File
+                        </option>
+                        <option value="technical" {% if draft and draft.required_output=='technical' %}selected{% endif
+                            %}>
+                            Technical Drawing
+                        </option>
+                        <option value="production" {% if draft and draft.required_output=='production' %}selected{%
+                            endif %}>
+                            Production Package
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+
+            <div class="region-btn-group">
+                <button type="button" class="region-btn" id="region_uae" data-region="uae">UAE</button>
+                <button type="button" class="region-btn" id="region_gulf" data-region="gulf">Gulf</button>
+            </div>
+
+
+            <div class="conditional-block hidden" id="blockUAECustomers">
+                <div class="form-group">
+                    <label class="form-label">UAE Customers</label>
+                    <div class="customer-checklist" id="uaeCustomerList">
+                    </div>
+                </div>
+            </div>
+
+            <div class="conditional-block hidden" id="blockGulf">
+                <h4 class="create-subsection-heading">Gulf Details</h4>
+
+                <div class="region-btn-group" id="gulfRegionChecks">
+                    <button type="button" class="region-btn" id="gulf_kuwait" data-country="kuwait">Kuwait</button>
+                    <button type="button" class="region-btn" id="gulf_qatar" data-country="qatar">Qatar</button>
+                    <button type="button" class="region-btn" id="gulf_bahrain" data-country="bahrain">Bahrain</button>
+                    <button type="button" class="region-btn" id="gulf_oman" data-country="oman">Oman</button>
+                </div>
+
+                <div class="gulf-customer-grid" id="gulfCustomerGrid">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Campaign Notes</label>
+                <textarea id="campaign_notes" name="campaign_notes" class="form-textarea" rows="5"
+                    placeholder="Drop any relevant notes from the client meeting here...">{{ draft.campaign_notes if draft and draft.campaign_notes else '' }}</textarea>
+            </div>
+
+        </div>
+
+        {# ── Section 4: Deliverables ── #}
+        <div class="create-section hidden" id="sectionDeliverables">
+            <h3 class="create-section-heading">Deliverables</h3>
+            <p class="create-section-hint">
+                Deliverables are organised per customer.
+                Select customers above to begin adding deliverables.
+            </p>
+            <div id="deliverablesBody">
+            </div>
+        </div>
+
+        {# ── Submit ── #}
+        <div class="create-section" id="sectionSubmit">
+            <div class="form-actions">
+                <button type="button" class="btn btn--primary" id="btnReviewSubmit">
+                    Review &amp; Submit
+                </button>
+            </div>
+        </div>
+
+    </div>
 </div>
-
-<form method="POST" action="{{ url_for('projects.create') }}" enctype="multipart/form-data" class="project-form">
-
-    <div class="form-section">
-        <h2 class="form-section-title">Project Details</h2>
-
-        <div class="form-group">
-            <label for="name">Project Name</label>
-            <input type="text" id="name" name="name" required>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label for="cs_lead_id">Client Servicing Lead</label>
-                <select id="cs_lead_id" name="cs_lead_id" required>
-                    <option value="">Select CS Lead</option>
-                    {% for user in cs_users %}
-                    <option value="{{ user.id }}">{{ user.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="client">Client</label>
-                <input type="text" id="client" name="client" required>
-            </div>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label for="scope_id">Scope</label>
-                <select id="scope_id" name="scope_id" required>
-                    <option value="">Select Scope</option>
-                    {% for scope in scopes %}
-                    <option value="{{ scope.id }}">{{ scope.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="job_number">Job Number</label>
-                <input type="text" id="job_number" name="job_number" required>
-            </div>
-        </div>
-    </div>
-
-    <div class="form-section">
-        <h2 class="form-section-title">Design Requirements</h2>
-
-        <div class="form-group">
-            <label>Design Teams Required</label>
-            <div class="checkbox-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="design_teams" value="3D">
-                    <span>3D</span>
-                </label>
-                <label class="checkbox-label">
-                    <input type="checkbox" name="design_teams" value="Graphics">
-                    <span>Graphics</span>
-                </label>
-                <label class="checkbox-label">
-                    <input type="checkbox" name="design_teams" value="Technical">
-                    <span>Technical</span>
-                </label>
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Importance</label>
-            <div class="radio-group">
-                <label class="radio-label radio-green">
-                    <input type="radio" name="importance" value="low" required>
-                    <span>● Low</span>
-                </label>
-                <label class="radio-label radio-yellow">
-                    <input type="radio" name="importance" value="medium">
-                    <span>● Medium</span>
-                </label>
-                <label class="radio-label radio-red">
-                    <input type="radio" name="importance" value="urgent">
-                    <span>● Urgent</span>
-                </label>
-            </div>
-        </div>
-    </div>
-
-    <div class="form-section">
-        <h2 class="form-section-title">Dates & Value</h2>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label for="design_needed_by">Design Needed By</label>
-                <input type="date" id="design_needed_by" name="design_needed_by" required>
-            </div>
-
-            <div class="form-group">
-                <label for="execution_date">Execution Date</label>
-                <input type="date" id="execution_date" name="execution_date" required>
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label for="value">Project Value (£)</label>
-            <input type="number" id="value" name="value" step="0.01" min="0" required>
-        </div>
-    </div>
-
-    <div class="form-section">
-        <h2 class="form-section-title">Brief</h2>
-
-        <div class="form-group">
-            <label for="brief_file">Brief File</label>
-            <input type="file" id="brief_file" name="brief_file" required>
-            <small class="form-hint">Any file type accepted. Max 32MB.</small>
-        </div>
-    </div>
-
-    <div class="form-actions">
-        <a href="{{ url_for('projects.index') }}" class="btn btn-secondary">Cancel</a>
-        <button type="submit" class="btn btn-primary">Create Project</button>
-    </div>
-
-</form>
 
 {% endblock %}

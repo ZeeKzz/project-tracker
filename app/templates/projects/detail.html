@@ -1,33 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}{{ project.name }} — Project Tracker{% endblock %}
+{% block title %}{{ project.name }} — Vitamin Helix{% endblock %}
 
 {% block content %}
 
-<div class="page-header">
-    <div class="page-header-top">
-        <div>
-            <a href="{{ url_for('projects.index') }}" class="back-link">← Projects</a>
-            <h1>{{ project.name }}</h1>
-            <p>{{ project.client }} · {{ project.job_number }}</p>
-        </div>
-        <span class="status status-{{ project.status|lower|replace(' ', '-') }}">
-            {{ project.status }}
-        </span>
+<div class="page-container">
+
+    <div class="page-header">
+      <h1 class="dashboard-greeting">{{ project.name }}</h1>
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        {% if current_user.role == 'admin' or project.cs_lead_id == current_user.id %}
+            <form method="POST" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
+                <button type="submit" class="btn-danger"
+                    onclick="return confirm('Delete {{ project.name }}? This cannot be undone.')">
+                    Delete Project
+                </button>
+            </form>
+        {% endif %}
+        <a href="{{ url_for('main.index') }}" class="btn-secondary">← Back</a>
+      </div>
     </div>
-</div>
 
-<div class="detail-grid">
-
-    <div class="detail-main">
+    <div class="detail-grid">
 
         <div class="detail-card">
             <h2 class="detail-card-title">Project Information</h2>
-            <div class="detail-fields">
 
+            <div class="detail-fields">
                 <div class="detail-field">
-                    <span class="detail-label">Client</span>
-                    <span class="detail-value">{{ project.client }}</span>
+                    <span class="detail-label">Job Number</span>
+                    <span class="detail-value mono">{{ project.job_number }}</span>
                 </div>
 
                 <div class="detail-field">
@@ -36,165 +38,86 @@
                 </div>
 
                 <div class="detail-field">
-                    <span class="detail-label">Scope</span>
-                    <span class="detail-value">{{ project.scope.name }}</span>
-                </div>
-
-                <div class="detail-field">
-                    <span class="detail-label">Job Number</span>
-                    <span class="detail-value job-number">{{ project.job_number }}</span>
-                </div>
-
-                <div class="detail-field">
-                    <span class="detail-label">Project Value</span>
-                    <span class="detail-value">£{{ "%.2f"|format(project.value) }}</span>
-                </div>
-
-                <div class="detail-field">
-                    <span class="detail-label">Importance</span>
-                    <span class="importance importance-{{ project.importance }}">
-                        {{ project.importance|title }}
-                    </span>
-                </div>
-
-                <div class="detail-field">
-                    <span class="detail-label">Design Teams Requested</span>
-                    <span class="detail-value">
-                        {% for team in project.design_teams_requested.split(',') %}
-                            <span class="team-tag team-{{ team|lower }}">{{ team }}</span>
-                        {% endfor %}
-                    </span>
-                </div>
-
-                <div class="detail-field">
-                   <span class="detail-label">Hours in Design</span>
-                   <span class="detail-value">
-                    {{ "%.1f"|format(calculate_hours(project)) }}h
-                   </span>
+                    <span class="detail-label">Optimal Deadline</span>
+                    <span class="detail-value mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</span>
                 </div>
 
                 <div class="detail-field">
                     <span class="detail-label">Brief File</span>
                     <span class="detail-value">
                         {% if project.brief_file %}
-                            <a href="{{ url_for('projects.download_brief', project_id=project.id) }}">
+                            <a href="{{ url_for('projects.download_brief', project_id=project.id) }}" class="btn-primary">
                                 Download Brief
                             </a>
                         {% else %}
-                            No file uploaded
+                            <span class="muted">No file uploaded</span>
                         {% endif %}
                     </span>
                 </div>
-
             </div>
         </div>
 
         <div class="detail-card">
-            <h2 class="detail-card-title">Dates</h2>
-            <div class="detail-fields">
+            <h2 class="detail-card-title">Assigned Designers</h2>
 
-                <div class="detail-field">
-                    <span class="detail-label">Design Needed By</span>
-                    <span class="detail-value">
-                </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Team</th>
+                            <th>Designer</th>
+                            {% if current_user.role in ['admin', 'team_lead'] %}
+                                <th>Action</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in project.design_teams_requested.split(',') %}
+                            {% set team_name = team.strip() %}
+                            {% set assignment = assignments_by_team.get(team_name) %}
+
+                            <tr>
+                                <td>
+                                    <span class="team-tag team-{{ team_name|lower }}">{{ team_name }}</span>
+                                </td>
+
+                                <td>
+                                    {% if assignment %}
+                                        {{ assignment.designer.name }}
+                                    {% else %}
+                                        <span class="badge badge-rose">Pending</span>
+                                    {% endif %}
+                                </td>
+
+                                {% if current_user.role == 'admin' or (current_user.role == 'team_lead' and current_user.team == team_name) %}
+                                    <td>
+                                        <form method="POST" action="{{ url_for('projects.assign_designers', project_id=project.id) }}" class="inline-form">
+                                            <select name="designer_{{ team_name|lower }}" required>
+                                                <option value="">Select designer</option>
+                                                {% for designer in designers_by_team[team_name] %}
+                                                    <option value="{{ designer.id }}"
+                                                        {{ 'selected' if assignment and assignment.user_id == designer.id }}>
+                                                        {{ designer.name }}
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="submit" class="btn-primary">
+                                                {% if assignment %}Update{% else %}Assign{% endif %}
+                                            </button>
+                                        </form>
+                                    </td>
+                                {% elif current_user.role in ['admin', 'team_lead'] %}
+                                    <td></td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
-         
-        <div class="detail-card">
-            <h2 class="detail-card-title">Status</h2>
 
-            <div class="detail-fields">
-            <div class="detail-field">
-            <span class="detail-label">Current Status</span>
-            <span class="status status-{{ project.status|lower|replace(' ', '-') }}">
-                {{ project.status }}
-            </span>
-            </div>
-
-                {% if current_user.role == 'admin' %}
-                <form method="POST" action="{{ url_for('projects.update_status', project_id=project.id) }}">
-                <div class="form-group">
-                <label for="status">Change Status</label>
-                <select id="status" name="status">
-                    <option value="To be Briefed" {{ 'selected' if project.status == 'To be Briefed' }}>To be Briefed</option>
-                    <option value="Briefed / In Queue" {{ 'selected' if project.status == 'Briefed / In Queue' }}>Briefed / In Queue</option>
-                    <option value="In Progress" {{ 'selected' if project.status == 'In Progress' }}>In Progress</option>
-                    <option value="Internal Review" {{ 'selected' if project.status == 'Internal Review' }}>Internal Review</option>
-                    <option value="Submitted" {{ 'selected' if project.status == 'Submitted' }}>Submitted</option>
-                    <option value="Revision In Queue" {{ 'selected' if project.status == 'Revision In Queue' }}>Revision In Queue</option>
-                    <option value="Revision in Progress" {{ 'selected' if project.status == 'Revision in Progress' }}>Revision in Progress</option>
-                    <option value="Revision Submitted" {{ 'selected' if project.status == 'Revision Submitted' }}>Revision Submitted</option>
-                    <option value="Technical In Queue" {{ 'selected' if project.status == 'Technical In Queue' }}>Technical In Queue</option>
-                    <option value="Technical In Progress" {{ 'selected' if project.status == 'Technical In Progress' }}>Technical In Progress</option>
-                    <option value="Approved" {{ 'selected' if project.status == 'Approved' }}>Approved</option>
-                </select>
-                </div>
-            <button type="submit" class="btn btn-primary">Update Status</button>
-        </form>
-        {% endif %}
-            </div>
-        </div>
-
-        {% if current_user.role == 'admin' %}
-<div class="detail-card">
-    <h2 class="detail-card-title">Designer Assignment</h2>
-
-    <form method="POST" action="{{ url_for('projects.assign_designers', project_id=project.id) }}">
-
-        <div class="form-group">
-            <label for="lead_designer_id">Lead Designer</label>
-            <select id="lead_designer_id" name="lead_designer_id">
-                <option value="">— Unassigned —</option>
-                {% for designer in designers %}
-                <option value="{{ designer.id }}"
-                    {{ 'selected' if project.lead_designer and project.lead_designer.id == designer.id }}>
-                    {{ designer.name }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="detail-field">
-    <span class="detail-label">Assigned Designers</span>
-    <span class="detail-value">
-        {% if project.assigned_designers %}
-            {% for assignment in project.assigned_designers %}
-                <div class="assigned-designer">
-                    <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.team }}</span>
-                    {{ assignment.designer.name }}
-                </div>
-            {% endfor %}
-        {% else %}
-            —
-        {% endif %}
-    </span>
     </div>
 
-        {% for team in project.design_teams_requested.split(',') %}
-        <div class="form-group">
-            <label>{{ team }} Designer</label>
-            <select name="designer_{{ team|lower }}">
-                <option value="">— Unassigned —</option>
-                {% for designer in designers %}
-                <option value="{{ designer.id }}"
-                    {% for assignment in project.assigned_designers %}
-                        {{ 'selected' if assignment.team == team and assignment.user_id == designer.id }}
-                    {% endfor %}>
-                    {{ designer.name }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-        {% endfor %}
-
-        <button type="submit" class="btn btn-primary">Save Assignments</button>
-    </form>
 </div>
-{% endif %}
 
-
-            
-    </div>
-</div>
-               
 {% endblock %}

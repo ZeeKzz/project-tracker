@@ -1,5 +1,5 @@
 from app import create_app, db
-from app.models import User, Project
+from app.models import User, Project, ProjectDesigner, Scope, ProjectReviewer, ProjectApproval
 
 app = create_app()
 

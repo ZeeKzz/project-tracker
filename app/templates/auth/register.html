@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Register — Project Tracker{% endblock %}
+{% block title %}Register — Vitamin Helix{% endblock %}
 
 {% block content %}
 
 <div class="auth-container">
     <div class="auth-card">
-        <h1>Create account</h1>
+
+        <h1 class="auth-title">Create Account</h1>
         <p class="auth-subtitle">Register a new team member</p>
 
         <form method="POST" action="{{ url_for('auth.register') }}">
@@ -27,19 +28,29 @@
 
             <div class="form-group">
                 <label for="role">Role</label>
-                <select id="role" name="role">
-                    <option value="designer">Designer</option>
+                <select id="role" name="role" required>
+                    <option value="">Select Role</option>
                     <option value="cs">Client Servicing</option>
+                    <option value="designer">Designer</option>
+                    <option value="team_lead">Team Lead</option>
+                    <option value="management">Management</option>
                     <option value="admin">Admin</option>
                 </select>
             </div>
 
-            <button type="submit" class="btn btn-primary">Create Account</button>
+            <div class="form-group hidden" id="team-group">
+                <label for="team">Team</label>
+                <select id="team" name="team">
+                    <option value="">Select Team</option>
+                    <option value="3D">3D</option>
+                    <option value="2D">2D</option>
+                    <option value="Technical">Technical</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn-primary" style="width: 100%;">Create Account</button>
         </form>
 
-        <p class="auth-footer">
-            Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a>
-        </p>
     </div>
 </div>
 
