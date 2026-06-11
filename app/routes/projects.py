@@ -20,7 +20,7 @@ projects = Blueprint('projects', __name__)
 @role_required('admin', 'cs')
 def create():
     cs_users = User.query.filter(
-        User.role.in_(['cs', 'admin'])  
+        User.role.in_(['cs'])  
     ).order_by(User.name).all()
 
     clients = Client.query.order_by(Client.name).all()

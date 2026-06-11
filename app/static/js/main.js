@@ -246,6 +246,53 @@ if (draftItems.length > 0) {
 
 }
 
+// ── Toast Notifications ──────────────────────────────────────
+function showToast(message, type) {
+    var existing = document.getElementById('helixToast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.id = 'helixToast';
+    toast.textContent = message;
+
+    toast.style.position = 'fixed';
+    toast.style.top = '24px';
+    toast.style.right = '0';
+    toast.style.zIndex = '9999';
+    toast.style.padding = '16px 24px';
+    toast.style.borderRadius = '6px 0 0 6px';
+    toast.style.fontSize = '0.9rem';
+    toast.style.fontFamily = 'var(--font-sans)';
+    toast.style.boxShadow = '-4px 4px 16px rgba(0,0,0,0.12)';
+    toast.style.borderLeft = '5px solid var(--tangerine)';
+    toast.style.transform = 'translateX(110%)';
+    toast.style.transition = 'transform 0.35s ease';
+    toast.style.maxWidth = '320px';
+
+    if (type === 'success') {
+        toast.style.backgroundColor = 'var(--pine)';
+        toast.style.color = '#ffffff';
+    } else {
+        toast.style.backgroundColor = 'var(--rose)';
+        toast.style.color = '#1a1a1a';
+    }
+
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+            toast.style.transform = 'translateX(0)';
+        });
+    });
+
+    setTimeout(function () {
+        toast.style.transform = 'translateX(110%)';
+        setTimeout(function () {
+            toast.remove();
+        }, 350);
+    }, 5000);
+}
+
 // ============================================================
 // CREATE PROJECT PAGE
 // ============================================================
@@ -258,6 +305,8 @@ if (document.getElementById('sectionBasics')) {
     const briefSavedState = {};
 
     // ── Completion Bar ───────────────────────────────────────
+    var currentCompletion = 0;
+
     function calculateCompletion() {
         let score = 0;
 
@@ -283,7 +332,7 @@ if (document.getElementById('sectionBasics')) {
             var ccmChecks = [
                 function () { return document.getElementById('urgency').value !== ''; },
                 function () { return document.getElementById('required_output').value !== ''; },
-                function () { return document.querySelector('#region_uae:checked, #region_gulf:checked') !== null; },
+                function () { return document.querySelector('.region-btn[data-region].active') !== null; },
                 function () { return document.querySelectorAll('.customer-pill.selected').length > 0; },
                 function () { return document.getElementById('campaign_notes').value.trim() !== ''; },
                 function () { return document.querySelectorAll('.deliverable-row').length > 0; },
@@ -297,6 +346,7 @@ if (document.getElementById('sectionBasics')) {
         var pct = Math.min(Math.round(score), 100);
         document.getElementById('completionBarFill').style.width = pct + '%';
         document.getElementById('completionLabel').textContent = pct + '% Complete';
+        currentCompletion = pct;
     }
 
     // ── Brief Type Switcher ──────────────────────────────────
@@ -460,7 +510,6 @@ if (document.getElementById('sectionBasics')) {
 
     // ── Deliverable Blocks ───────────────────────────────────
     function addDeliverableBlock(customerId, customerName, region) {
-        console.log('addDeliverableBlock called', customerId, customerName, region);
         var body = document.getElementById('deliverablesBody');
         if (body.querySelector('[data-customer-id="' + customerId + '"]')) return;
 
@@ -854,6 +903,95 @@ if (document.getElementById('sectionBasics')) {
         });
     }
 
+    // ── Submit Form ────────────────────────────────────────
+    function showSubmitBlockedMessage() {
+        showToast('Please complete all required fields before submitting.', 'error');
+
+    }
+
+
+
+    function openReviewModal() {
+        // ── Populate meta fields ─────────────────────────────
+        var projectName = document.getElementById('project_name').value.trim();
+        var jobNumber = document.getElementById('job_number').value.trim();
+        var csLeadSelect = document.getElementById('cs_lead_id');
+        var csLeadText = csLeadSelect.options[csLeadSelect.selectedIndex].text;
+        var briefType = document.getElementById('brief_type').value;
+
+        document.getElementById('reviewProjectName').textContent = projectName;
+        document.getElementById('reviewJobNumber').textContent = jobNumber;
+        document.getElementById('reviewCSLead').textContent = csLeadText;
+        document.getElementById('reviewBriefType').textContent = briefType === 'ccm' ? 'C&CM' : 'Standard';
+
+        // ── Populate deliverables list ───────────────────────
+        var list = document.getElementById('reviewDeliverablesList');
+        list.innerHTML = '';
+
+        var regionSections = document.querySelectorAll('.deliverables-region-section');
+
+        regionSections.forEach(function (regionSection) {
+            var region = regionSection.dataset.region;
+
+            var regionHeading = document.createElement('div');
+            regionHeading.className = 'review-region-heading';
+            regionHeading.textContent = region === 'uae' ? 'UAE' : region.charAt(0).toUpperCase() + region.slice(1);
+            list.appendChild(regionHeading);
+
+            var customerBlocks = regionSection.querySelectorAll('.deliverables-customer-block');
+
+            customerBlocks.forEach(function (block) {
+                var customerName = block.querySelector('.deliverables-customer-heading').textContent;
+
+                var customerItem = document.createElement('div');
+                customerItem.className = 'review-customer-item';
+
+                var customerNameEl = document.createElement('div');
+                customerNameEl.className = 'review-customer-name';
+                customerNameEl.textContent = customerName;
+                customerItem.appendChild(customerNameEl);
+
+                var deliverableRows = block.querySelectorAll('.deliverable-row');
+
+                deliverableRows.forEach(function (row) {
+
+                    var name = row.dataset.name;
+                    var disciplines = row.querySelectorAll('.discipline-tag');
+
+                    var deliverableRow = document.createElement('div');
+                    deliverableRow.className = 'review-deliverable-row';
+
+                    var nameSpan = document.createElement('span');
+                    nameSpan.textContent = name;
+                    deliverableRow.appendChild(nameSpan);
+
+                    disciplines.forEach(function (tag) {
+
+                        var tagClone = tag.cloneNode(true);
+                        deliverableRow.appendChild(tagClone);
+
+                    });
+
+                    customerItem.appendChild(deliverableRow);
+                });
+
+                list.appendChild(customerItem);
+            });
+
+
+        });
+
+        // ── Show modal ───────────────────────────────────────
+        document.getElementById('reviewModalOverlay').classList.remove('hidden');
+
+    }
+
+
+
+
+
+
+
     // ── Event Listeners ──────────────────────────────────────
 
     document.querySelectorAll('.brief-type-btn').forEach(function (btn) {
@@ -916,28 +1054,47 @@ if (document.getElementById('sectionBasics')) {
         });
     }
 
-    var submitBtn = document.getElementById('btnReviewSubmit');
-    if (submitBtn) {
-        submitBtn.addEventListener('click', function () {
-            autosave();
-            alert('Review & Submit — coming next!');
+
+    var btnReviewSubmit = document.getElementById('btnReviewSubmit')
+    if (btnReviewSubmit) {
+        btnReviewSubmit.addEventListener('click', function () {
+            if (currentCompletion < 100) {
+                showSubmitBlockedMessage();
+            } else {
+                openReviewModal();
+            }
         });
     }
 
-    // ── Initialise ───────────────────────────────────────────
-
-    setupAddClient();
-
-    var urlParams = new URLSearchParams(window.location.search);
-    var draftIdParam = urlParams.get('draft_id');
-    if (draftIdParam) {
-        currentDraftId = parseInt(draftIdParam);
-        var briefTypeEl = document.getElementById('brief_type');
-        if (briefTypeEl && briefTypeEl.value) {
-            switchBriefType(briefTypeEl.value);
-        }
+    var reviewModalClose = document.getElementById('reviewModalClose');
+    if (reviewModalClose) {
+        reviewModalClose.addEventListener('click', function () {
+            document.getElementById('reviewModalOverlay').classList.add('hidden');
+        });
     }
 
-    calculateCompletion();
+    var reviewModalCancel = document.getElementById('reviewModalCancel');
+    if (reviewModalCancel) {
+        reviewModalCancel.addEventListener('click', function () {
+            document.getElementById('reviewModalOverlay').classList.add('hidden');
+        });
+    }
 
 }
+
+// ── Initialise ───────────────────────────────────────────
+
+setupAddClient();
+
+var urlParams = new URLSearchParams(window.location.search);
+var draftIdParam = urlParams.get('draft_id');
+if (draftIdParam) {
+    currentDraftId = parseInt(draftIdParam);
+    var briefTypeEl = document.getElementById('brief_type');
+    if (briefTypeEl && briefTypeEl.value) {
+        switchBriefType(briefTypeEl.value);
+    }
+}
+
+calculateCompletion();
+

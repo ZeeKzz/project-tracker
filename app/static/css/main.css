@@ -1801,3 +1801,140 @@ textarea {
     padding-bottom: 8px;
     border-bottom: 1px solid #ede8e0;
 }
+
+/* ── Section 17: Review Modal ─────────────────────────── */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(245, 240, 232, 0.85);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.hidden {
+    display: none !important;
+}
+
+.modal--review {
+    background: #ffffff;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+}
+
+.modal-title {
+    font-family: var(--font-heading);
+    font-size: 1.4rem;
+    color: var(--ink);
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    color: var(--ink);
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.modal-close:hover {
+    opacity: 1;
+}
+
+.modal-section {
+    padding: 16px 24px;
+}
+
+.modal-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.08);
+    margin: 0 24px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+}
+
+.review-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 24px;
+}
+
+.review-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.review-meta-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink);
+    opacity: 0.5;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.review-meta-value {
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    color: var(--ink);
+}
+
+.review-region-heading {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    color: var(--tangerine);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 8px 0;
+}
+
+.review-customer-item {
+    margin-bottom: 12px;
+    padding-left: 12px;
+    border-left: 2px solid var(--sandstone);
+}
+
+.review-customer-name {
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: var(--ink);
+    margin-bottom: 4px;
+}
+
+.review-deliverable-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--ink);
+    opacity: 0.8;
+}

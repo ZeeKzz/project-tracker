@@ -256,6 +256,52 @@
         </div>
 
     </div>
+
+    {# ── Review & Submit Modal ── #}
+    <div id="reviewModalOverlay" class="modal-overlay hidden">
+        <div class="modal modal--review">
+
+            <div class="modal-header">
+                <h2 class="modal-title">Review & Submit</h2>
+                <button type="button" class="modal-close" id="reviewModalClose">&times;</button>
+            </div>
+
+            <div class="modal-section">
+                <div class="review-meta-grid">
+                    <div class="review-meta-item">
+                        <span class="review-meta-label">Project Name</span>
+                        <span class="review-meta-value" id="reviewProjectName">—</span>
+                    </div>
+                    <div class="review-meta-item">
+                        <span class="review-meta-label">Job Number</span>
+                        <span class="review-meta-value" id="reviewJobNumber">—</span>
+                    </div>
+                    <div class="review-meta-item">
+                        <span class="review-meta-label">CS Lead</span>
+                        <span class="review-meta-value" id="reviewCSLead">—</span>
+                    </div>
+                    <div class="review-meta-item">
+                        <span class="review-meta-label">Brief Type</span>
+                        <span class="review-meta-value" id="reviewBriefType">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-divider"></div>
+
+            <div class="modal-section">
+                <div id="reviewDeliverablesList"></div>
+            </div>
+
+            <div class="modal-divider"></div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn--secondary" id="reviewModalCancel">Cancel</button>
+                <button type="button" class="btn btn--primary" id="btnSubmitBrief">Submit Brief</button>
+            </div>
+
+        </div>
+    </div>
 </div>
 
 {% endblock %}
