@@ -77,7 +77,7 @@ def autosave():
             name=data.get('name', '').strip() or 'Untitled Draft',
             client='TBD',
             cs_lead_id=int(data['cs_lead_id']) if data.get('cs_lead_id') else current_user.id,
-            created_by=current_user,
+            creator=current_user,
             project_status='draft',
             scope_id=default_scope.id if default_scope else 1
         )
@@ -422,7 +422,144 @@ def add_deliverable_type():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
+    
 
+@projects.route('/projects/submit', methods=['POST'])
+@login_required
+@role_required('cs', 'admin')
+def submit_project():
+    try:
+        data = request.get_json()
 
+        print(f"Draft ID received: {data.get('draft_id')}")
+        print(f"Current user ID: {current_user.id}")
 
+        # ── Basic validation ─────────────────────────────────
+        required_fields = ['name', 'client_id', 'cs_lead_id', 'job_number',
+                           'brief_type', 'regions', 'deliverables']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        # ── Parse dates ──────────────────────────────────────
+        from datetime import datetime
+        def parse_date(val):
+            if not val:
+                return None
+            try:
+                return datetime.strptime(val, '%Y-%m-%d').date()
+            except ValueError:
+                return None
+
+        # ── Promote draft to active, or create fresh ─────────
+        draft_id = data.get('draft_id')
+        project = None
+
+        if draft_id:
+            candidate = Project.query.get(int(draft_id))
+            if candidate and candidate.created_by_id == current_user.id and candidate.project_status == 'draft':
+                project = candidate
+
+        if not project:
+            project = Project(creator=current_user)
+            db.session.add(project)
+
+        project.name = data['name']
+        project.client_id = int(data['client_id'])
+        project.cs_lead_id = int(data['cs_lead_id'])
+        project.job_number = data['job_number']
+        project.design_teams_requested = ','.join(data.get('design_teams', []))
+        project.brief_type = data['brief_type']
+        project.project_status = 'active'
+        project.urgency = data.get('urgency')
+        project.required_output = data.get('required_output')
+        project.campaign_notes = data.get('campaign_notes')
+        project.briefing_date = parse_date(data.get('briefing_date'))
+        project.first_output_deadline = parse_date(data.get('first_output_deadline'))
+        project.execution_date = parse_date(data.get('final_deadline'))
+        project.installation_date = parse_date(data.get('installation_date'))
+
+        db.session.flush()
+
+        # ── Create regions ───────────────────────────────────
+        ProjectRegion.query.filter_by(project_id=project.id).delete()
+        for region_name in data['regions']:
+            region = ProjectRegion(
+                project_id=project.id,
+                region=region_name
+            )
+            db.session.add(region)
+
+        # ── Create customers and deliverables ────────────────
+        for pc in ProjectCustomer.query.filter_by(project_id=project.id).all():
+            db.session.delete(pc)
+        db.session.flush()
+
+        customer_map = {}
+        for item in data['deliverables']:
+            customer_id = int(item['customer_id'])
+
+            if customer_id not in customer_map:
+                project_customer = ProjectCustomer(
+                    project_id=project.id,
+                    customer_id=customer_id
+                )
+                db.session.add(project_customer)
+                db.session.flush()
+                customer_map[customer_id] = project_customer.id
+
+            deliverable = Deliverable(
+                project_id=project.id,
+                project_customer_id=customer_map[customer_id],
+                deliverable_type_id=int(item['type_id']) if item.get('type_id') and item['type_id'] != 'custom' else None,
+                name=item['name'],
+                created_by=current_user
+            )
+            db.session.add(deliverable)
+
+        db.session.commit()
+
+        # ── Notifications ────────────────────────────────────
+        selected_cs_id = int(data['cs_lead_id'])
+        if selected_cs_id != current_user.id:
+            cs_lead = User.query.get(selected_cs_id)
+            if cs_lead:
+                create_notification(
+                    recipient=cs_lead,
+                    message=f'You have been assigned as CS Lead on "{project.name}".',
+                    notif_type='project_assigned',
+                    project=project,
+                    triggered_by=current_user
+                )
+
+        disciplines_used = set()
+        for item in data['deliverables']:
+            if item.get('type_id') and item['type_id'] != 'custom':
+                dt = DeliverableType.query.get(int(item['type_id']))
+                if dt:
+                    for d in dt.disciplines:
+                        disciplines_used.add(d.team)
+
+        team_leads = User.query.filter_by(role='team_lead').all()
+        for lead in team_leads:
+            if lead.team in disciplines_used:
+                create_notification(
+                    recipient=lead,
+                    message=f'New project "{project.name}" requires your team. Please assign designers.',
+                    notif_type='project_assigned',
+                    project=project,
+                    triggered_by=current_user
+                )
+
+        return jsonify({
+            'success': True,
+            'project_id': project.id,
+            'redirect_url': '/'
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Something went wrong. Please try again.'}), 500
 

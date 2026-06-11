@@ -159,7 +159,6 @@ if (draftItems.length > 0) {
     let pendingDeleteId = null;
     let pendingDeleteRow = null;
 
-    // Click on draft item — toggle active, close others
     draftItems.forEach(function (item) {
         item.addEventListener('click', function () {
             const isActive = this.classList.contains('active');
@@ -170,14 +169,12 @@ if (draftItems.length > 0) {
         });
     });
 
-    // Click outside any draft item — close all
     document.addEventListener('click', function (e) {
         if (!e.target.closest('.draft-item')) {
             draftItems.forEach(function (i) { i.classList.remove('active'); });
         }
     });
 
-    // Delete button — store target, show confirm overlay
     document.querySelectorAll('.draft-delete-btn').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
@@ -189,7 +186,6 @@ if (draftItems.length > 0) {
         });
     });
 
-    // Confirm yes — POST to delete endpoint, animate row out
     if (draftConfirmYes) {
         draftConfirmYes.addEventListener('click', function () {
             if (!pendingDeleteId) return;
@@ -233,7 +229,6 @@ if (draftItems.length > 0) {
         });
     }
 
-    // Confirm cancel — hide overlay, clear pending state
     if (draftConfirmCancel) {
         draftConfirmCancel.addEventListener('click', function () {
             if (draftConfirmOverlay) {
@@ -569,7 +564,7 @@ if (document.getElementById('sectionBasics')) {
     }
 
     // ── Deliverable Selector ─────────────────────────────────
-    function fetchAndShowDeliverableSelector(customerId, clientId, types) {
+    function fetchAndShowDeliverableSelector(customerId) {
         var clientId = document.getElementById('client_id').value;
         fetch('/projects/deliverable-types/' + customerId + '?client_id=' + clientId)
             .then(function (res) { return res.json(); })
@@ -903,16 +898,12 @@ if (document.getElementById('sectionBasics')) {
         });
     }
 
-    // ── Submit Form ────────────────────────────────────────
+    // ── Submit Form ───────────────────────────────────────────
     function showSubmitBlockedMessage() {
         showToast('Please complete all required fields before submitting.', 'error');
-
     }
 
-
-
     function openReviewModal() {
-        // ── Populate meta fields ─────────────────────────────
         var projectName = document.getElementById('project_name').value.trim();
         var jobNumber = document.getElementById('job_number').value.trim();
         var csLeadSelect = document.getElementById('cs_lead_id');
@@ -924,7 +915,6 @@ if (document.getElementById('sectionBasics')) {
         document.getElementById('reviewCSLead').textContent = csLeadText;
         document.getElementById('reviewBriefType').textContent = briefType === 'ccm' ? 'C&CM' : 'Standard';
 
-        // ── Populate deliverables list ───────────────────────
         var list = document.getElementById('reviewDeliverablesList');
         list.innerHTML = '';
 
@@ -935,7 +925,8 @@ if (document.getElementById('sectionBasics')) {
 
             var regionHeading = document.createElement('div');
             regionHeading.className = 'review-region-heading';
-            regionHeading.textContent = region === 'uae' ? 'UAE' : region.charAt(0).toUpperCase() + region.slice(1);
+            regionHeading.textContent = region === 'uae' ? 'UAE' :
+                region.charAt(0).toUpperCase() + region.slice(1);
             list.appendChild(regionHeading);
 
             var customerBlocks = regionSection.querySelectorAll('.deliverables-customer-block');
@@ -954,7 +945,6 @@ if (document.getElementById('sectionBasics')) {
                 var deliverableRows = block.querySelectorAll('.deliverable-row');
 
                 deliverableRows.forEach(function (row) {
-
                     var name = row.dataset.name;
                     var disciplines = row.querySelectorAll('.discipline-tag');
 
@@ -966,10 +956,8 @@ if (document.getElementById('sectionBasics')) {
                     deliverableRow.appendChild(nameSpan);
 
                     disciplines.forEach(function (tag) {
-
                         var tagClone = tag.cloneNode(true);
                         deliverableRow.appendChild(tagClone);
-
                     });
 
                     customerItem.appendChild(deliverableRow);
@@ -977,20 +965,10 @@ if (document.getElementById('sectionBasics')) {
 
                 list.appendChild(customerItem);
             });
-
-
         });
 
-        // ── Show modal ───────────────────────────────────────
         document.getElementById('reviewModalOverlay').classList.remove('hidden');
-
     }
-
-
-
-
-
-
 
     // ── Event Listeners ──────────────────────────────────────
 
@@ -1054,8 +1032,7 @@ if (document.getElementById('sectionBasics')) {
         });
     }
 
-
-    var btnReviewSubmit = document.getElementById('btnReviewSubmit')
+    var btnReviewSubmit = document.getElementById('btnReviewSubmit');
     if (btnReviewSubmit) {
         btnReviewSubmit.addEventListener('click', function () {
             if (currentCompletion < 100) {
@@ -1080,21 +1057,83 @@ if (document.getElementById('sectionBasics')) {
         });
     }
 
-}
+    var btnSubmitBrief = document.getElementById('btnSubmitBrief');
+    if (btnSubmitBrief) {
+        btnSubmitBrief.addEventListener('click', function () {
+            btnSubmitBrief.disabled = true;
+            btnSubmitBrief.textContent = 'Submitting...';
 
-// ── Initialise ───────────────────────────────────────────
+            var formData = collectFormData();
 
-setupAddClient();
+            var regions = Array.from(
+                document.querySelectorAll('.region-btn[data-region].active')
+            ).map(function (btn) { return btn.dataset.region; });
 
-var urlParams = new URLSearchParams(window.location.search);
-var draftIdParam = urlParams.get('draft_id');
-if (draftIdParam) {
-    currentDraftId = parseInt(draftIdParam);
-    var briefTypeEl = document.getElementById('brief_type');
-    if (briefTypeEl && briefTypeEl.value) {
-        switchBriefType(briefTypeEl.value);
+            var deliverables = [];
+            document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
+                var customerId = block.dataset.customerId;
+                var regionSection = block.closest('.deliverables-region-section');
+                var region = regionSection.dataset.region;
+
+                block.querySelectorAll('.deliverable-row').forEach(function (row) {
+                    deliverables.push({
+                        customer_id: customerId,
+                        region: region,
+                        type_id: row.dataset.typeId,
+                        name: row.dataset.name
+                    });
+                });
+            });
+
+            var payload = Object.assign({}, formData, {
+                regions: regions,
+                deliverables: deliverables
+            });
+
+            fetch('/projects/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data.error) {
+                        showToast(data.error, 'error');
+                        btnSubmitBrief.disabled = false;
+                        btnSubmitBrief.textContent = 'Submit Brief';
+                        return;
+                    }
+                    clearTimeout(autosaveTimeout);
+                    window.location.href = data.redirect_url + '?toast=Project+submitted+successfully';
+                })
+                .catch(function () {
+                    showToast('Something went wrong. Please try again.', 'error');
+                    btnSubmitBrief.disabled = false;
+                    btnSubmitBrief.textContent = 'Submit Brief';
+                });
+        });
     }
+
+    // ── Initialise ───────────────────────────────────────────
+    setupAddClient();
+
+    var urlParams = new URLSearchParams(window.location.search);
+    var draftIdParam = urlParams.get('draft_id');
+    if (draftIdParam) {
+        currentDraftId = parseInt(draftIdParam);
+        var briefTypeEl = document.getElementById('brief_type');
+        if (briefTypeEl && briefTypeEl.value) {
+            switchBriefType(briefTypeEl.value);
+        }
+    }
+
+    calculateCompletion();
+
+} // end sectionBasics wrapper
+
+// ── Post-redirect Toast ──────────────────────────────────────
+var urlParams = new URLSearchParams(window.location.search);
+var toastMsg = urlParams.get('toast');
+if (toastMsg) {
+    showToast(decodeURIComponent(toastMsg), 'success');
 }
-
-calculateCompletion();
-

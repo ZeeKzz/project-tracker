@@ -35,11 +35,11 @@
         <tr class="clickable-row" data-href="{{ url_for('projects.detail', project_id=project.id) }}">
             <td class="job-number">{{ project.job_number }}</td>
             <td><strong>{{ project.name }}</strong></td>
-            <td>{{ project.client }}</td>
+            <td>{{ project.client_brand }}</td>
             <td>{{ project.cs_lead.name }}</td>
             <td>
                 {% for team in project.design_teams_requested.split(',') %}
-                    <span class="team-tag team-{{ team|lower }}">{{ team }}</span>
+                <span class="team-tag team-{{ team|lower }}">{{ team }}</span>
                 {% endfor %}
             </td>
             <td>

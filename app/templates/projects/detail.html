@@ -7,18 +7,18 @@
 <div class="page-container">
 
     <div class="page-header">
-      <h1 class="dashboard-greeting">{{ project.name }}</h1>
-      <div style="display: flex; gap: 0.75rem; align-items: center;">
-        {% if current_user.role == 'admin' or project.cs_lead_id == current_user.id %}
+        <h1 class="dashboard-greeting">{{ project.name }}</h1>
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+            {% if current_user.role == 'admin' or project.cs_lead_id == current_user.id %}
             <form method="POST" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
                 <button type="submit" class="btn-danger"
                     onclick="return confirm('Delete {{ project.name }}? This cannot be undone.')">
                     Delete Project
                 </button>
             </form>
-        {% endif %}
-        <a href="{{ url_for('main.index') }}" class="btn-secondary">← Back</a>
-      </div>
+            {% endif %}
+            <a href="{{ url_for('main.index') }}" class="btn-secondary">← Back</a>
+        </div>
     </div>
 
     <div class="detail-grid">
@@ -39,18 +39,19 @@
 
                 <div class="detail-field">
                     <span class="detail-label">Optimal Deadline</span>
-                    <span class="detail-value mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</span>
+                    <span class="detail-value mono">{{ project.design_needed_by.strftime('%d %b %Y') if
+                        project.design_needed_by else '—' }}</span>
                 </div>
 
                 <div class="detail-field">
                     <span class="detail-label">Brief File</span>
                     <span class="detail-value">
                         {% if project.brief_file %}
-                            <a href="{{ url_for('projects.download_brief', project_id=project.id) }}" class="btn-primary">
-                                Download Brief
-                            </a>
+                        <a href="{{ url_for('projects.download_brief', project_id=project.id) }}" class="btn-primary">
+                            Download Brief
+                        </a>
                         {% else %}
-                            <span class="muted">No file uploaded</span>
+                        <span class="muted">No file uploaded</span>
                         {% endif %}
                     </span>
                 </div>
@@ -67,49 +68,52 @@
                             <th>Team</th>
                             <th>Designer</th>
                             {% if current_user.role in ['admin', 'team_lead'] %}
-                                <th>Action</th>
+                            <th>Action</th>
                             {% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for team in project.design_teams_requested.split(',') %}
-                            {% set team_name = team.strip() %}
-                            {% set assignment = assignments_by_team.get(team_name) %}
+                        {% set team_name = team.strip() %}
+                        {% set assignment = assignments_by_team.get(team_name) %}
 
-                            <tr>
-                                <td>
-                                    <span class="team-tag team-{{ team_name|lower }}">{{ team_name }}</span>
-                                </td>
+                        <tr>
+                            <td>
+                                <span class="team-tag team-{{ team_name|lower }}">{{ team_name }}</span>
+                            </td>
 
-                                <td>
-                                    {% if assignment %}
-                                        {{ assignment.designer.name }}
-                                    {% else %}
-                                        <span class="badge badge-rose">Pending</span>
-                                    {% endif %}
-                                </td>
-
-                                {% if current_user.role == 'admin' or (current_user.role == 'team_lead' and current_user.team == team_name) %}
-                                    <td>
-                                        <form method="POST" action="{{ url_for('projects.assign_designers', project_id=project.id) }}" class="inline-form">
-                                            <select name="designer_{{ team_name|lower }}" required>
-                                                <option value="">Select designer</option>
-                                                {% for designer in designers_by_team[team_name] %}
-                                                    <option value="{{ designer.id }}"
-                                                        {{ 'selected' if assignment and assignment.user_id == designer.id }}>
-                                                        {{ designer.name }}
-                                                    </option>
-                                                {% endfor %}
-                                            </select>
-                                            <button type="submit" class="btn-primary">
-                                                {% if assignment %}Update{% else %}Assign{% endif %}
-                                            </button>
-                                        </form>
-                                    </td>
-                                {% elif current_user.role in ['admin', 'team_lead'] %}
-                                    <td></td>
+                            <td>
+                                {% if assignment %}
+                                {{ assignment.designer.name }}
+                                {% else %}
+                                <span class="badge badge-rose">Pending</span>
                                 {% endif %}
-                            </tr>
+                            </td>
+
+                            {% if current_user.role == 'admin' or (current_user.role == 'team_lead' and
+                            current_user.team == team_name) %}
+                            <td>
+                                <form method="POST"
+                                    action="{{ url_for('projects.assign_designers', project_id=project.id) }}"
+                                    class="inline-form">
+                                    <select name="designer_{{ team_name|lower }}" required>
+                                        <option value="">Select designer</option>
+                                        {% for designer in designers_by_team[team_name] %}
+                                        <option value="{{ designer.id }}" {{ 'selected' if assignment and
+                                            assignment.user_id==designer.id }}>
+                                            {{ designer.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn-primary">
+                                        {% if assignment %}Update{% else %}Assign{% endif %}
+                                    </button>
+                                </form>
+                            </td>
+                            {% elif current_user.role in ['admin', 'team_lead'] %}
+                            <td></td>
+                            {% endif %}
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>

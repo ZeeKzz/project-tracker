@@ -70,8 +70,8 @@ class Project(db.Model):
     # Required Fields - set on creation
     name = db.Column(db.String(200), nullable=False)
     cs_lead_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    client = db.Column(db.String(200), nullable=False)
-    scope_id = db.Column(db.Integer, db.ForeignKey('scopes.id'), nullable=False)
+    client = db.Column(db.String(200), nullable=True)
+    scope_id = db.Column(db.Integer, db.ForeignKey('scopes.id'), nullable=True)
     design_teams_requested = db.Column(db.String(200), nullable=True)
     importance = db.Column(db.String(20), nullable=True)
     design_needed_by = db.Column(db.Date, nullable=True)
@@ -110,7 +110,11 @@ class Project(db.Model):
     lead_designer = db.relationship('User', foreign_keys=[lead_designer_id])
     scope = db.relationship('Scope', backref='projects')
     assigned_designers = db.relationship('ProjectDesigner', backref='project', cascade='all, delete-orphan')
-    client = db.relationship('Client', foreign_keys=[client_id])
+    client_brand = db.relationship('Client', foreign_keys=[client_id])
+    project_customers = db.relationship('ProjectCustomer', backref='project_ref', cascade='all, delete-orphan')
+    project_regions = db.relationship('ProjectRegion', backref='project_region_ref', cascade='all, delete-orphan')
+    project_deliverables = db.relationship('Deliverable', backref='project_ref', cascade='all, delete-orphan')
+    
 
     def __repr__(self):
         return f'<Project {self.name}>'
@@ -224,7 +228,7 @@ class ProjectCustomer(db.Model):
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    project = db.relationship('Project', backref='project_customers')
+    project = db.relationship('Project')
     customer = db.relationship('Customer', backref='customer_projects')
     deliverables = db.relationship('Deliverable', backref='project_customer', cascade='all, delete-orphan')
 

@@ -36,12 +36,13 @@
                     </thead>
                     <tbody>
                         {% for project in projects %}
-                        {% set is_overdue = project.design_needed_by < today %} <tr
+                        {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} <tr
                             class="clickable {% if is_overdue %}overdue{% endif %}"
                             data-href="{{ url_for('projects.detail', project_id=project.id) }}">
                             <td>{{ project.name }}</td>
                             <td class="mono">{{ project.job_number }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</td>
+                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
+                                project.design_needed_by else '—' }}</td>
                             <td>
                                 {% for team in project.design_teams_requested.split(',') %}
                                 <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
@@ -92,12 +93,13 @@
                 <tbody>
                     {% endif %}
 
-                    {% set is_overdue = project.design_needed_by < today %} <tr
+                    {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} <tr
                         class="clickable {% if is_overdue %}overdue{% endif %}"
                         data-href="{{ url_for('projects.detail', project_id=project.id) }}">
                         <td>{{ project.name }}</td>
                         <td class="mono">{{ project.job_number }}</td>
-                        <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</td>
+                        <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by
+                            else '—' }}</td>
                         <td>
                             {% for team in project.design_teams_requested.split(',') %}
                             <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
