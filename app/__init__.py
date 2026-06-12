@@ -41,29 +41,31 @@ def create_app():
     
     @app.context_processor
     def inject_notifications():
-        """
-        Make notifications and unread count available in every template.
-        """
-        from flask_login import current_user
-        from app.models import Notification
+      from flask_login import current_user
+      from app.models import Notification
 
-        if current_user.is_authenticated:
-            notifications = Notification.query.filter_by(
-                recipient_id=current_user.id
-            ).order_by(Notification.created_at.desc()).limit(20).all()
-            
-            unread_count = Notification.query.filter_by(
-                recipient_id=current_user.id,
-                is_read=False
-            ).count()
-            
-            return {
-                'user_notifications': notifications,
-                'unread_count': unread_count
-            }
+      if current_user.is_authenticated:
+        active_notifications = Notification.query.filter_by(
+            recipient_id=current_user.id,
+            is_archived=False
+        ).order_by(Notification.created_at.desc()).all()
+
+        archived_notifications = Notification.query.filter_by(
+            recipient_id=current_user.id,
+            is_archived=True
+        ).order_by(Notification.created_at.desc()).limit(50).all()
+
+        unread_count = sum(1 for n in active_notifications if not n.is_read)
+
         return {
-            'user_notifications': [],
-            'unread_count': 0
+            'user_notifications': active_notifications,
+            'archived_notifications': archived_notifications,
+            'unread_count': unread_count
         }
+      return {
+        'user_notifications': [],
+        'archived_notifications': [],
+        'unread_count': 0
+    }
 
     return app

@@ -29,15 +29,18 @@ def cs_dashboard():
     today = date.today()
 
     if current_user.role == 'admin':
-        my_projects = Project.query.order_by(
-            Project.design_needed_by.asc()
-        ).all()
+        my_projects = Project.query.filter(
+            Project.project_status != 'draft'
+        ).order_by(Project.design_needed_by.asc()).all()
     else:
-        my_projects = Project.query.filter_by(
-            cs_lead_id=current_user.id
+        my_projects = Project.query.filter(
+            Project.cs_lead_id == current_user.id,
+            Project.project_status != 'draft'
         ).order_by(Project.design_needed_by.asc()).all()
 
-    all_projects = Project.query.order_by(
+    all_projects = Project.query.filter(
+        Project.project_status != 'draft'
+    ).order_by(
         Project.cs_lead_id.asc(),
         Project.design_needed_by.asc()
     ).all()

@@ -28,27 +28,76 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th></th>
                             <th>Project Name</th>
                             <th>Job Number</th>
                             <th>Deadline</th>
                             <th>Teams</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for project in projects %}
-                        {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} <tr
-                            class="clickable {% if is_overdue %}overdue{% endif %}"
-                            data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                        {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} {% if
+                            project.brief_type=='ccm' and project.project_customers %} <tr
+                            class="expandable-row {% if is_overdue %}overdue{% endif %}" data-expand="{{ project.id }}">
+                            <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                             <td>{{ project.name }}</td>
                             <td class="mono">{{ project.job_number }}</td>
                             <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
                                 project.design_needed_by else '—' }}</td>
                             <td>
-                                {% for team in project.design_teams_requested.split(',') %}
+                                {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
                                 <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
                                 {% endfor %}
                             </td>
+                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                    class="btn btn--secondary">View Details </a></td>
                             </tr>
+                            <tr class="expansion-row hidden" id="expand_{{ project.id }}">
+                                <td colspan="6">
+                                    <table class="customer-sub-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Customer</th>
+                                                <th>Design Deadline</th>
+                                                <th>Installation</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for pc in project.project_customers %}
+                                            <tr>
+                                                <td>{{ pc.customer.name }}</td>
+                                                <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if
+                                                    pc.design_deadline else '—' }}</td>
+                                                <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if
+                                                    pc.installation_date else '—' }}
+                                                </td>
+                                                <td>—</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr class="clickable {% if is_overdue %}overdue{% endif %}"
+                                data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                                <td class="chevron-cell"></td>
+                                <td>{{ project.name }}</td>
+                                <td class="mono">{{ project.job_number }}</td>
+                                <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
+                                    project.design_needed_by else '—' }}</td>
+                                <td>
+                                    {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
+                                    <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
+                                    {% endfor %}
+                                </td>
+                                <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                        class="btn btn--secondary">View Details</a></td>
+                            </tr>
+                            {% endif %}
                             {% endfor %}
                     </tbody>
                 </table>
@@ -84,31 +133,81 @@
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th></th>
                         <th>Project Name</th>
                         <th>Job Number</th>
                         <th>Deadline</th>
                         <th>Teams</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% endif %}
 
-                    {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} <tr
-                        class="clickable {% if is_overdue %}overdue{% endif %}"
-                        data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                    {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} {% if
+                        project.brief_type=='ccm' and project.project_customers %} <tr
+                        class="expandable-row {% if is_overdue %}overdue{% endif %}" data-expand="{{ project.id }}">
+                        <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                         <td>{{ project.name }}</td>
                         <td class="mono">{{ project.job_number }}</td>
                         <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by
                             else '—' }}</td>
                         <td>
-                            {% for team in project.design_teams_requested.split(',') %}
+                            {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
                             <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
                             {% endfor %}
                         </td>
+                        <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                class="btn btn--secondary">View Details</a></td>
                         </tr>
+                        {% else %}
+                        <tr class="clickable {% if is_overdue %}overdue{% endif %}"
+                            data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                            <td class="chevron-cell"></td>
+                            <td>{{ project.name }}</td>
+                            <td class="mono">{{ project.job_number }}</td>
+                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
+                                project.design_needed_by else '—' }}</td>
+                            <td>
+                                {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
+                                <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
+                                {% endfor %}
+                            </td>
+                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                    class="btn btn--secondary">View Details</a></td>
+                        </tr>
+                        {% endif %}
+
+                        {% if project.brief_type == 'ccm' and project.project_customers %}
+                        <tr class="expansion-row hidden" id="expand_{{ project.id }}">
+                            <td colspan="6">
+                                <table class="customer-sub-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Customer</th>
+                                            <th>Design Deadline</th>
+                                            <th>Installation</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for pc in project.project_customers %}
+                                        <tr>
+                                            <td>{{ pc.customer.name }}</td>
+                                            <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if
+                                                pc.design_deadline else '—' }}</td>
+                                            <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if
+                                                pc.installation_date else '—' }}</td>
+                                            <td>—</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                        {% endif %}
 
                         {% if loop.last %}
-                </tbody>
             </table>
         </div>
         {% endif %}

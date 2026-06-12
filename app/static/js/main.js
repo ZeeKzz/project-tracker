@@ -38,29 +38,76 @@ document.addEventListener('click', function (event) {
 });
 
 // Click a notification - mark as read, then navigate
-document.querySelectorAll('.notification-item').forEach(item => {
-    item.addEventListener('click', function () {
-        const notificationId = this.dataset.id;
-
-        fetch(`/notifications/${notificationId}/read`, {
+// Click a notification to mark as read and navigate
+document.querySelectorAll('.notification-item:not(.notification-item--archived)').forEach(function (item) {
+    item.addEventListener('click', function (e) {
+        if (e.target.closest('.notification-archive-btn')) return;
+        var notificationId = this.dataset.id;
+        fetch('/notifications/' + notificationId + '/read', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' }
         })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.href = data.redirect_url;
-                } else {
-                    console.error('Failed to mark notification as read:', data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error marking notification as read:', error);
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) window.location.href = data.redirect_url;
             });
     });
 });
+
+// Archive a notification
+document.querySelectorAll('.notification-archive-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var notificationId = this.dataset.id;
+        var item = this.closest('.notification-item');
+
+        fetch('/notifications/' + notificationId + '/archive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) return;
+
+                // Update badge count
+                var badge = document.querySelector('.bell-badge');
+                if (badge && item.classList.contains('unread')) {
+                    var count = parseInt(badge.textContent) - 1;
+                    if (count <= 0) {
+                        badge.remove();
+                    } else {
+                        badge.textContent = count;
+                    }
+                }
+
+                // Remove from active list
+                item.remove();
+
+                // Show empty state if nothing left
+                var activeList = document.getElementById('active-notifications');
+                if (activeList && activeList.querySelectorAll('.notification-item').length === 0) {
+                    var empty = document.createElement('p');
+                    empty.className = 'no-notifications';
+                    empty.textContent = 'No notifications';
+                    activeList.appendChild(empty);
+                }
+            });
+    });
+});
+
+// Toggle archived section
+var toggleArchivedBtn = document.getElementById('toggle-archived');
+if (toggleArchivedBtn) {
+    toggleArchivedBtn.addEventListener('click', function () {
+        var section = document.getElementById('archived-section');
+        if (!section) return;
+        var isHidden = section.classList.contains('hidden');
+        section.classList.toggle('hidden');
+        var match = this.textContent.match(/\d+/);
+        var num = match ? ' (' + match[0] + ')' : '';
+        this.textContent = isHidden ? 'Hide archived' + num : 'Show archived' + num;
+    });
+}
 
 // Team lead dashboard toggle - team view vs personal view
 const btnTeamView = document.getElementById('btn-team-view');
@@ -215,7 +262,7 @@ if (draftItems.length > 0) {
                                 pendingDeleteRow.remove();
                                 const remaining = document.querySelectorAll('.draft-item');
                                 if (remaining.length === 0) {
-                                    window.location.href = '/projects/create';
+                                    window.location.href = '/';
                                 }
                             }, 620);
                         }
@@ -314,7 +361,6 @@ if (document.getElementById('sectionBasics')) {
             function () { return document.getElementById('briefing_date').value !== ''; },
             function () { return document.getElementById('first_output_deadline').value !== ''; },
             function () { return document.getElementById('final_deadline').value !== ''; },
-            function () { return document.getElementById('installation_date').value !== ''; },
         ];
 
         var basicWeight = 25 / basicChecks.length;
@@ -326,7 +372,6 @@ if (document.getElementById('sectionBasics')) {
         if (briefType === 'ccm') {
             var ccmChecks = [
                 function () { return document.getElementById('urgency').value !== ''; },
-                function () { return document.getElementById('required_output').value !== ''; },
                 function () { return document.querySelector('.region-btn[data-region].active') !== null; },
                 function () { return document.querySelectorAll('.customer-pill.selected').length > 0; },
                 function () { return document.getElementById('campaign_notes').value.trim() !== ''; },
@@ -358,6 +403,7 @@ if (document.getElementById('sectionBasics')) {
         });
 
         var isCCM = type === 'ccm';
+        document.getElementById('sectionConcept').classList.toggle('hidden', !isCCM);
         document.getElementById('sectionCCM').classList.toggle('hidden', !isCCM);
         document.getElementById('sectionDeliverables').classList.toggle('hidden', true);
 
@@ -373,7 +419,6 @@ if (document.getElementById('sectionBasics')) {
         if (type === 'ccm') {
             return {
                 urgency: document.getElementById('urgency').value,
-                required_output: document.getElementById('required_output').value,
                 campaign_notes: document.getElementById('campaign_notes').value,
                 region_uae: document.getElementById('region_uae').checked,
                 region_gulf: document.getElementById('region_gulf').checked,
@@ -385,7 +430,6 @@ if (document.getElementById('sectionBasics')) {
     function restoreBriefState(type, state) {
         if (type === 'ccm') {
             document.getElementById('urgency').value = state.urgency || '';
-            document.getElementById('required_output').value = state.required_output || '';
             document.getElementById('campaign_notes').value = state.campaign_notes || '';
             document.getElementById('region_uae').checked = state.region_uae || false;
             document.getElementById('region_gulf').checked = state.region_gulf || false;
@@ -524,6 +568,18 @@ if (document.getElementById('sectionBasics')) {
                 region.charAt(0).toUpperCase() + region.slice(1);
             regionSection.appendChild(heading);
 
+            if (region !== 'uae') {
+                var applyBtn = document.createElement('button');
+                applyBtn.type = 'button';
+                applyBtn.className = 'btn btn--secondary apply-dates-btn';
+                applyBtn.textContent = 'Apply same dates to all ' +
+                    region.charAt(0).toUpperCase() + region.slice(1) + ' customers';
+                applyBtn.addEventListener('click', function () {
+                    applyDatesToRegion(region);
+                });
+                regionSection.appendChild(applyBtn);
+            }
+
             body.appendChild(regionSection);
         }
 
@@ -533,11 +589,26 @@ if (document.getElementById('sectionBasics')) {
 
         block.innerHTML =
             '<h4 class="deliverables-customer-heading">' + customerName + '</h4>' +
+            '<div class="deliverables-customer-dates">' +
+            '<div class="customer-date-field">' +
+            '<label class="customer-date-label">Design Deadline</label>' +
+            '<input type="date" class="form-input" id="design_deadline_' + customerId + '">' +
+            '</div>' +
+            '<div class="customer-date-field">' +
+            '<label class="customer-date-label">Installation Date</label>' +
+            '<input type="date" class="form-input" id="installation_date_' + customerId + '">' +
+            '</div>' +
+            '</div>' +
             '<div class="deliverable-rows" id="deliverableRows_' + customerId + '"></div>' +
             '<button type="button" class="btn-add-inline add-deliverable-btn" ' +
             'data-customer-id="' + customerId + '">+ Add Deliverable</button>';
 
-        regionSection.appendChild(block);
+        var applyBtn = regionSection.querySelector('.apply-dates-btn');
+        if (applyBtn) {
+            regionSection.insertBefore(block, applyBtn);
+        } else {
+            regionSection.appendChild(block);
+        }
 
         block.querySelector('.add-deliverable-btn').addEventListener('click', function () {
             fetchAndShowDeliverableSelector(customerId);
@@ -561,6 +632,25 @@ if (document.getElementById('sectionBasics')) {
             document.getElementById('sectionDeliverables').classList.add('hidden');
         }
         calculateCompletion();
+    }
+
+    function applyDatesToRegion(region) {
+        var blocks = document.querySelectorAll(
+            '.deliverables-region-section[data-region="' + region + '"] .deliverables-customer-block'
+        );
+        if (blocks.length < 2) return;
+
+        var firstId = blocks[0].dataset.customerId;
+        var designVal = document.getElementById('design_deadline_' + firstId).value;
+        var installVal = document.getElementById('installation_date_' + firstId).value;
+
+        for (var i = 1; i < blocks.length; i++) {
+            var cid = blocks[i].dataset.customerId;
+            var ddEl = document.getElementById('design_deadline_' + cid);
+            var instEl = document.getElementById('installation_date_' + cid);
+            if (ddEl) ddEl.value = designVal;
+            if (instEl) instEl.value = installVal;
+        }
     }
 
     // ── Deliverable Selector ─────────────────────────────────
@@ -790,6 +880,20 @@ if (document.getElementById('sectionBasics')) {
             document.querySelectorAll('input[name="design_teams"]:checked')
         ).map(function (cb) { return cb.value; });
 
+        var hasKvEl = document.getElementById('has_kv');
+        var hasKv = hasKvEl ? hasKvEl.value === 'true' : false;
+
+        var customerDates = {};
+        document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
+            var cid = block.dataset.customerId;
+            var ddEl = document.getElementById('design_deadline_' + cid);
+            var instEl = document.getElementById('installation_date_' + cid);
+            customerDates[cid] = {
+                design_deadline: ddEl ? ddEl.value || null : null,
+                installation_date: instEl ? instEl.value || null : null
+            };
+        });
+
         return {
             draft_id: currentDraftId,
             name: document.getElementById('project_name').value.trim(),
@@ -797,14 +901,16 @@ if (document.getElementById('sectionBasics')) {
             cs_lead_id: document.getElementById('cs_lead_id').value || null,
             job_number: document.getElementById('job_number').value.trim() || null,
             design_teams: teams,
-            briefing_date: document.getElementById('briefing_date').value || null,
-            first_output_deadline: document.getElementById('first_output_deadline').value || null,
-            final_deadline: document.getElementById('final_deadline').value || null,
-            installation_date: document.getElementById('installation_date').value || null,
             brief_type: document.getElementById('brief_type').value || null,
-            urgency: document.getElementById('urgency').value || null,
-            required_output: document.getElementById('required_output').value || null,
-            campaign_notes: document.getElementById('campaign_notes').value.trim() || null,
+            urgency: document.getElementById('urgency') ? document.getElementById('urgency').value || null : null,
+            required_output: document.getElementById('required_output') ? document.getElementById('required_output').value || null : null,
+            concept_requirements: document.getElementById('concept_requirements') ? document.getElementById('concept_requirements').value.trim() || null : null,
+            concept_deadline: document.getElementById('concept_deadline') ? document.getElementById('concept_deadline').value || null : null,
+            has_kv: hasKv,
+            kv_requirements: document.getElementById('kv_requirements') ? document.getElementById('kv_requirements').value.trim() || null : null,
+            kv_deadline: document.getElementById('kv_deadline') ? document.getElementById('kv_deadline').value || null : null,
+            kv_options_required: document.getElementById('kv_options_required') ? parseInt(document.getElementById('kv_options_required').value) || null : null,
+            customer_dates: customerDates,
         };
     }
 
@@ -843,7 +949,7 @@ if (document.getElementById('sectionBasics')) {
 
     function scheduleAutosave() {
         clearTimeout(autosaveTimeout);
-        autosaveTimeout = setTimeout(autosave, 30000);
+        autosaveTimeout = setTimeout(autosave, 5000);
     }
 
     // ── Add New Client ────────────────────────────────────────
@@ -906,8 +1012,10 @@ if (document.getElementById('sectionBasics')) {
     function openReviewModal() {
         var projectName = document.getElementById('project_name').value.trim();
         var jobNumber = document.getElementById('job_number').value.trim();
-        var csLeadSelect = document.getElementById('cs_lead_id');
-        var csLeadText = csLeadSelect.options[csLeadSelect.selectedIndex].text;
+        var csLeadEl = document.getElementById('cs_lead_id');
+        var csLeadText = csLeadEl.tagName === 'SELECT'
+            ? csLeadEl.options[csLeadEl.selectedIndex].text
+            : (document.querySelector('.form-static-value') || { textContent: '' }).textContent.trim();
         var briefType = document.getElementById('brief_type').value;
 
         document.getElementById('reviewProjectName').textContent = projectName;
@@ -974,9 +1082,28 @@ if (document.getElementById('sectionBasics')) {
 
     document.querySelectorAll('.brief-type-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
+            var clientId = document.getElementById('client_id').value;
+            if (!clientId) {
+                showToast('Please select a client before choosing a brief type.', 'error');
+                return;
+            }
             switchBriefType(this.dataset.type);
         });
     });
+
+    var btnKVToggle = document.getElementById('btnKVToggle');
+    if (btnKVToggle) {
+        btnKVToggle.addEventListener('click', function () {
+            var kvBlock = document.getElementById('kvBlock');
+            var hasKvInput = document.getElementById('has_kv');
+            var isOpen = !kvBlock.classList.contains('hidden');
+
+            kvBlock.classList.toggle('hidden', isOpen);
+            hasKvInput.value = isOpen ? 'false' : 'true';
+            btnKVToggle.textContent = isOpen ? '+ Include Initial KV' : '− Remove KV';
+            scheduleAutosave();
+        });
+    }
 
     document.querySelectorAll('.region-btn[data-region]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -1137,3 +1264,15 @@ var toastMsg = urlParams.get('toast');
 if (toastMsg) {
     showToast(decodeURIComponent(toastMsg), 'success');
 }
+
+// ── Expandable customer rows ──────────────────────────────
+document.querySelectorAll('tr[data-expand]').forEach(function (row) {
+    row.addEventListener('click', function (e) {
+        if (e.target.closest('a, button')) return;
+        var expandRow = this.nextElementSibling;
+        if (!expandRow || !expandRow.classList.contains('expansion-row')) return;
+        expandRow.classList.toggle('hidden');
+        var icon = this.querySelector('.chevron-icon');
+        if (icon) icon.classList.toggle('rotated');
+    });
+});

@@ -41,6 +41,7 @@ class Notification(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
     triggered_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False)
+    is_archived = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
@@ -89,6 +90,13 @@ class Project(db.Model):
     first_output_deadline = db.Column(db.Date, nullable=True)
     installation_date = db.Column(db.Date, nullable=True)
     last_autosaved_at = db.Column(db.DateTime, nullable=True)
+    concept_deadline = db.Column(db.Date, nullable=True)
+    has_kv = db.Column(db.Boolean, default=False, nullable=False)
+    kv_deadline = db.Column(db.Date, nullable=True)
+    kv_requirements = db.Column(db.Text, nullable=True)
+    kv_options_required = db.Column(db.Integer, nullable=True)
+    concept_designer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    kv_designer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # Auto-populated on creation
 
@@ -114,6 +122,8 @@ class Project(db.Model):
     project_customers = db.relationship('ProjectCustomer', backref='project_ref', cascade='all, delete-orphan')
     project_regions = db.relationship('ProjectRegion', backref='project_region_ref', cascade='all, delete-orphan')
     project_deliverables = db.relationship('Deliverable', backref='project_ref', cascade='all, delete-orphan')
+    concept_designer = db.relationship('User', foreign_keys=[concept_designer_id])
+    kv_designer = db.relationship('User', foreign_keys=[kv_designer_id])
     
 
     def __repr__(self):
@@ -227,6 +237,8 @@ class ProjectCustomer(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    design_deadline = db.Column(db.Date, nullable=True)
+    installation_date = db.Column(db.Date, nullable=True)
 
     project = db.relationship('Project')
     customer = db.relationship('Customer', backref='customer_projects')

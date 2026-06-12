@@ -37,24 +37,7 @@
                     <span class="detail-value">{{ project.cs_lead.name }}</span>
                 </div>
 
-                <div class="detail-field">
-                    <span class="detail-label">Optimal Deadline</span>
-                    <span class="detail-value mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                        project.design_needed_by else '—' }}</span>
-                </div>
 
-                <div class="detail-field">
-                    <span class="detail-label">Brief File</span>
-                    <span class="detail-value">
-                        {% if project.brief_file %}
-                        <a href="{{ url_for('projects.download_brief', project_id=project.id) }}" class="btn-primary">
-                            Download Brief
-                        </a>
-                        {% else %}
-                        <span class="muted">No file uploaded</span>
-                        {% endif %}
-                    </span>
-                </div>
             </div>
         </div>
 
@@ -73,7 +56,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for team in project.design_teams_requested.split(',') %}
+                        {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
                         {% set team_name = team.strip() %}
                         {% set assignment = assignments_by_team.get(team_name) %}
 
@@ -121,6 +104,175 @@
         </div>
 
     </div>
+
+    {% if project.brief_type == 'ccm' %}
+    <div class="detail-card detail-card--full">
+        <h2 class="detail-card-title">C&amp;CM Brief</h2>
+
+        <div class="detail-fields">
+            <div class="detail-field">
+                <span class="detail-label">Client</span>
+                <span class="detail-value">{{ project.client_brand.name if project.client_brand else '—' }}</span>
+            </div>
+            <div class="detail-field">
+                <span class="detail-label">Urgency</span>
+                <span class="detail-value">{{ project.urgency | replace('_', ' ') | title if project.urgency else '—'
+                    }}</span>
+            </div>
+            <div class="detail-field">
+                <span class="detail-label">Briefing Date</span>
+                <span class="detail-value mono">{{ project.briefing_date.strftime('%d %b %Y') if project.briefing_date
+                    else
+                    '—' }}</span>
+            </div>
+            <div class="detail-field">
+                <span class="detail-label">First Output Deadline</span>
+                <span class="detail-value mono">{{ project.first_output_deadline.strftime('%d %b %Y') if
+                    project.first_output_deadline else '—' }}</span>
+            </div>
+            <div class="detail-field">
+                <span class="detail-label">Concept Deadline</span>
+                <span class="detail-value mono">{{ project.concept_deadline.strftime('%d %b %Y') if
+                    project.concept_deadline else '—' }}</span>
+            </div>
+            <div class="detail-field">
+                <span class="detail-label">Concept Designer</span>
+                <span class="detail-value">
+                    {% if project.concept_designer %}{{ project.concept_designer.name }}
+                    {% else %}<span class="badge badge-rose">Pending</span>{% endif %}
+                </span>
+            </div>
+        </div>
+
+        {% if current_user.role in ['admin', 'team_lead'] %}
+        <form method="POST" action="{{ url_for('projects.assign_concept_kv', project_id=project.id) }}"
+            class="inline-form" style="margin-top: 1rem;">
+            <div class="detail-field">
+                <span class="detail-label">Assign Concept Designer</span>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <select name="concept_designer_id" class="form-select">
+                        <option value="">— Select —</option>
+                        {% for designer in designers_by_team['2D'] %}
+                        <option value="{{ designer.id }}" {{ 'selected' if project.concept_designer_id==designer.id }}>
+                            {{ designer.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </div>
+        </form>
+
+        <form method="POST" action="{{ url_for('projects.assign_concept_kv', project_id=project.id) }}"
+            class="inline-form" style="margin-top: 0.5rem;">
+            <div class="detail-field">
+                <span class="detail-label">Assign KV Designer</span>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <select name="kv_designer_id" class="form-select">
+                        <option value="">— Select —</option>
+                        {% for designer in designers_by_team['2D'] %}
+                        <option value="{{ designer.id }}" {{ 'selected' if project.kv_designer_id==designer.id }}>
+                            {{ designer.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+
+        {% if project.campaign_notes %}
+        <div class="brief-notes">
+            <span class="detail-label">Concept Requirements</span>
+            <p class="brief-notes-text">{{ project.campaign_notes }}</p>
+        </div>
+        {% endif %}
+
+        {% if project.has_kv %}
+        <div class="brief-kv-block">
+            <h3 class="brief-section-heading">Key Visual (KV)</h3>
+            <div class="detail-fields">
+                <div class="detail-field">
+                    <span class="detail-label">KV Deadline</span>
+                    <span class="detail-value mono">{{ project.kv_deadline.strftime('%d %b %Y') if project.kv_deadline
+                        else
+                        '—' }}</span>
+                </div>
+                <div class="detail-field">
+                    <span class="detail-label">Options Required</span>
+                    <span class="detail-value">{{ project.kv_options_required if project.kv_options_required else '—'
+                        }}</span>
+                </div>
+
+                <div class="detail-field">
+                    <span class="detail-label">KV Designer</span>
+                    <span class="detail-value">
+                        {% if project.kv_designer %}{{ project.kv_designer.name }}
+                        {% else %}<span class="badge badge-rose">Pending</span>{% endif %}
+                    </span>
+                </div>
+            </div>
+            {% if project.kv_requirements %}
+            <div class="brief-notes">
+                <span class="detail-label">KV Requirements</span>
+                <p class="brief-notes-text">{{ project.kv_requirements }}</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% for region_key in ['uae', 'kuwait', 'qatar', 'bahrain', 'oman'] %}
+        {% if region_key in brief_sections %}
+        <div class="brief-region-block">
+            <h3 class="brief-region-heading">{{ region_key | upper }}</h3>
+            {% for pc in brief_sections[region_key] %}
+            <div class="brief-customer-block">
+                <div class="brief-customer-header">
+                    <h4 class="brief-customer-name">{{ pc.customer.name }}</h4>
+                    <div class="brief-customer-dates">
+                        <span class="brief-date-item">
+                            <span class="brief-date-label">Design Deadline</span>
+                            <span class="brief-date-value mono">{{ pc.design_deadline.strftime('%d %b %Y') if
+                                pc.design_deadline else '—' }}</span>
+                        </span>
+                        <span class="brief-date-item">
+                            <span class="brief-date-label">Installation</span>
+                            <span class="brief-date-value mono">{{ pc.installation_date.strftime('%d %b %Y') if
+                                pc.installation_date else '—' }}</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="brief-deliverables">
+                    {% for deliverable in pc.deliverables %}
+                    <div class="brief-deliverable-row">
+                        <span class="brief-deliverable-name">{{ deliverable.name }}</span>
+                        <div class="brief-deliverable-assignments">
+                            {% if deliverable.deliverable_type %}
+                            {% for d in deliverable.deliverable_type.disciplines %}
+                            {% set designers = assignments_by_deliverable.get(deliverable.id, {}).get(d.team, []) %}
+                            <div class="brief-assignment-chip">
+                                <span class="team-tag team-{{ d.team | lower }}">{{ d.team }}</span>
+                                <span class="brief-assignment-name {{ 'muted' if not designers }}">
+                                    {{ designers | join(', ') if designers else 'Pending' }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <span class="muted">Pending</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endfor %}
+
+    </div>
+    {% endif %}
 
 </div>
 

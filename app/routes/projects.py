@@ -44,13 +44,19 @@ def create():
         candidate = Project.query.get(int(draft_id))
         if candidate and candidate.created_by_id == current_user.id and candidate.project_status == 'draft':
             draft = candidate
+    
+    has_other_drafts = Project.query.filter_by(
+         created_by_id=current_user.id,
+         project_status='draft'
+    ).count() > 0
 
     return render_template(
         'projects/create.html',
         cs_users=cs_users,
         clients=clients,
         customers_by_region=customers_by_region,
-        draft=draft
+        draft=draft,
+        has_other_drafts=has_other_drafts
     )
 
 @projects.route('/projects/autosave', methods=['POST'])
@@ -69,7 +75,9 @@ def autosave():
         candidate = Project.query.get(int(draft_id))
         if candidate and candidate.created_by_id == current_user.id and candidate.project_status == 'draft':
             draft = candidate
-    
+        elif candidate and candidate.project_status != 'draft':
+            return jsonify({'success': False, 'error': 'Project already submitted'}), 400
+
     default_scope = Scope.query.filter_by(active=True).first()
 
     if not draft:
@@ -94,7 +102,13 @@ def autosave():
         draft.client_id = int(data['client_id'])
     
     if data.get('job_number'):
-        draft.job_number = data['job_number'].strip() or None
+        job_num = data['job_number'].strip()
+        conflict = Project.query.filter(
+            Project.job_number == job_num,
+            Project.id != draft.id
+        ).first()
+        if not conflict:
+            draft.job_number = job_num or None
     
     if data.get('design_teams'):
         draft.design_teams_requested = ', '.join(data['design_teams'])
@@ -108,26 +122,37 @@ def autosave():
     if data.get('required_output'):
         draft.required_output = data['required_output']
 
-    if data.get('campaign_notes'):
-        draft.campaign_notes = data['campaign_notes']
+    if data.get('concept_deadline'):
+        draft.concept_deadline = date.fromisoformat(data['concept_deadline'])
+        
+    if data.get('concept_requirements') is not None:
+        draft.campaign_notes = data['concept_requirements']
+
+    if 'has_kv' in data:
+        draft.has_kv = bool(data['has_kv'])
+
+    if data.get('kv_requirements') is not None:
+        draft.kv_requirements = data['kv_requirements']
+
+    if data.get('kv_deadline'):
+        draft.kv_deadline = date.fromisoformat(data['kv_deadline'])
+
+    if data.get('kv_options_required') is not None:
+        draft.kv_options_required = data['kv_options_required']    
 
     if data.get('briefing_date'):
-        from datetime import date
         draft.briefing_date = date.fromisoformat(data['briefing_date'])
 
     if data.get('first_output_deadline'):
-        from datetime import date
+
         draft.first_output_deadline = date.fromisoformat(data['first_output_deadline'])
 
     if data.get('final_deadline'):
-        from datetime import date
         draft.design_needed_by = date.fromisoformat(data['final_deadline']) 
 
     if data.get('installation_date'):
-        from datetime import date
         draft.installation_date = date.fromisoformat(data['installation_date'])
     
-    from datetime import datetime
     draft.last_autosaved_at = datetime.now()
 
     db.session.commit()
@@ -139,7 +164,6 @@ def autosave():
 def detail(project_id):
     project = Project.query.get_or_404(project_id)
 
-    # Get designers organised by team for the assignment dropdowns
     designers_by_team = {
         '3D': User.query.filter(
             User.role.in_(['designer', 'team_lead']),
@@ -155,16 +179,33 @@ def detail(project_id):
         ).order_by(User.name).all(),
     }
 
-    # Build a lookup dict mapping team name to its existing assignment (if any)
     assignments_by_team = {}
     for assignment in project.assigned_designers:
         assignments_by_team[assignment.team] = assignment
+
+    brief_sections = {}
+    for pc in project.project_customers:
+        region = pc.customer.region
+        if region not in brief_sections:
+            brief_sections[region] = []
+        brief_sections[region].append(pc)
+
+    assignments_by_deliverable = {}
+    for deliverable in project.project_deliverables:
+        by_team = {}
+        for assignment in deliverable.disciplines:
+             if assignment.team not in by_team:
+                 by_team[assignment.team] = []
+             by_team[assignment.team].append(assignment.designer.name)
+        assignments_by_deliverable[deliverable.id] = by_team
 
     return render_template(
         'projects/detail.html',
         project=project,
         designers_by_team=designers_by_team,
-        assignments_by_team=assignments_by_team
+        assignments_by_team=assignments_by_team,
+        brief_sections=brief_sections,
+        assignments_by_deliverable=assignments_by_deliverable
     )
 
 @projects.route('/projects/<int:project_id>/update-status', methods=['POST'])
@@ -257,6 +298,22 @@ def assign_designers(project_id):
 
     flash('Designer assignment updated successfully.', 'success')
     return redirect(url_for('projects.detail', project_id=project_id))
+
+@projects.route('/projects/<int:project_id>/assign-concept-kv', methods=['POST'])
+@login_required
+@role_required('admin', 'team_lead')
+def assign_concept_kv(project_id):
+    project = Project.query.get_or_404(project_id)
+    concept_id = request.form.get('concept_designer_id')
+    kv_id = request.form.get('kv_designer_id')
+
+    if concept_id:
+        project.concept_designer_id = int(concept_id)
+    if kv_id:
+        project.kv_designer_id = int(kv_id)
+
+    db.session.commit()
+    return redirect(url_for('projects.detail', project_id=project.id))
 
 @projects.route('/projects/<int:project_id>/download-brief')
 @login_required
@@ -435,11 +492,10 @@ def submit_project():
         print(f"Current user ID: {current_user.id}")
 
         # ── Basic validation ─────────────────────────────────
-        required_fields = ['name', 'client_id', 'cs_lead_id', 'job_number',
-                           'brief_type', 'regions', 'deliverables']
+        required_fields = ['name', 'client_id', 'cs_lead_id', 'brief_type']
         for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'Missing required field: {field}'}), 400
+          if not data.get(field):
+             return jsonify({'error': f'Missing required field: {field}'}), 400
 
         # ── Parse dates ──────────────────────────────────────
         from datetime import datetime
@@ -467,13 +523,26 @@ def submit_project():
         project.name = data['name']
         project.client_id = int(data['client_id'])
         project.cs_lead_id = int(data['cs_lead_id'])
-        project.job_number = data['job_number']
+        job_num = data.get('job_number')
+        if job_num:
+            conflict = Project.query.filter(
+                Project.job_number == job_num,
+                Project.id != project.id
+            ).first()
+            if conflict:
+                return jsonify({'error': f'Job number {job_num} is already in use'}), 400
+        project.job_number = job_num
         project.design_teams_requested = ','.join(data.get('design_teams', []))
         project.brief_type = data['brief_type']
         project.project_status = 'active'
         project.urgency = data.get('urgency')
         project.required_output = data.get('required_output')
-        project.campaign_notes = data.get('campaign_notes')
+        project.campaign_notes = data.get('concept_requirements')
+        project.concept_deadline = parse_date(data.get('concept_deadline'))
+        project.has_kv = bool(data.get('has_kv', False))
+        project.kv_requirements = data.get('kv_requirements')
+        project.kv_deadline = parse_date(data.get('kv_deadline'))
+        project.kv_options_required = data.get('kv_options_required')
         project.briefing_date = parse_date(data.get('briefing_date'))
         project.first_output_deadline = parse_date(data.get('first_output_deadline'))
         project.execution_date = parse_date(data.get('final_deadline'))
@@ -500,9 +569,13 @@ def submit_project():
             customer_id = int(item['customer_id'])
 
             if customer_id not in customer_map:
+                customer_dates = data.get('customer_dates', {})
+                dates = customer_dates.get(str(customer_id), {})
                 project_customer = ProjectCustomer(
                     project_id=project.id,
-                    customer_id=customer_id
+                    customer_id=customer_id,
+                    design_deadline=datetime.strptime(dates['design_deadline'], '%Y-%m-%d').date() if dates.get('design_deadline') else None,
+                    installation_date=datetime.strptime(dates['installation_date'], '%Y-%m-%d').date() if dates.get('installation_date') else None,
                 )
                 db.session.add(project_customer)
                 db.session.flush()
@@ -527,7 +600,7 @@ def submit_project():
                 create_notification(
                     recipient=cs_lead,
                     message=f'You have been assigned as CS Lead on "{project.name}".',
-                    notif_type='project_assigned',
+                    notification_type='project_assigned',
                     project=project,
                     triggered_by=current_user
                 )
@@ -546,7 +619,7 @@ def submit_project():
                 create_notification(
                     recipient=lead,
                     message=f'New project "{project.name}" requires your team. Please assign designers.',
-                    notif_type='project_assigned',
+                    notification_type='project_assigned',
                     project=project,
                     triggered_by=current_user
                 )

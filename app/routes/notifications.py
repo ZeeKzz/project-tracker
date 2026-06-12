@@ -46,3 +46,14 @@ def mark_all_read():
     ).update({'is_read': True})
     db.session.commit()
     return jsonify({'success': True})
+
+@notifications_bp.route('/notifications/<int:notification_id>/archive', methods=['POST'])
+@login_required
+def archive_notification(notification_id):
+    notification = Notification.query.get_or_404(notification_id)
+    if notification.recipient_id != current_user.id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    notification.is_archived = True
+    notification.is_read = True
+    db.session.commit()
+    return jsonify({'success': True})

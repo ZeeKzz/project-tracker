@@ -80,21 +80,44 @@
             <span class="notification-panel-title">Notifications</span>
         </div>
 
-        <div class="notification-panel-body">
+        <div class="notification-panel-body" id="active-notifications">
             {% if user_notifications %}
             {% for notification in user_notifications %}
             <div class="notification-item {% if not notification.is_read %}unread{% endif %}"
                 data-id="{{ notification.id }}">
+                <div class="notification-content">
+                    <p class="notification-message">{{ notification.message }}</p>
+                    <span class="notification-time">
+                        {{ notification.created_at.strftime('%d %b %Y, %H:%M') }}
+                    </span>
+                </div>
+                <button type="button" class="notification-archive-btn" data-id="{{ notification.id }}"
+                    title="Archive">×</button>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="no-notifications">No notifications</p>
+            {% endif %}
+        </div>
+
+        {% if archived_notifications %}
+        <div class="notification-panel-footer">
+            <button type="button" id="toggle-archived" class="archived-toggle-btn">
+                Show archived ({{ archived_notifications | length }})
+            </button>
+        </div>
+        <div class="archived-notifications-section hidden" id="archived-section">
+            <p class="archived-section-label">Archived</p>
+            {% for notification in archived_notifications %}
+            <div class="notification-item notification-item--archived" data-id="{{ notification.id }}">
                 <p class="notification-message">{{ notification.message }}</p>
                 <span class="notification-time">
                     {{ notification.created_at.strftime('%d %b %Y, %H:%M') }}
                 </span>
             </div>
             {% endfor %}
-            {% else %}
-            <p class="no-notifications">No notifications yet</p>
-            {% endif %}
         </div>
+        {% endif %}
     </aside>
     {% endif %}
 

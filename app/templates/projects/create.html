@@ -13,7 +13,8 @@
     {# ── Sticky Subheader ── #}
     <div class="create-subheader">
         <div class="create-subheader-left">
-            <a href="{{ url_for('projects.drafts') }}" class="btn btn--secondary">Back</a>
+            <a href="{{ url_for('projects.drafts') if has_other_drafts else url_for('main.index') }}"
+                class="btn btn--secondary">Back</a>
         </div>
         <div class="create-subheader-center">
             <div class="completion-bar-track">
@@ -65,14 +66,19 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Client Servicing Lead</label>
-                    <select id="cs_lead_id" name="cs_lead_id" class="form-select">
+                    {% if current_user.role == 'admin' %}
+                    <select id="cs_lead_id" class="form-select">
+                        <option value="">— Select CS Lead —</option>
                         {% for user in cs_users %}
-                        <option value="{{ user.id }}" {% if draft and draft.cs_lead_id==user.id %}selected {% elif
-                            user.id==current_user.id %}selected{% endif %}>
+                        <option value="{{ user.id }}" {% if draft and draft.cs_lead_id==user.id %}selected{% endif %}>
                             {{ user.name }}
                         </option>
                         {% endfor %}
                     </select>
+                    {% else %}
+                    <input type="hidden" id="cs_lead_id" value="{{ current_user.id }}">
+                    <p class="form-static-value">{{ current_user.name }}</p>
+                    {% endif %}
                 </div>
 
                 <div class="form-group">
@@ -125,11 +131,6 @@
                     <input type="date" id="final_deadline" name="final_deadline" class="form-input"
                         value="{{ draft.design_needed_by.isoformat() if draft and draft.design_needed_by else '' }}">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Installation Date</label>
-                    <input type="date" id="installation_date" name="installation_date" class="form-input"
-                        value="{{ draft.installation_date.isoformat() if draft and draft.installation_date else '' }}">
-                </div>
             </div>
 
         </div>
@@ -154,9 +155,61 @@
                 value="{{ draft.brief_type if draft and draft.brief_type else '' }}">
         </div>
 
+        {# ── Section 2.5: Concept ── #}
+        <div class="create-section hidden" id="sectionConcept">
+            <h3 class="create-section-heading">Concept</h3>
+
+            <div class="form-group">
+                <label class="form-label">Concept Requirements</label>
+                <textarea id="concept_requirements" class="form-textarea" rows="4"
+                    placeholder="Describe the overall concept and any client requirements...">{{ draft.campaign_notes if draft and draft.campaign_notes else '' }}</textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Concept Deadline</label>
+                    <input type="date" id="concept_deadline" class="form-input"
+                        value="{{ draft.concept_deadline.isoformat() if draft and draft.concept_deadline else '' }}">
+                </div>
+            </div>
+
+            <div class="kv-toggle-row">
+                <button type="button" class="btn btn--secondary" id="btnKVToggle">
+                    + Include Initial KV
+                </button>
+            </div>
+
+            <input type="hidden" id="has_kv" value="false">
+
+            <div class="kv-block hidden" id="kvBlock">
+                <h4 class="create-subsection-heading">Initial KV</h4>
+                <div class="form-group">
+                    <label class="form-label">KV Requirements</label>
+                    <textarea id="kv_requirements" class="form-textarea" rows="4"
+                        placeholder="Describe the KV and how it adapts per customer...">{{ draft.kv_requirements if draft and draft.kv_requirements else '' }}</textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">KV Deadline</label>
+                        <input type="date" id="kv_deadline" class="form-input"
+                            value="{{ draft.kv_deadline.isoformat() if draft and draft.kv_deadline else '' }}">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Options Required</label>
+                        <input type="number" id="kv_options_required" class="form-input" min="1" step="1"
+                            placeholder="e.g. 3"
+                            value="{{ draft.kv_options_required if draft and draft.kv_options_required else '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {# ── Section 3: C&CM Brief ── #}
         <div class="create-section hidden" id="sectionCCM">
-            <h3 class="create-section-heading">C&amp;CM Brief</h3>
+            <h3 class="create-section-heading">Further Details</h3>
 
             <div class="form-row">
                 <div class="form-group">
@@ -171,28 +224,6 @@
                         </option>
                         <option value="same_day" {% if draft and draft.urgency=='same_day' %}selected{% endif %}>
                             Same Day
-                        </option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Required Output</label>
-                    <select id="required_output" name="required_output" class="form-select">
-                        <option value="">— Select —</option>
-                        <option value="presentation" {% if draft and draft.required_output=='presentation' %}selected{%
-                            endif %}>
-                            Presentation
-                        </option>
-                        <option value="artwork" {% if draft and draft.required_output=='artwork' %}selected{% endif %}>
-                            Artwork File
-                        </option>
-                        <option value="technical" {% if draft and draft.required_output=='technical' %}selected{% endif
-                            %}>
-                            Technical Drawing
-                        </option>
-                        <option value="production" {% if draft and draft.required_output=='production' %}selected{%
-                            endif %}>
-                            Production Package
                         </option>
                     </select>
                 </div>

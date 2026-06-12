@@ -654,6 +654,12 @@ textarea {
     letter-spacing: 0.03em;
 }
 
+.form-static-value {
+    padding: 0.5rem 0;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
 /* =====================
    TABLES
 ===================== */
@@ -912,10 +918,78 @@ textarea {
 }
 
 .notification-item {
-    padding: 0.85rem 1.25rem;
-    border-bottom: 1px solid var(--grey-light);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
     cursor: pointer;
-    transition: background-color 0.15s ease;
+}
+
+.notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-archive-btn {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--grey-mid);
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.notification-item:hover .notification-archive-btn {
+    opacity: 1;
+}
+
+.notification-archive-btn:hover {
+    color: var(--rose);
+}
+
+.notification-panel-footer {
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.archived-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--grey-mid);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+    font-family: var(--font-mono);
+    letter-spacing: 0.03em;
+}
+
+.archived-toggle-btn:hover {
+    color: var(--text-primary);
+}
+
+.archived-notifications-section {
+    border-top: 1px solid var(--border-subtle);
+}
+
+.archived-section-label {
+    padding: 0.5rem 1rem 0.25rem;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--grey-mid);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.notification-item--archived {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.notification-item--archived:hover {
+    background: none;
 }
 
 .notification-item:last-child {
@@ -1937,4 +2011,245 @@ textarea {
     font-size: 0.8rem;
     color: var(--ink);
     opacity: 0.8;
+}
+
+/* ── Section 18: Brief Detail View ── */
+
+.detail-card--full {
+    grid-column: 1 / -1;
+    margin-top: 1.5rem;
+}
+
+.brief-notes {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.brief-notes-text {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--color-text);
+    line-height: 1.6;
+    background: var(--sandstone);
+    border-left: 3px solid var(--tangerine);
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    margin: 0;
+}
+
+.brief-region-block {
+    margin-top: 2rem;
+}
+
+.brief-region-heading {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    color: var(--tangerine);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--tangerine);
+    padding-bottom: 0.4rem;
+    margin-bottom: 1rem;
+}
+
+.brief-customer-block {
+    margin-bottom: 1.25rem;
+}
+
+.brief-customer-name {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+}
+
+.brief-deliverables {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.brief-deliverable-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #e8e2d8;
+}
+
+.brief-deliverable-name {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--color-text);
+    flex: 1;
+}
+
+.brief-deliverable-tags {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.brief-deliverable-assignments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.brief-assignment-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: white;
+    border: 1px solid #e8e2d8;
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+}
+
+.brief-assignment-name {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    color: var(--color-text);
+}
+
+.brief-assignment-name.muted {
+    color: #aaa;
+    font-style: italic;
+}
+
+/* --- Per-customer date row --- */
+.brief-customer-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.brief-customer-dates {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.brief-date-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.brief-date-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+}
+
+.brief-date-value {
+    font-size: 0.85rem;
+    color: var(--color-text);
+}
+
+/* --- KV subsection --- */
+.brief-kv-block {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.brief-section-heading {
+    font-family: var(--font-condensed);
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--tangerine);
+    margin: 0 0 0.75rem 0;
+}
+
+/* --- Per-customer date inputs (create page) --- */
+.deliverables-customer-dates {
+    display: flex;
+    gap: 1rem;
+    margin: 0.5rem 0 0.75rem 0;
+    flex-wrap: wrap;
+}
+
+.customer-date-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+    min-width: 160px;
+}
+
+.customer-date-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+}
+
+.apply-dates-btn {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+}
+
+/* --- Expandable customer rows --- */
+.chevron-cell {
+    width: 2rem;
+    text-align: center;
+}
+
+.chevron-icon {
+    display: inline-block;
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    user-select: none;
+}
+
+.chevron-icon.rotated {
+    transform: rotate(90deg);
+}
+
+.expansion-row td {
+    padding: 0.45 !important;
+    background: var(--white);
+}
+
+.customer-sub-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.customer-sub-table th,
+.customer-sub-table td {
+    padding: 0.45rem 1.25rem;
+    font-size: 0.8rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.customer-sub-table thead th {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background: transparent;
+    padding: 0.45rem 1.25rem;
+}
+
+.expandable-row {
+    cursor: pointer;
 }
