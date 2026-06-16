@@ -19,19 +19,21 @@ def create_app():
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment)
+    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog)
     from app.routes import main
     from app.routes.auth import auth
     from app.routes.projects import projects
     from app.routes.notifications import notifications_bp
     from app.models import Notification
     from flask_login import current_user
+    from app.routes.admin import admin_bp
     
     app.register_blueprint(notifications_bp)
 
     app.register_blueprint(main)
     app.register_blueprint(auth)
     app.register_blueprint(projects)
+    app.register_blueprint(admin_bp)
 
     from app.utils import calculate_project_hours
     
@@ -67,5 +69,26 @@ def create_app():
         'archived_notifications': [],
         'unread_count': 0
     }
+
+    @app.context_processor
+    def inject_effective_user():
+       from flask import session
+       if current_user.is_authenticated:
+             emulating_id = session.get('emulating_user_id')
+             if emulating_id and current_user.role == 'admin':
+                 effective_user = User.query.get(emulating_id)
+                 is_emulating = True
+             else:
+                effective_user = current_user
+                is_emulating = False
+             return {
+                 'effective_user': effective_user,
+                 'is_emulating': is_emulating
+             }
+       return {
+           'effective_user': current_user,
+           'is_emulating': False
+       }
+        
 
     return app

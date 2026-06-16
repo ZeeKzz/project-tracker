@@ -883,7 +883,7 @@ textarea {
 .notification-panel-header {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    justify-content: space-between;
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--grey-light);
     background-color: var(--sandstone);
@@ -922,11 +922,14 @@ textarea {
     align-items: flex-start;
     gap: 0.5rem;
     cursor: pointer;
+    border-left: 3px solid var(--tangerine);
+    margin-top: 5px;
 }
 
 .notification-content {
     flex: 1;
     min-width: 0;
+    margin-left: 5px;
 }
 
 .notification-archive-btn {
@@ -950,47 +953,6 @@ textarea {
     color: var(--rose);
 }
 
-.notification-panel-footer {
-    padding: 0.5rem 1rem;
-    border-top: 1px solid var(--border-subtle);
-}
-
-.archived-toggle-btn {
-    background: none;
-    border: none;
-    color: var(--grey-mid);
-    font-size: 0.78rem;
-    cursor: pointer;
-    padding: 0;
-    font-family: var(--font-mono);
-    letter-spacing: 0.03em;
-}
-
-.archived-toggle-btn:hover {
-    color: var(--text-primary);
-}
-
-.archived-notifications-section {
-    border-top: 1px solid var(--border-subtle);
-}
-
-.archived-section-label {
-    padding: 0.5rem 1rem 0.25rem;
-    font-size: 0.72rem;
-    font-family: var(--font-mono);
-    color: var(--grey-mid);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-}
-
-.notification-item--archived {
-    opacity: 0.5;
-    cursor: default;
-}
-
-.notification-item--archived:hover {
-    background: none;
-}
 
 .notification-item:last-child {
     border-bottom: none;
@@ -1031,6 +993,67 @@ textarea {
     text-align: center;
     padding: 2rem 1.25rem;
     letter-spacing: 0.05em;
+}
+
+.archived-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.archived-remove-btn {
+    background-color: var(--);
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--rose);
+    cursor: pointer;
+    padding: 0.25rem 0.6rem;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.archived-remove-btn:hover {
+    background-color: var(--border-subtle);
+    color: var(--black);
+}
+
+.archived-select-btn {
+    margin-left: auto;
+    background-color: var(--);
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--rose);
+    cursor: pointer;
+    padding: 0.25rem 0.6rem;
+    transition: background-color 0.15s, color 0.15s;
+
+
+
+}
+
+.archived-select-btn:hover {
+    background-color: var(--border-subtle);
+    color: var(--black);
+}
+
+
+
+.notif-checkbox {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    margin-top: 2px;
+    cursor: pointer;
+    accent-color: var(--tangerine);
 }
 
 /* =====================
@@ -2252,4 +2275,748 @@ textarea {
 
 .expandable-row {
     cursor: pointer;
+}
+
+/* ── Admin Panel ─────────────────────────────────── */
+
+.nav-admin-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    padding: 0.25rem;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.nav-admin-btn:hover {
+    opacity: 1;
+}
+
+.admin-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 440px;
+    height: 100vh;
+    background: var(--white);
+    border-right: 1px solid var(--border-subtle);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+}
+
+.admin-panel.hidden {
+    transform: translateX(-100%);
+}
+
+.admin-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-subtle);
+    background-color: var(--sandstone);
+}
+
+.admin-panel-title {
+    font-family: var(--font-headline);
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#close-admin-panel {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--grey-mid);
+    padding: 0.25rem;
+}
+
+#close-admin-panel:hover {
+    color: var(--text-primary);
+}
+
+.admin-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    padding: 0.35rem;
+    transition: border-color 0.15s;
+}
+
+.admin-nav-btn.active {
+    border-color: var(--tangerine);
+}
+
+.admin-nav-img-wrap {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: calc(var(--radius) - 2px);
+    overflow: hidden;
+    background-color: var(--grey-light);
+}
+
+.admin-nav-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-nav-btn span {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    text-align: center;
+}
+
+.admin-nav-btn.active span {
+    color: var(--text-primary);
+}
+
+.admin-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.25rem;
+}
+
+.admin-section {
+    height: 100%;
+}
+
+/* ── Emulation Badge ─────────────────────────────────── */
+
+.emulation-badge {
+    position: fixed;
+    top: 4rem;
+    right: 1.25rem;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--black);
+    color: var(--white);
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+}
+
+.emulation-badge-label {
+    color: var(--grey-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.emulation-badge-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: var(--white);
+    cursor: pointer;
+    padding: 0.15rem 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    transition: border-color 0.15s;
+}
+
+.emulation-badge-trigger:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.emulation-badge-name {
+    color: var(--white);
+    font-weight: 600;
+}
+
+.emulation-badge-role {
+    background-color: var(--tangerine);
+    color: var(--white);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.65rem;
+}
+
+.emulation-badge-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    width: 240px;
+    background: var(--white);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    z-index: 301;
+}
+
+.badge-user-search-input {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--border-subtle);
+    border-radius: 0;
+    padding: 0.6rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.badge-user-list {
+    max-height: 220px;
+    overflow-y: auto;
+    color: var(--black);
+}
+
+.badge-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.badge-user-row:hover {
+    background-color: var(--grey-light);
+}
+
+.badge-user-row.current {
+    background-color: var(--sandstone);
+}
+
+.badge-user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.badge-user-name {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+.badge-user-role {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+}
+
+.emulation-badge-exit {
+    background: none;
+    border: 1px solid var(--grey-mid);
+    color: var(--white);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 0.25rem;
+    transition: border-color 0.15s;
+}
+
+.emulation-badge-exit:hover {
+    border-color: var(--white);
+}
+
+/* ── Emulation User List ─────────────────────────────── */
+
+.emulate-user-list {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.emulate-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius);
+    background-color: var(--grey-light);
+}
+
+.emulate-user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.emulate-user-name {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.emulate-user-role {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+}
+
+.emulate-user-btn {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.emulate-user-btn:hover {
+    border-color: var(--tangerine);
+    color: var(--tangerine);
+}
+
+/* ── Accounts Section ────────────────────────────────── */
+
+.accounts-add-btn {
+    display: block;
+    width: 100%;
+    padding: 0.55rem 1rem;
+    background: none;
+    border: 1px dashed var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--grey-mid);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    margin-bottom: 1rem;
+}
+
+.accounts-add-btn:hover {
+    border-color: var(--tangerine);
+    color: var(--tangerine);
+}
+
+.add-user-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--grey-light);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+}
+
+.add-user-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.add-user-actions button[type="button"] {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.add-user-actions button[type="button"]:hover {
+    border-color: var(--rose);
+    color: var(--rose);
+}
+
+.accounts-user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.account-user-row {
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius);
+    background-color: var(--grey-light);
+}
+
+.account-user-row:has(.account-user-edit-form) {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    padding: 0.75rem;
+}
+
+.account-user-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.account-user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.account-user-name {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.account-user-role {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--sandstone);
+    background: var(--tangerine);
+    padding: 0.15rem 0.4rem;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.account-user-team {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    border: 1px solid var(--border-subtle);
+    padding: 0.15rem 0.4rem;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.account-user-actions {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.account-edit-btn {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    transition: border-color;
+}
+
+.accounts-group-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--grey-mid);
+    margin: 1rem 0 0.35rem 0.25rem;
+}
+
+.accounts-group-label:first-child {
+    margin-top: 0;
+}
+
+/* ── Project Tools Section ───────────────────────────── */
+
+.pt-tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 0.5rem;
+}
+
+.pt-tab-btn {
+    background: none;
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--grey-mid);
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.pt-tab-btn:hover {
+    background: var(--grey-light);
+    color: var(--text-primary);
+}
+
+.pt-tab-btn.active {
+    background: var(--tangerine);
+    color: var(--sandstone);
+}
+
+.pt-add-link {
+    display: block;
+    text-decoration: none;
+    text-align: center;
+}
+
+.account-delete-btn {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    color: var(--grey-mid);
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    transition: border-color 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.account-delete-btn:hover {
+    border-color: var(--rose);
+    color: var(--rose);
+}
+
+.account-user-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    width: 100%;
+}
+
+.account-edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.account-edit-actions button[type="button"] {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.account-edit-actions button[type="button"]:hover {
+    border-color: var(--rose);
+    color: var(--rose);
+}
+
+.pt-discipline-checks {
+    display: flex;
+    gap: 1rem;
+}
+
+.pt-discipline-checks label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    cursor: pointer;
+}
+
+.pt-filter-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.pt-filter-select {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 0.35rem 0.6rem;
+    background: var(--grey-light);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.pt-filter-select:focus {
+    outline: none;
+    border-color: var(--tangerine);
+}
+
+.pt-custom-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    cursor: pointer;
+}
+
+/* ── Activity Log ────────────────────────────────────── */
+
+.activity-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.activity-search-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.activity-search-row #activity-search {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+.activity-search-row input[type="date"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.activity-clear-btn {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.activity-clear-btn:hover {
+    border-color: var(--tangerine);
+    color: var(--tangerine);
+}
+
+.activity-action-row {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.activity-action-row .accounts-add-btn {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.activity-wipe-btn {
+    border-color: var(--rose) !important;
+    color: var(--rose) !important;
+}
+
+.activity-wipe-btn:hover {
+    background: var(--rose) !important;
+    color: white !important;
+}
+
+.activity-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.activity-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius);
+    background: var(--grey-light);
+}
+
+.activity-entry-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-description {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.activity-meta {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grey-mid);
 }

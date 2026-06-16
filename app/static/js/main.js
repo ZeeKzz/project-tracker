@@ -95,19 +95,84 @@ document.querySelectorAll('.notification-archive-btn').forEach(function (btn) {
     });
 });
 
-// Toggle archived section
-var toggleArchivedBtn = document.getElementById('toggle-archived');
-if (toggleArchivedBtn) {
-    toggleArchivedBtn.addEventListener('click', function () {
-        var section = document.getElementById('archived-section');
-        if (!section) return;
-        var isHidden = section.classList.contains('hidden');
-        section.classList.toggle('hidden');
-        var match = this.textContent.match(/\d+/);
-        var num = match ? ' (' + match[0] + ')' : '';
-        this.textContent = isHidden ? 'Hide archived' + num : 'Show archived' + num;
+// Inbox / Archived Toggle
+var btnInbox = document.getElementById('btn-notif-inbox');
+var btnArchived = document.getElementById('btn-notif-archived');
+var inboxView = document.getElementById('notif-inbox-view');
+var archivedView = document.getElementById('notif-archived-view');
+
+if (btnInbox && btnArchived) {
+    btnInbox.addEventListener('click', function () {
+        btnInbox.classList.add('active');
+        btnArchived.classList.remove('active');
+        inboxView.classList.remove('hidden');
+        archivedView.classList.add('hidden');
+    });
+
+    btnArchived.addEventListener('click', function () {
+        btnArchived.classList.add('active');
+        btnInbox.classList.remove('active');
+        archivedView.classList.remove('hidden');
+        inboxView.classList.add('hidden');
     });
 }
+
+// Archived select / bulk delete
+var archivedSelectBtn = document.getElementById('archived-select-btn');
+var archivedRemoveBtn = document.getElementById('archived-remove-btn');
+var selectModeActive = false;
+
+if (archivedSelectBtn) {
+    archivedSelectBtn.addEventListener('click', function () {
+        selectModeActive = !selectModeActive;
+        var checkboxes = document.querySelectorAll('#notif-archived-view .notif-checkbox');
+        checkboxes.forEach(function (cb) {
+            cb.classList.toggle('hidden', !selectModeActive);
+            if (!selectModeActive) cb.checked = false;
+        });
+        archivedSelectBtn.textContent = selectModeActive ? 'Cancel' : 'Select';
+        archivedRemoveBtn.classList.toggle('hidden', !selectModeActive);
+    });
+}
+
+if (archivedRemoveBtn) {
+    archivedRemoveBtn.addEventListener('click', function () {
+        var checked = document.querySelectorAll('#notif-archived-view .notif-checkbox:checked');
+        if (checked.length === 0) return;
+        var ids = Array.from(checked).map(function (cb) { return parseInt(cb.value); });
+        fetch('/notifications/delete-bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: ids })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) return;
+                ids.forEach(function (id) {
+                    var item = document.querySelector('#notif-archived-view .notification-item[data-id="' + id + '"]');
+                    if (item) item.remove();
+                });
+                // Exit select mode
+                selectModeActive = false;
+                archivedSelectBtn.textContent = 'Select';
+                archivedRemoveBtn.classList.add('hidden');
+                document.querySelectorAll('#notif-archived-view .notif-checkbox').forEach(function (cb) {
+                    cb.classList.add('hidden');
+                });
+                // Show empty state if nothing left
+                var remaining = document.querySelectorAll('#notif-archived-view .notification-item');
+                if (remaining.length === 0) {
+                    var toolbar = document.getElementById('archived-select-btn').closest('.archived-toolbar');
+                    if (toolbar) toolbar.remove();
+                    var empty = document.createElement('p');
+                    empty.className = 'no-notifications';
+                    empty.textContent = 'No archived notifications';
+                    document.getElementById('notif-archived-view').appendChild(empty);
+                }
+            });
+    });
+}
+
 
 // Team lead dashboard toggle - team view vs personal view
 const btnTeamView = document.getElementById('btn-team-view');
@@ -420,8 +485,12 @@ if (document.getElementById('sectionBasics')) {
             return {
                 urgency: document.getElementById('urgency').value,
                 campaign_notes: document.getElementById('campaign_notes').value,
-                region_uae: document.getElementById('region_uae').checked,
-                region_gulf: document.getElementById('region_gulf').checked,
+                region_uae: document.getElementById('region_uae').classList.contains('active'),
+                region_gulf: document.getElementById('region_gulf').classList.contains('active'),
+                gulf_kuwait: document.getElementById('gulf_kuwait').classList.contains('active'),
+                gulf_qatar: document.getElementById('gulf_qatar').classList.contains('active'),
+                gulf_bahrain: document.getElementById('gulf_bahrain').classList.contains('active'),
+                gulf_oman: document.getElementById('gulf_oman').classList.contains('active'),
             };
         }
         return {};
@@ -431,9 +500,26 @@ if (document.getElementById('sectionBasics')) {
         if (type === 'ccm') {
             document.getElementById('urgency').value = state.urgency || '';
             document.getElementById('campaign_notes').value = state.campaign_notes || '';
-            document.getElementById('region_uae').checked = state.region_uae || false;
-            document.getElementById('region_gulf').checked = state.region_gulf || false;
+
+            var uaeBtn = document.getElementById('region_uae');
+            var gulfBtn = document.getElementById('region_gulf');
+            if (state.region_uae) { uaeBtn.classList.add('active'); } else { uaeBtn.classList.remove('active'); }
+            if (state.region_gulf) { gulfBtn.classList.add('active'); } else { gulfBtn.classList.remove('active'); }
+
+            ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (c) {
+                var btn = document.getElementById('gulf_' + c);
+                if (btn) {
+                    if (state['gulf_' + c]) { btn.classList.add('active'); } else { btn.classList.remove('active'); }
+                }
+            });
+
             handleRegionChange();
+
+            ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (c) {
+                if (state['gulf_' + c]) {
+                    buildGulfCountryCustomers(c);
+                }
+            });
         }
     }
 
@@ -1192,9 +1278,20 @@ if (document.getElementById('sectionBasics')) {
 
             var formData = collectFormData();
 
-            var regions = Array.from(
-                document.querySelectorAll('.region-btn[data-region].active')
-            ).map(function (btn) { return btn.dataset.region; });
+            var regions = [];
+            var uaeBtn = document.getElementById('region_uae');
+            if (uaeBtn && uaeBtn.classList.contains('active')) {
+                regions.push('uae');
+            }
+            var gulfBtn = document.getElementById('region_gulf');
+            if (gulfBtn && gulfBtn.classList.contains('active')) {
+                ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
+                    var btn = document.getElementById('gulf_' + country);
+                    if (btn && btn.classList.contains('active')) {
+                        regions.push(country);
+                    }
+                });
+            }
 
             var deliverables = [];
             document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
@@ -1275,4 +1372,995 @@ document.querySelectorAll('tr[data-expand]').forEach(function (row) {
         var icon = this.querySelector('.chevron-icon');
         if (icon) icon.classList.toggle('rotated');
     });
+});
+
+// Admin panel open / close
+var adminTrigger = document.getElementById('admin-panel-trigger');
+var adminPanel = document.getElementById('admin-panel');
+var closeAdminBtn = document.getElementById('close-admin-panel');
+
+if (adminTrigger) {
+    adminTrigger.addEventListener('click', function () {
+        adminPanel.classList.toggle('hidden');
+    });
+}
+
+if (closeAdminBtn) {
+    closeAdminBtn.addEventListener('click', function () {
+        adminPanel.classList.add('hidden');
+    });
+}
+
+// Admin section switching
+// Admin section switching
+document.querySelectorAll('.admin-nav-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.admin-nav-btn').forEach(function (b) {
+            b.classList.remove('active');
+        });
+        document.querySelectorAll('.admin-section').forEach(function (s) {
+            s.classList.add('hidden');
+        });
+        this.classList.add('active');
+        var sectionName = this.dataset.section;
+        var section = document.getElementById('admin-section-' + sectionName);
+        if (section) section.classList.remove('hidden');
+        if (sectionName === 'accounts') loadAccountsSection();
+        if (sectionName === 'projects') loadProjectToolsSection();
+        if (sectionName === 'activity') loadActivitySection();
+    });
+});
+
+// ── Emulation ────────────────────────────────────────
+
+var emulateSearch = document.getElementById('emulate-search');
+var emulateUserList = document.getElementById('emulate-user-list');
+var exitEmulationBtn = document.getElementById('exit-emulation-btn');
+var allUsers = [];
+
+// Fetch user list when admin panel opens
+if (adminTrigger) {
+    adminTrigger.addEventListener('click', function () {
+        if (allUsers.length === 0 && emulateUserList) {
+            fetch('/admin/api/users')
+                .then(function (r) { return r.json(); })
+                .then(function (users) {
+                    allUsers = users;
+                    renderUserList(users);
+                });
+        }
+    });
+}
+
+function renderUserList(users) {
+    emulateUserList.innerHTML = '';
+    if (users.length === 0) {
+        emulateUserList.innerHTML = '<p class="no-notifications">No users found</p>';
+        return;
+    }
+    users.forEach(function (user) {
+        var row = document.createElement('div');
+        row.className = 'emulate-user-row';
+        row.innerHTML =
+            '<div class="emulate-user-info">' +
+            '<span class="emulate-user-name">' + user.name + '</span>' +
+            '<span class="emulate-user-role">' + user.role + '</span>' +
+            '</div>' +
+            '<button type="button" class="emulate-user-btn" data-id="' + user.id + '">Emulate</button>';
+        emulateUserList.appendChild(row);
+    });
+
+    emulateUserList.querySelectorAll('.emulate-user-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            fetch('/admin/emulate/' + this.dataset.id, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) window.location.reload();
+                });
+        });
+    });
+}
+
+// Live search filter
+if (emulateSearch) {
+    emulateSearch.addEventListener('input', function () {
+        var query = this.value.toLowerCase();
+        var filtered = allUsers.filter(function (u) {
+            return u.name.toLowerCase().includes(query) || u.role.toLowerCase().includes(query);
+        });
+        renderUserList(filtered);
+    });
+}
+
+// Exit emulation
+if (exitEmulationBtn) {
+    exitEmulationBtn.addEventListener('click', function () {
+        fetch('/admin/emulate/exit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) window.location.reload();
+            });
+    });
+}
+
+// Emulation badge dropdown
+var badgeTrigger = document.getElementById('emulation-badge-trigger');
+var badgeDropdown = document.getElementById('emulation-badge-dropdown');
+var badgeUserSearch = document.getElementById('badge-user-search');
+var badgeUserList = document.getElementById('badge-user-list');
+var badgeUsers = [];
+
+function renderBadgeUserList(users) {
+    badgeUserList.innerHTML = '';
+    users.forEach(function (user) {
+        var row = document.createElement('div');
+        row.className = 'badge-user-row';
+        row.innerHTML =
+            '<div class="badge-user-info">' +
+            '<span class="badge-user-name">' + user.name + '</span>' +
+            '<span class="badge-user-role">' + user.role + '</span>' +
+            '</div>';
+        row.addEventListener('click', function () {
+            fetch('/admin/emulate/' + user.id, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) window.location.reload();
+                });
+        });
+        badgeUserList.appendChild(row);
+    });
+}
+
+if (badgeTrigger) {
+    badgeTrigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var isHidden = badgeDropdown.classList.contains('hidden');
+        badgeDropdown.classList.toggle('hidden');
+        if (isHidden) {
+            if (badgeUsers.length === 0) {
+                fetch('/admin/api/users')
+                    .then(function (r) { return r.json(); })
+                    .then(function (users) {
+                        badgeUsers = users;
+                        renderBadgeUserList(users);
+                        if (badgeUserSearch) badgeUserSearch.focus();
+                    });
+            } else {
+                renderBadgeUserList(badgeUsers);
+                if (badgeUserSearch) badgeUserSearch.focus();
+            }
+        }
+    });
+}
+
+if (badgeUserSearch) {
+    badgeUserSearch.addEventListener('input', function () {
+        var query = this.value.toLowerCase();
+        var filtered = badgeUsers.filter(function (u) {
+            return u.name.toLowerCase().includes(query) || u.role.toLowerCase().includes(query);
+        });
+        renderBadgeUserList(filtered);
+    });
+}
+
+document.addEventListener('click', function (e) {
+    if (badgeDropdown && !badgeDropdown.classList.contains('hidden')) {
+        if (!badgeDropdown.contains(e.target) && e.target !== badgeTrigger) {
+            badgeDropdown.classList.add('hidden');
+        }
+    }
+});
+
+// ── Accounts ─────────────────────────────────────────
+
+var accountsUserList = document.getElementById('accounts-user-list');
+var addUserToggle = document.getElementById('add-user-toggle');
+var addUserForm = document.getElementById('add-user-form');
+var addUserCancel = document.getElementById('add-user-cancel');
+var newUserRole = document.getElementById('new-user-role');
+var newUserTeam = document.getElementById('new-user-team');
+
+function loadAccountsSection() {
+    if (!accountsUserList) return;
+    fetch('/admin/api/users')
+        .then(function (r) { return r.json(); })
+        .then(function (users) {
+            accountsUserList.innerHTML = '';
+
+            var groups = [
+                { label: 'CS & Admin', filter: function (u) { return u.role === 'cs' || u.role === 'admin'; } },
+                { label: '2D Team', filter: function (u) { return u.team === '2D'; } },
+                { label: '3D Team', filter: function (u) { return u.team === '3D'; } },
+                { label: 'Technical', filter: function (u) { return u.team === 'Technical'; } }
+            ];
+
+            groups.forEach(function (group) {
+                var members = users.filter(group.filter);
+                if (members.length === 0) return;
+
+                var heading = document.createElement('p');
+                heading.className = 'accounts-group-label';
+                heading.textContent = group.label;
+                accountsUserList.appendChild(heading);
+
+                members.forEach(function (user) {
+                    var row = document.createElement('div');
+                    row.className = 'account-user-row';
+                    row.dataset.id = user.id;
+                    row.innerHTML = renderAccountDisplay(user);
+                    accountsUserList.appendChild(row);
+                    attachRowActions(row, user);
+                });
+            });
+
+            if (accountsUserList.children.length === 0) {
+                accountsUserList.innerHTML = '<p class="no-notifications">No users found</p>';
+            }
+        });
+}
+
+function renderAccountDisplay(user) {
+    var teamTag = user.team ? '<span class="account-user-team">' + user.team + '</span>' : '';
+    return '<div class="account-user-info">' +
+        '<span class="account-user-name">' + user.name + '</span>' +
+        '<span class="account-user-role">' + user.role + '</span>' +
+        teamTag +
+        '</div>' +
+        '<div class="account-user-actions">' +
+        '<button type="button" class="account-edit-btn" data-name="' + user.name + '" data-role="' + user.role + '" data-team="' + (user.team || '') + '">Edit</button>' +
+        '<button type="button" class="account-reset-btn" data-name="' + user.name + '">&#8635;</button>' +
+        '<button type="button" class="account-delete-btn" data-name="' + user.name + '">&times;</button>' +
+        '</div>';
+}
+
+function renderAccountEdit(user) {
+    var roleOptions = ['cs', 'designer', 'team_lead', 'admin'].map(function (r) {
+        return '<option value="' + r + '"' + (user.role === r ? ' selected' : '') + '>' + r + '</option>';
+    }).join('');
+    var teamOptions = ['2D', '3D', 'Technical'].map(function (t) {
+        return '<option value="' + t + '"' + (user.team === t ? ' selected' : '') + '>' + t + '</option>';
+    }).join('');
+    var teamHidden = (user.role === 'designer' || user.role === 'team_lead') ? '' : ' hidden';
+    return '<div class="account-user-edit-form">' +
+        '<input type="text" class="form-input edit-name" value="' + user.name + '" placeholder="Full name">' +
+        '<input type="email" class="form-input edit-email" value="' + (user.email || '') + '" placeholder="Email">' +
+        '<select class="form-input edit-role">' + roleOptions + '</select>' +
+        '<select class="form-input edit-team' + teamHidden + '"><option value="">Select team...</option>' + teamOptions + '</select>' +
+        '<input type="password" class="form-input edit-password" placeholder="New password (leave blank to keep)">' +
+        '<div class="account-edit-actions">' +
+        '<button type="button" class="account-save-btn btn-primary">Save</button>' +
+        '<button type="button" class="account-cancel-edit-btn">Cancel</button>' +
+        '</div>' +
+        '</div>';
+}
+
+function attachRowActions(row, user) {
+    var editBtn = row.querySelector('.account-edit-btn');
+    var resetBtn = row.querySelector('.account-reset-btn');
+    var deleteBtn = row.querySelector('.account-delete-btn');
+    var saveBtn = row.querySelector('.account-save-btn');
+    var cancelBtn = row.querySelector('.account-cancel-edit-btn');
+    var editRole = row.querySelector('.edit-role');
+
+    if (editBtn) {
+        editBtn.addEventListener('click', function () {
+            row.innerHTML = renderAccountEdit(user);
+            attachRowActions(row, user);
+        });
+    }
+
+    if (editRole) {
+        editRole.addEventListener('change', function () {
+            var teamField = row.querySelector('.edit-team');
+            if (this.value === 'designer' || this.value === 'team_lead') {
+                teamField.classList.remove('hidden');
+            } else {
+                teamField.classList.add('hidden');
+            }
+        });
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+            var name = row.querySelector('.edit-name').value.trim();
+            var email = row.querySelector('.edit-email').value.trim();
+            var role = row.querySelector('.edit-role').value;
+            var team = row.querySelector('.edit-team').value;
+            var password = row.querySelector('.edit-password').value.trim();
+            fetch('/admin/api/users/' + user.id, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, email: email, role: role, team: team, password: password })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        row.innerHTML = renderAccountDisplay(data.user);
+                        attachRowActions(row, data.user);
+                    } else {
+                        alert(data.error);
+                    }
+                });
+        });
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+            row.innerHTML = renderAccountDisplay(user);
+            attachRowActions(row, user);
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+            if (!confirm('Reset password for ' + user.name + ' to Vitamin2026!?')) return;
+            fetch('/admin/api/users/' + user.id + '/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        resetBtn.textContent = '✓';
+                        setTimeout(function () { resetBtn.innerHTML = '&#8635;'; }, 2000);
+                    }
+                });
+        });
+    }
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function () {
+            if (!confirm('Delete ' + user.name + '? This cannot be undone.')) return;
+            fetch('/admin/api/users/' + user.id, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) row.remove();
+                });
+        });
+    }
+}
+
+if (addUserToggle) {
+    addUserToggle.addEventListener('click', function () {
+        addUserForm.classList.toggle('hidden');
+    });
+}
+
+if (addUserCancel) {
+    addUserCancel.addEventListener('click', function () {
+        addUserForm.classList.add('hidden');
+        addUserForm.reset();
+        newUserTeam.classList.add('hidden');
+    });
+}
+
+if (newUserRole) {
+    newUserRole.addEventListener('change', function () {
+        if (this.value === 'designer' || this.value === 'team_lead') {
+            newUserTeam.classList.remove('hidden');
+        } else {
+            newUserTeam.classList.add('hidden');
+        }
+    });
+}
+
+if (addUserForm) {
+    addUserForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var name = document.getElementById('new-user-name').value.trim();
+        var email = document.getElementById('new-user-email').value.trim();
+        var password = document.getElementById('new-user-password').value.trim();
+        var role = newUserRole.value;
+        var team = newUserTeam.value;
+        fetch('/admin/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, email: email, password: password, role: role, team: team })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    addUserForm.reset();
+                    newUserTeam.classList.add('hidden');
+                    addUserForm.classList.add('hidden');
+                    loadAccountsSection();
+                } else {
+                    alert(data.error);
+                }
+            });
+    });
+}
+
+// ── Project Tools ─────────────────────────────────────────────────────────
+
+document.querySelectorAll('.pt-tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.pt-tab-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelectorAll('.pt-panel').forEach(function (p) { p.classList.add('hidden'); });
+        this.classList.add('active');
+        var panel = document.getElementById('pt-panel-' + this.dataset.pt);
+        if (panel) panel.classList.remove('hidden');
+        loadPTPanel(this.dataset.pt);
+    });
+});
+
+function loadProjectToolsSection() {
+    var activeTab = document.querySelector('.pt-tab-btn.active');
+    if (activeTab) loadPTPanel(activeTab.dataset.pt);
+}
+
+function loadPTPanel(name) {
+    if (name === 'clients') loadPTClients();
+    else if (name === 'customers') loadPTCustomers();
+    else if (name === 'projects') loadPTProjects();
+    else if (name === 'drafts') loadPTDrafts();
+    else if (name === 'deliverables') loadPTDeliverables();
+}
+
+// ── Clients ───────────────────────────────────────────────────
+
+function loadPTClients() {
+    fetch('/admin/api/clients')
+        .then(function (res) { return res.json(); })
+        .then(function (clients) {
+            var list = document.getElementById('pt-clients-list');
+            if (clients.length === 0) {
+                list.innerHTML = '<p class="empty-state">No clients yet.</p>';
+                return;
+            }
+            list.innerHTML = clients.map(function (c) {
+                return '<div class="account-user-row" id="pt-client-' + c.id + '">' +
+                    '<span class="account-user-name">' + c.name + '</span>' +
+                    '<div class="account-user-actions">' +
+                    '<button type="button" class="account-delete-btn" data-id="' + c.id + '" data-name="' + c.name + '">&times;</button>' +
+                    '</div></div>';
+            }).join('');
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete client "' + this.dataset.name + '"? This cannot be undone.')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/clients/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) { document.getElementById('pt-client-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete client.'); }
+                        });
+                });
+            });
+        });
+}
+
+var ptAddClientToggle = document.getElementById('pt-add-client-toggle');
+var ptAddClientForm = document.getElementById('pt-add-client-form');
+if (ptAddClientToggle) {
+    ptAddClientToggle.addEventListener('click', function () {
+        ptAddClientForm.classList.toggle('hidden');
+    });
+}
+document.getElementById('pt-add-client-cancel').addEventListener('click', function () {
+    ptAddClientForm.classList.add('hidden');
+    document.getElementById('pt-new-client-name').value = '';
+});
+ptAddClientForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('pt-new-client-name').value.trim();
+    if (!name) return;
+    fetch('/admin/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                ptAddClientForm.classList.add('hidden');
+                document.getElementById('pt-new-client-name').value = '';
+                loadPTClients();
+            } else { alert(data.error || 'Could not create client.'); }
+        });
+});
+
+// ── Customers ─────────────────────────────────────────────────
+
+function loadPTCustomers() {
+    fetch('/admin/api/customers')
+        .then(function (res) { return res.json(); })
+        .then(function (customers) {
+            var list = document.getElementById('pt-customers-list');
+            if (customers.length === 0) {
+                list.innerHTML = '<p class="empty-state">No customers yet.</p>';
+                return;
+            }
+            var grouped = {};
+            customers.forEach(function (c) {
+                if (!grouped[c.region]) grouped[c.region] = [];
+                grouped[c.region].push(c);
+            });
+            var html = '';
+            Object.keys(grouped).sort().forEach(function (region) {
+                html += '<div class="accounts-group-label">' + region.charAt(0).toUpperCase() + region.slice(1) + '</div>';
+                grouped[region].forEach(function (c) {
+                    html += '<div class="account-user-row" id="pt-customer-' + c.id + '">' +
+                        '<span class="account-user-name">' + c.name + '</span>' +
+                        '<div class="account-user-actions">' +
+                        '<button type="button" class="account-delete-btn" data-id="' + c.id + '" data-name="' + c.name + '">&times;</button>' +
+                        '</div></div>';
+                });
+            });
+            list.innerHTML = html;
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete customer "' + this.dataset.name + '"? This cannot be undone.')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/customers/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) { document.getElementById('pt-customer-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete customer.'); }
+                        });
+                });
+            });
+        });
+}
+
+var ptAddCustomerToggle = document.getElementById('pt-add-customer-toggle');
+var ptAddCustomerForm = document.getElementById('pt-add-customer-form');
+if (ptAddCustomerToggle) {
+    ptAddCustomerToggle.addEventListener('click', function () {
+        ptAddCustomerForm.classList.toggle('hidden');
+    });
+}
+document.getElementById('pt-add-customer-cancel').addEventListener('click', function () {
+    ptAddCustomerForm.classList.add('hidden');
+    document.getElementById('pt-new-customer-name').value = '';
+    document.getElementById('pt-new-customer-region').value = '';
+});
+ptAddCustomerForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('pt-new-customer-name').value.trim();
+    var region = document.getElementById('pt-new-customer-region').value;
+    if (!name || !region) return;
+    fetch('/admin/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, region: region })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                ptAddCustomerForm.classList.add('hidden');
+                document.getElementById('pt-new-customer-name').value = '';
+                document.getElementById('pt-new-customer-region').value = '';
+                loadPTCustomers();
+            } else { alert(data.error || 'Could not create customer.'); }
+        });
+});
+
+// ── Projects ──────────────────────────────────────────────────
+
+function loadPTProjects() {
+    fetch('/admin/api/projects')
+        .then(function (res) { return res.json(); })
+        .then(function (projects) {
+            var list = document.getElementById('pt-projects-list');
+            if (projects.length === 0) {
+                list.innerHTML = '<p class="empty-state">No active projects.</p>';
+                return;
+            }
+            list.innerHTML = projects.map(function (p) {
+                return '<div class="account-user-row" id="pt-project-' + p.id + '">' +
+                    '<div class="account-user-info">' +
+                    '<span class="account-user-name">' + p.name + '</span>' +
+                    '<span class="account-user-role">' + (p.job_number || 'No job #') + ' · ' + p.cs_lead + '</span>' +
+                    '</div>' +
+                    '<div class="account-user-actions">' +
+                    '<button type="button" class="account-delete-btn" data-id="' + p.id + '" data-name="' + p.name + '">&times;</button>' +
+                    '</div></div>';
+            }).join('');
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete project "' + this.dataset.name + '"? This cannot be undone.')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/projects/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) { document.getElementById('pt-project-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete project.'); }
+                        });
+                });
+            });
+        });
+}
+
+// ── Drafts ────────────────────────────────────────────────────
+
+function loadPTDrafts() {
+    fetch('/admin/api/drafts')
+        .then(function (res) { return res.json(); })
+        .then(function (drafts) {
+            var list = document.getElementById('pt-drafts-list');
+            if (drafts.length === 0) {
+                list.innerHTML = '<p class="empty-state">No drafts.</p>';
+                return;
+            }
+            list.innerHTML = drafts.map(function (d) {
+                return '<div class="account-user-row" id="pt-draft-' + d.id + '">' +
+                    '<div class="account-user-info">' +
+                    '<span class="account-user-name">' + d.name + '</span>' +
+                    '<span class="account-user-role">' + d.cs_lead + '</span>' +
+                    '</div>' +
+                    '<div class="account-user-actions">' +
+                    '<button type="button" class="account-delete-btn" data-id="' + d.id + '" data-name="' + d.name + '">&times;</button>' +
+                    '</div></div>';
+            }).join('');
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete draft "' + this.dataset.name + '"?')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/drafts/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) { document.getElementById('pt-draft-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete draft.'); }
+                        });
+                });
+            });
+        });
+}
+
+// ── Deliverable Types ─────────────────────────────────────────
+var ptFormClients = [];
+var ptFormCustomers = [];
+var ptDelFormLoaded = false;
+
+function loadPTDelFormData(callback) {
+    if (ptDelFormLoaded) { callback(); return; }
+    Promise.all([
+        fetch('/admin/api/clients').then(function (r) { return r.json(); }),
+        fetch('/admin/api/customers').then(function (r) { return r.json(); })
+    ]).then(function (results) {
+        ptFormClients = results[0];
+        ptFormCustomers = results[1];
+        ptDelFormLoaded = true;
+        callback();
+    });
+}
+
+function populatePTDelFormClients() {
+    var sel = document.getElementById('pt-new-del-client');
+    sel.innerHTML = '<option value="">Select client...</option>' +
+        ptFormClients.map(function (c) {
+            return '<option value="' + c.id + '">' + c.name + '</option>';
+        }).join('');
+}
+
+function populatePTDelFormCustomers(region) {
+    var filtered = region
+        ? ptFormCustomers.filter(function (c) { return c.region === region; })
+        : ptFormCustomers;
+    var sel = document.getElementById('pt-new-del-customer');
+    sel.innerHTML = '<option value="">Select customer...</option>' +
+        filtered.map(function (c) {
+            return '<option value="' + c.id + '">' + c.name + '</option>';
+        }).join('');
+}
+
+var ptAddDelToggle = document.getElementById('pt-add-del-toggle');
+var ptAddDelForm = document.getElementById('pt-add-del-form');
+
+ptAddDelToggle.addEventListener('click', function () {
+    var opening = ptAddDelForm.classList.contains('hidden');
+    ptAddDelForm.classList.toggle('hidden');
+    if (opening) {
+        loadPTDelFormData(function () {
+            populatePTDelFormClients();
+            populatePTDelFormCustomers('');
+        });
+    }
+});
+
+document.getElementById('pt-add-del-cancel').addEventListener('click', function () {
+    ptAddDelForm.classList.add('hidden');
+    ptAddDelForm.reset();
+});
+
+document.getElementById('pt-new-del-region').addEventListener('change', function () {
+    populatePTDelFormCustomers(this.value);
+});
+
+ptAddDelForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('pt-new-del-name').value.trim();
+    var clientId = document.getElementById('pt-new-del-client').value;
+    var customerId = document.getElementById('pt-new-del-customer').value;
+    var disciplines = Array.from(
+        ptAddDelForm.querySelectorAll('.pt-discipline-checks input:checked')
+    ).map(function (cb) { return cb.value; });
+    var isCustom = document.getElementById('pt-new-del-custom').checked;
+    if (!name || !clientId || !customerId) {
+        alert('Name, client, and customer are all required.');
+        return;
+    }
+    fetch('/admin/api/deliverable-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: name,
+            client_id: clientId,
+            customer_id: customerId,
+            disciplines: disciplines,
+            is_custom: isCustom
+        })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                ptAddDelForm.classList.add('hidden');
+                ptAddDelForm.reset();
+                ptAllDeliverableTypes.push(data.type);
+                ptAllDeliverableTypes.sort(function (a, b) { return a.name.localeCompare(b.name); });
+                populatePTDelClientFilter(ptAllDeliverableTypes);
+                renderPTDeliverableRows(ptAllDeliverableTypes);
+            } else {
+                alert(data.error || 'Could not create deliverable type.');
+            }
+        });
+});
+
+
+var ptAllDeliverableTypes = [];
+
+function loadPTDeliverables() {
+    fetch('/admin/api/deliverable-types')
+        .then(function (res) { return res.json(); })
+        .then(function (types) {
+            ptAllDeliverableTypes = types;
+            populatePTDelClientFilter(types);
+            renderPTDeliverableRows(types);
+        });
+}
+
+function populatePTDelClientFilter(types) {
+    var seen = {};
+    var clients = [];
+    types.forEach(function (t) {
+        if (t.client !== '—' && !seen[t.client]) {
+            seen[t.client] = true;
+            clients.push(t.client);
+        }
+    });
+    clients.sort();
+    var sel = document.getElementById('pt-filter-client');
+    sel.innerHTML = '<option value="">All Clients</option>' +
+        clients.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+}
+
+function populatePTDelCustomerFilter(region) {
+    var filtered = region
+        ? ptAllDeliverableTypes.filter(function (t) { return t.region === region; })
+        : ptAllDeliverableTypes;
+    var seen = {};
+    var customers = [];
+    filtered.forEach(function (t) {
+        if (t.customer !== '—' && !seen[t.customer]) {
+            seen[t.customer] = true;
+            customers.push(t.customer);
+        }
+    });
+    customers.sort();
+    var sel = document.getElementById('pt-filter-customer');
+    var prev = sel.value;
+    sel.innerHTML = '<option value="">All Customers</option>' +
+        customers.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+    if (customers.indexOf(prev) !== -1) sel.value = prev;
+}
+
+function filterPTDeliverables() {
+    var client = document.getElementById('pt-filter-client').value;
+    var region = document.getElementById('pt-filter-region').value;
+    var customer = document.getElementById('pt-filter-customer').value;
+    var filtered = ptAllDeliverableTypes.filter(function (t) {
+        if (client && t.client !== client) return false;
+        if (region && t.region !== region) return false;
+        if (customer && t.customer !== customer) return false;
+        return true;
+    });
+    renderPTDeliverableRows(filtered);
+}
+
+document.getElementById('pt-filter-client').addEventListener('change', filterPTDeliverables);
+document.getElementById('pt-filter-region').addEventListener('change', function () {
+    populatePTDelCustomerFilter(this.value);
+    filterPTDeliverables();
+});
+document.getElementById('pt-filter-customer').addEventListener('change', filterPTDeliverables);
+
+function renderPTDeliverableRows(types) {
+    var list = document.getElementById('pt-deliverables-list');
+    if (types.length === 0) {
+        list.innerHTML = '<p class="empty-state">No deliverable types match.</p>';
+        return;
+    }
+    list.innerHTML = types.map(function (t) {
+        return '<div class="account-user-row" id="pt-del-' + t.id + '">' +
+            '<div class="account-user-info">' +
+            '<span class="account-user-name">' + t.name + '</span>' +
+            '<span class="account-user-role">' + t.client + ' · ' + t.customer + (t.is_custom ? ' · Custom' : '') + '</span>' +
+            '</div>' +
+            '<div class="account-user-actions">' +
+            '<button type="button" class="account-edit-btn" data-id="' + t.id + '">Edit</button>' +
+            '<button type="button" class="account-delete-btn" data-id="' + t.id + '" data-name="' + t.name + '">&times;</button>' +
+            '</div></div>';
+    }).join('');
+
+    list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!confirm('Delete "' + this.dataset.name + '"?')) return;
+            var id = this.dataset.id;
+            fetch('/admin/api/deliverable-types/' + id, { method: 'DELETE' })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        ptAllDeliverableTypes = ptAllDeliverableTypes.filter(function (t) { return String(t.id) !== String(id); });
+                        document.getElementById('pt-del-' + id).remove();
+                    } else { alert(data.error || 'Could not delete.'); }
+                });
+        });
+    });
+
+    list.querySelectorAll('.account-edit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.dataset.id;
+            var type = ptAllDeliverableTypes.find(function (t) { return String(t.id) === String(id); });
+            if (!type) return;
+            var row = document.getElementById('pt-del-' + id);
+            row.innerHTML =
+                '<div class="account-user-edit-form">' +
+                '<input type="text" class="form-input pt-del-name-input" value="' + type.name + '">' +
+                '<div class="pt-discipline-checks">' +
+                ['2d', '3d', 'technical'].map(function (d) {
+                    var checked = type.disciplines.indexOf(d) !== -1 ? 'checked' : '';
+                    return '<label><input type="checkbox" value="' + d + '" ' + checked + '> ' + d.toUpperCase() + '</label>';
+                }).join('') +
+                '</div>' +
+                '<div class="account-edit-actions">' +
+                '<button type="button" class="btn-primary pt-del-save-btn">Save</button>' +
+                '<button type="button" class="account-cancel-edit-btn">Cancel</button>' +
+                '</div></div>';
+            row.querySelector('.account-cancel-edit-btn').addEventListener('click', function () {
+                renderPTDeliverableRows(ptAllDeliverableTypes);
+            });
+            row.querySelector('.pt-del-save-btn').addEventListener('click', function () {
+                var name = row.querySelector('.pt-del-name-input').value.trim();
+                var disciplines = Array.from(
+                    row.querySelectorAll('.pt-discipline-checks input:checked')
+                ).map(function (cb) { return cb.value; });
+                if (!name) { alert('Name is required.'); return; }
+                fetch('/admin/api/deliverable-types/' + id, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, disciplines: disciplines })
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            var idx = ptAllDeliverableTypes.findIndex(function (t) { return String(t.id) === String(id); });
+                            if (idx !== -1) {
+                                ptAllDeliverableTypes[idx].name = name;
+                                ptAllDeliverableTypes[idx].disciplines = disciplines;
+                            }
+                            renderPTDeliverableRows(ptAllDeliverableTypes);
+                        } else { alert(data.error || 'Could not save.'); }
+                    });
+            });
+        });
+    });
+}
+
+// ── Activity Log ───────────────────────────────────────────────
+
+function loadActivitySection() {
+    var search = document.getElementById('activity-search').value.trim();
+    var from = document.getElementById('activity-from').value;
+    var to = document.getElementById('activity-to').value;
+
+    var params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+
+    var url = '/admin/api/activity' + (params.toString() ? '?' + params.toString() : '');
+
+    fetch(url)
+        .then(function (res) { return res.json(); })
+        .then(function (entries) {
+            var list = document.getElementById('activity-log-list');
+            if (entries.length === 0) {
+                list.innerHTML = '<p class="empty-state">No activity found.</p>';
+                return;
+            }
+            list.innerHTML = entries.map(function (e) {
+                return '<div class="activity-entry" id="activity-' + e.id + '">' +
+                    '<div class="activity-entry-body">' +
+                    '<span class="activity-description">' + e.description + '</span>' +
+                    '<span class="activity-meta">' + e.user + ' · ' + e.created_at + '</span>' +
+                    '</div>' +
+                    '<button type="button" class="account-delete-btn" data-id="' + e.id + '">&times;</button>' +
+                    '</div>';
+            }).join('');
+
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = this.dataset.id;
+                    fetch('/admin/api/activity/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                document.getElementById('activity-' + id).remove();
+                            }
+                        });
+                });
+            });
+        });
+}
+
+document.getElementById('activity-search-btn').addEventListener('click', function () {
+    loadActivitySection();
+});
+
+document.getElementById('activity-reset-btn').addEventListener('click', function () {
+    document.getElementById('activity-search').value = '';
+    document.getElementById('activity-from').value = '';
+    document.getElementById('activity-to').value = '';
+    loadActivitySection();
+});
+
+document.getElementById('activity-export-btn').addEventListener('click', function () {
+    fetch('/admin/api/activity/export', { method: 'POST' })
+        .then(function (res) {
+            if (!res.ok) {
+                return res.json().then(function (d) { alert(d.error || 'Export failed.'); });
+            }
+            var disposition = res.headers.get('Content-Disposition');
+            var filename = 'activity-log.txt';
+            if (disposition) {
+                var match = disposition.match(/filename="(.+)"/);
+                if (match) filename = match[1];
+            }
+            return res.blob().then(function (blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        });
+});
+
+document.getElementById('activity-wipe-btn').addEventListener('click', function () {
+    if (!confirm('Wipe the entire activity log? This cannot be undone.')) return;
+    fetch('/admin/api/activity/clear', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                loadActivitySection();
+            } else {
+                alert('Could not wipe log.');
+            }
+        });
 });

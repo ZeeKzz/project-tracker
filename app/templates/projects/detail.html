@@ -9,7 +9,7 @@
     <div class="page-header">
         <h1 class="dashboard-greeting">{{ project.name }}</h1>
         <div style="display: flex; gap: 0.75rem; align-items: center;">
-            {% if current_user.role == 'admin' or project.cs_lead_id == current_user.id %}
+            {% if effective_user.role == 'admin' or project.cs_lead_id == effective_user.id %}
             <form method="POST" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
                 <button type="submit" class="btn-danger"
                     onclick="return confirm('Delete {{ project.name }}? This cannot be undone.')">
@@ -50,7 +50,7 @@
                         <tr>
                             <th>Team</th>
                             <th>Designer</th>
-                            {% if current_user.role in ['admin', 'team_lead'] %}
+                            {% if effective_user.role in ['admin', 'team_lead'] %}
                             <th>Action</th>
                             {% endif %}
                         </tr>
@@ -73,8 +73,8 @@
                                 {% endif %}
                             </td>
 
-                            {% if current_user.role == 'admin' or (current_user.role == 'team_lead' and
-                            current_user.team == team_name) %}
+                            {% if effective_user.role == 'admin' or (effective_user.role == 'team_lead' and
+                            effective_user.team == team_name) %}
                             <td>
                                 <form method="POST"
                                     action="{{ url_for('projects.assign_designers', project_id=project.id) }}"
@@ -93,7 +93,7 @@
                                     </button>
                                 </form>
                             </td>
-                            {% elif current_user.role in ['admin', 'team_lead'] %}
+                            {% elif effective_user.role in ['admin', 'team_lead'] %}
                             <td></td>
                             {% endif %}
                         </tr>
@@ -144,7 +144,7 @@
             </div>
         </div>
 
-        {% if current_user.role in ['admin', 'team_lead'] %}
+        {% if effective_user.role in ['admin', 'team_lead'] %}
         <form method="POST" action="{{ url_for('projects.assign_concept_kv', project_id=project.id) }}"
             class="inline-form" style="margin-top: 1rem;">
             <div class="detail-field">

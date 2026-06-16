@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, url_for
+from flask import Blueprint, jsonify, request, url_for
 from flask_login import login_required, current_user
 from app import db
 from app.models import Notification
@@ -55,5 +55,19 @@ def archive_notification(notification_id):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     notification.is_archived = True
     notification.is_read = True
+    db.session.commit()
+    return jsonify({'success': True})
+
+@notifications_bp.route('/notifications/delete-bulk', methods=['POST'])
+@login_required
+def delete_bulk():
+    data = request.get_json()
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'success': False, 'error': 'No IDs Provided'}), 400
+    Notification.query.filter(
+        Notification.id.in_(ids),
+        Notification.recipient_id == current_user.id
+    ).delete(synchronize_session=False)
     db.session.commit()
     return jsonify({'success': True})

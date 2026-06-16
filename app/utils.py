@@ -41,3 +41,22 @@ def calculate_project_hours(project):
     if project.timer_started_at and project.status in TIME_ACTIVE_STATUSES:
         total_hours += work_hours_between(project.timer_started_at, datetime.utcnow())
     return round(total_hours, 1)
+
+def log_activity(action, description, user=None, entity_type=None, entity_name=None, entity_id=None):
+    from app import db
+    from app.models import ActivityLog
+    try:
+        entry = ActivityLog(
+            user_id=user.id if user else None,
+            action=action,
+            description=description,
+            entity_type=entity_type,
+            entity_name=entity_name,
+            entity_id=entity_id
+        )
+        db.session.add(entry)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()

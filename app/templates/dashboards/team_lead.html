@@ -7,7 +7,7 @@
 <div class="page-container">
 
     <div class="dashboard-header">
-        <h1 class="dashboard-greeting">Welcome, <span>{{ current_user.name.split()[0] }}</span></h1>
+        <h1 class="dashboard-greeting">Welcome, <span>{{ effective_user.name.split()[0] }}</span></h1>
         <div class="dashboard-toggle">
             <button type="button" id="btn-team-view" class="toggle-btn active">Team View</button>
             <button type="button" id="btn-personal-view" class="toggle-btn">Personal</button>
@@ -18,7 +18,7 @@
     <div id="team-view" class="dashboard-view">
 
         <div class="dashboard-section">
-            <h2 class="dashboard-section-title">{{ current_user.team }} Team Workload</h2>
+            <h2 class="dashboard-section-title">{{ effective_user.team }} Team Workload</h2>
             <div class="workload-grid">
                 {% for designer in team_workload %}
                 <div class="workload-card">
@@ -62,16 +62,17 @@
                     </thead>
                     <tbody>
                         {% for project in team_projects %}
-                        {% set is_overdue = project.design_needed_by < today %} <tr
+                        {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} <tr
                             class="clickable {% if is_overdue %}overdue{% endif %}"
                             data-href="{{ url_for('projects.detail', project_id=project.id) }}">
                             <td>{{ project.name }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</td>
+                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
+                                project.design_needed_by else '—' }}</td>
                             <td>{{ project.cs_lead.name }}</td>
                             <td>
                                 {% set assigned_names = [] %}
                                 {% for a in project.assigned_designers %}
-                                {% if a.team == current_user.team %}
+                                {% if a.team == effective_user.team %}
                                 {% if assigned_names.append(a.designer.name) %}{% endif %}
                                 {% endif %}
                                 {% endfor %}
@@ -129,11 +130,12 @@
                     </thead>
                     <tbody>
                         {% for project in personal_projects %}
-                        {% set is_overdue = project.design_needed_by < today %} <tr
+                        {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} <tr
                             class="clickable {% if is_overdue %}overdue{% endif %}"
                             data-href="{{ url_for('projects.detail', project_id=project.id) }}">
                             <td>{{ project.name }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') }}</td>
+                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
+                                project.design_needed_by else '—' }}</td>
                             <td>{{ project.cs_lead.name }}</td>
                             <td>
                                 {% set has_assignment = [] %}

@@ -33,6 +33,18 @@
 
         <div class="nav-actions">
             {% if current_user.is_authenticated %}
+            {% if current_user.role == 'admin' %}
+
+            <button type="button" id="admin-panel-trigger" class="nav-admin-btn" title="Admin Panel">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                </svg>
+            </button>
+            {% endif %}
 
             <button type="button" id="notification-bell" class="nav-bell">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -73,23 +85,44 @@
         </div>
     </nav>
 
+    {% if is_emulating %}
+    <div class="emulation-badge">
+        <span class="emulation-badge-label">Viewing as</span>
+        <button type="button" id="emulation-badge-trigger" class="emulation-badge-trigger">
+            <strong class="emulation-badge-name">{{ effective_user.name }}</strong>
+            <span class="emulation-badge-role">{{ effective_user.role }}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        </button>
+        <div id="emulation-badge-dropdown" class="emulation-badge-dropdown hidden">
+            <input type="text" id="badge-user-search" placeholder="Search users..." class="badge-user-search-input">
+            <div id="badge-user-list" class="badge-user-list"></div>
+        </div>
+        <button type="button" id="exit-emulation-btn" class="emulation-badge-exit">Exit</button>
+    </div>
+    {% endif %}
+
     {% if current_user.is_authenticated %}
     <aside id="notification-panel" class="notification-panel hidden">
         <div class="notification-panel-header">
             <button type="button" id="close-notifications" aria-label="Close notifications">&gt;</button>
             <span class="notification-panel-title">Notifications</span>
+            <div class="notification-panel-toggle dashboard-toggle">
+                <button type="button" id="btn-notif-inbox" class="toggle-btn active">Inbox</button>
+                <button type="button" id="btn-notif-archived" class="toggle-btn">Archived</button>
+            </div>
         </div>
 
-        <div class="notification-panel-body" id="active-notifications">
+        <div id="notif-inbox-view" class="notification-panel-body">
             {% if user_notifications %}
             {% for notification in user_notifications %}
             <div class="notification-item {% if not notification.is_read %}unread{% endif %}"
                 data-id="{{ notification.id }}">
                 <div class="notification-content">
                     <p class="notification-message">{{ notification.message }}</p>
-                    <span class="notification-time">
-                        {{ notification.created_at.strftime('%d %b %Y, %H:%M') }}
-                    </span>
+                    <span class="notification-time">{{ notification.created_at.strftime('%d %b %Y, %H:%M') }}</span>
                 </div>
                 <button type="button" class="notification-archive-btn" data-id="{{ notification.id }}"
                     title="Archive">×</button>
@@ -100,25 +133,221 @@
             {% endif %}
         </div>
 
-        {% if archived_notifications %}
-        <div class="notification-panel-footer">
-            <button type="button" id="toggle-archived" class="archived-toggle-btn">
-                Show archived ({{ archived_notifications | length }})
-            </button>
-        </div>
-        <div class="archived-notifications-section hidden" id="archived-section">
-            <p class="archived-section-label">Archived</p>
+        <div id="notif-archived-view" class="notification-panel-body hidden">
+            {% if archived_notifications %}
+            <div class="archived-toolbar">
+                <button type="button" id="archived-remove-btn" class="archived-remove-btn hidden">Remove</button>
+                <button type="button" id="archived-select-btn" class="archived-select-btn">Select</button>
+
+            </div>
             {% for notification in archived_notifications %}
-            <div class="notification-item notification-item--archived" data-id="{{ notification.id }}">
-                <p class="notification-message">{{ notification.message }}</p>
-                <span class="notification-time">
-                    {{ notification.created_at.strftime('%d %b %Y, %H:%M') }}
-                </span>
+            <div class=" notification-item notification-item--archived" data-id="{{ notification.id }}">
+                <input type="checkbox" class="notif-checkbox hidden" value="{{ notification.id }}">
+                <div class="notification-content">
+                    <p class="notification-message">{{ notification.message }}</p>
+                    <span class="notification-time">{{ notification.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                </div>
             </div>
             {% endfor %}
+            {% else %}
+            <p class="no-notifications">No archived notifications</p>
+            {% endif %}
         </div>
-        {% endif %}
     </aside>
+
+    {% if current_user.role == 'admin' %}
+    <aside id="admin-panel" class="admin-panel hidden">
+        <div class="admin-panel-header">
+            <span class="admin-panel-title">Admin Panel</span>
+            <button type="button" id="close-admin-panel" aria-label="Close">&lt;</button>
+        </div>
+
+        <div class="admin-nav-grid">
+            <button type="button" class="admin-nav-btn active" data-section="emulate">
+                <div class="admin-nav-img-wrap">
+                    <img src="{{ url_for('static', filename='images/admin/emulate.png') }}" alt="">
+                </div>
+                <span>Emulate User</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-section="projects">
+                <div class="admin-nav-img-wrap">
+                    <img src="{{ url_for('static', filename='images/admin/projects.png') }}" alt="">
+                </div>
+                <span>Project Tools</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-section="accounts">
+                <div class="admin-nav-img-wrap">
+                    <img src="{{ url_for('static', filename='images/admin/accounts.png') }}" alt="">
+                </div>
+                <span>Account Tools</span>
+            </button>
+            <button type="button" class="admin-nav-btn" data-section="activity">
+                <div class="admin-nav-img-wrap">
+                    <img src="{{ url_for('static', filename='images/admin/activity.png') }}" alt="">
+                </div>
+                <span>Activity Log</span>
+            </button>
+        </div>
+
+        <div class="admin-panel-body">
+            <div class="admin-section" id="admin-section-emulate">
+                <input type="text" id="emulate-search" class="form-input" placeholder="Search users...">
+                <div id="emulate-user-list" class="emulate-user-list">
+                    <!-- populated by JS -->
+                </div>
+            </div>
+            <div class="admin-section hidden" id="admin-section-projects">
+                <div class="pt-tabs">
+                    <button class="pt-tab-btn active" data-pt="clients">Clients</button>
+                    <button class="pt-tab-btn" data-pt="customers">Customers</button>
+                    <button class="pt-tab-btn" data-pt="projects">Projects</button>
+                    <button class="pt-tab-btn" data-pt="drafts">Drafts</button>
+                    <button class="pt-tab-btn" data-pt="deliverables">Del. Types</button>
+                </div>
+
+                <div class="pt-panel" id="pt-panel-clients">
+                    <button type="button" class="accounts-add-btn" id="pt-add-client-toggle">+ Add Client</button>
+                    <form id="pt-add-client-form" class="add-user-form hidden">
+                        <input type="text" id="pt-new-client-name" class="form-input" placeholder="Client name">
+                        <div class="add-user-actions">
+                            <button type="submit" class="btn-primary">Create</button>
+                            <button type="button" id="pt-add-client-cancel">Cancel</button>
+                        </div>
+                    </form>
+                    <div id="pt-clients-list" class="accounts-user-list"></div>
+                </div>
+
+                <div class="pt-panel hidden" id="pt-panel-customers">
+                    <button type="button" class="accounts-add-btn" id="pt-add-customer-toggle">+ Add Customer</button>
+                    <form id="pt-add-customer-form" class="add-user-form hidden">
+                        <input type="text" id="pt-new-customer-name" class="form-input" placeholder="Customer name">
+                        <select id="pt-new-customer-region" class="form-input">
+                            <option value="">Select region...</option>
+                            <option value="uae">UAE</option>
+                            <option value="kuwait">Kuwait</option>
+                            <option value="qatar">Qatar</option>
+                            <option value="bahrain">Bahrain</option>
+                            <option value="oman">Oman</option>
+                        </select>
+                        <div class="add-user-actions">
+                            <button type="submit" class="btn-primary">Create</button>
+                            <button type="button" id="pt-add-customer-cancel">Cancel</button>
+                        </div>
+                    </form>
+                    <div id="pt-customers-list" class="accounts-user-list"></div>
+                </div>
+
+                <div class="pt-panel hidden" id="pt-panel-projects">
+                    <a href="{{ url_for('projects.drafts') }}" class="accounts-add-btn pt-add-link">+ Add Project</a>
+                    <div id="pt-projects-list" class="accounts-user-list"></div>
+                </div>
+
+                <div class="pt-panel hidden" id="pt-panel-drafts">
+                    <div id="pt-drafts-list" class="accounts-user-list"></div>
+                </div>
+
+                <div class="pt-panel hidden" id="pt-panel-deliverables">
+                    <button type="button" class="accounts-add-btn" id="pt-add-del-toggle">+ Add Deliverable
+                        Type</button>
+                    <form id="pt-add-del-form" class="add-user-form hidden">
+                        <input type="text" id="pt-new-del-name" class="form-input" placeholder="Deliverable type name">
+                        <select id="pt-new-del-client" class="form-input">
+                            <option value="">Select client...</option>
+                        </select>
+                        <select id="pt-new-del-region" class="form-input">
+                            <option value="">Select region...</option>
+                            <option value="uae">UAE</option>
+                            <option value="kuwait">Kuwait</option>
+                            <option value="qatar">Qatar</option>
+                            <option value="bahrain">Bahrain</option>
+                            <option value="oman">Oman</option>
+                        </select>
+                        <select id="pt-new-del-customer" class="form-input">
+                            <option value="">Select customer...</option>
+                        </select>
+                        <div class="pt-discipline-checks">
+                            <label><input type="checkbox" value="2d"> 2D</label>
+                            <label><input type="checkbox" value="3d"> 3D</label>
+                            <label><input type="checkbox" value="technical"> TECHNICAL</label>
+                        </div>
+                        <label class="pt-custom-label">
+                            <input type="checkbox" id="pt-new-del-custom"> Mark as custom
+                        </label>
+                        <div class="add-user-actions">
+                            <button type="submit" class="btn-primary">Create</button>
+                            <button type="button" id="pt-add-del-cancel">Cancel</button>
+                        </div>
+                    </form>
+                    <div class="pt-filter-bar">
+                        <select id="pt-filter-client" class="pt-filter-select">
+                            <option value="">All Clients</option>
+                        </select>
+                        <select id="pt-filter-region" class="pt-filter-select">
+                            <option value="">All Regions</option>
+                            <option value="uae">UAE</option>
+                            <option value="kuwait">Kuwait</option>
+                            <option value="qatar">Qatar</option>
+                            <option value="bahrain">Bahrain</option>
+                            <option value="oman">Oman</option>
+                        </select>
+                        <select id="pt-filter-customer" class="pt-filter-select">
+                            <option value="">All Customers</option>
+                        </select>
+                    </div>
+                    <div id="pt-deliverables-list" class="accounts-user-list"></div>
+                </div>
+            </div>
+            <div class="admin-section hidden" id="admin-section-accounts">
+                <!-- Account tools -->
+                <button type="button" id="add-user-toggle" class="accounts-add-btn">+ Add User</button>
+
+                <form id="add-user-form" class="add-user-form hidden">
+                    <input type="text" id="new-user-name" class="form-input" placeholder="Full name">
+                    <input type="email" id="new-user-email" class="form-input" placeholder="Email">
+                    <input type="password" id="new-user-password" class="form-input" placeholder="Password">
+                    <select id="new-user-role" class="form-input">
+                        <option value="">Select role...</option>
+                        <option value="cs">CS</option>
+                        <option value="designer">Designer</option>
+                        <option value="team_lead">Team Lead</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                    <select id="new-user-team" class="form-input hidden">
+                        <option value="">Select team...</option>
+                        <option value="2D">2D</option>
+                        <option value="3D">3D</option>
+                        <option value="Technical">Technical</option>
+                    </select>
+                    <div class="add-user-actions">
+                        <button type="submit" class="btn-primary">Create User</button>
+                        <button type="button" id="add-user-cancel">Cancel</button>
+                    </div>
+                </form>
+
+                <div id="accounts-user-list" class="accounts-user-list"></div>
+            </div>
+            <div class="admin-section hidden" id="admin-section-activity">
+                <div class="activity-toolbar">
+                    <div class="activity-search-row">
+                        <input type="text" id="activity-search" class="form-input" placeholder="Search log...">
+                        <input type="date" id="activity-from" class="form-input">
+                        <input type="date" id="activity-to" class="form-input">
+                        <button type="button" class="btn-primary" id="activity-search-btn">Search</button>
+                        <button type="button" class="activity-clear-btn" id="activity-reset-btn">Reset</button>
+                    </div>
+                    <div class="activity-action-row">
+                        <button type="button" class="accounts-add-btn activity-export-btn"
+                            id="activity-export-btn">Export to
+                            file</button>
+                        <button type="button" class="accounts-add-btn activity-wipe-btn" id="activity-wipe-btn">Wipe
+                            log</button>
+                    </div>
+                </div>
+                <div id="activity-log-list" class="activity-log-list"></div>
+            </div>
+        </div>
+    </aside>
+    {% endif %}
     {% endif %}
 
     <main class="main-content">

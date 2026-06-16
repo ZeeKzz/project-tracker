@@ -12,6 +12,7 @@ from app.models import (Project, ProjectDesigner, Scope, User, Client,
 from app.decorators import role_required
 from datetime import date, datetime
 from app.notifications import notify_team_leads_of_new_project, notify_cs_lead_of_assignment
+from app.utils import log_activity
 
 projects = Blueprint('projects', __name__)
 
@@ -63,101 +64,104 @@ def create():
 @login_required
 @role_required('admin', 'cs')
 def autosave():
-    # Implementation for autosaving project data
-    data = request.get_json()
-    if not data:
-        return jsonify({'success': False, 'error': 'No data provided'}), 400
-    
-    draft_id = data.get('draft_id')
-    draft = None
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
 
-    if draft_id:
-        candidate = Project.query.get(int(draft_id))
-        if candidate and candidate.created_by_id == current_user.id and candidate.project_status == 'draft':
-            draft = candidate
-        elif candidate and candidate.project_status != 'draft':
-            return jsonify({'success': False, 'error': 'Project already submitted'}), 400
+        draft_id = data.get('draft_id')
+        draft = None
 
-    default_scope = Scope.query.filter_by(active=True).first()
+        if draft_id:
+            candidate = Project.query.get(int(draft_id))
+            if candidate and candidate.created_by_id == current_user.id and candidate.project_status == 'draft':
+                draft = candidate
+            elif candidate and candidate.project_status != 'draft':
+                return jsonify({'success': False, 'error': 'Project already submitted'}), 400
 
-    if not draft:
-        draft = Project(
-            name=data.get('name', '').strip() or 'Untitled Draft',
-            client='TBD',
-            cs_lead_id=int(data['cs_lead_id']) if data.get('cs_lead_id') else current_user.id,
-            creator=current_user,
-            project_status='draft',
-            scope_id=default_scope.id if default_scope else 1
-        )
-        db.session.add(draft)
-        db.session.flush()  # Get the ID before commit for the response 
+        default_scope = Scope.query.filter_by(active=True).first()
 
-    
-    draft.name = data.get('name', '').strip() or 'Untitled Draft'
+        if not draft:
+            draft = Project(
+                name=data.get('name', '').strip() or 'Untitled Draft',
+                client='TBD',
+                cs_lead_id=int(data['cs_lead_id']) if data.get('cs_lead_id') else current_user.id,
+                creator=current_user,
+                project_status='draft',
+                scope_id=default_scope.id if default_scope else 1
+            )
+            db.session.add(draft)
+            db.session.flush()
 
-    if data.get('cs_lead_id'):
-        draft.cs_lead_id = int(data['cs_lead_id'])
+        draft.name = data.get('name', '').strip() or 'Untitled Draft'
 
-    if data.get('client_id'):
-        draft.client_id = int(data['client_id'])
-    
-    if data.get('job_number'):
-        job_num = data['job_number'].strip()
-        conflict = Project.query.filter(
-            Project.job_number == job_num,
-            Project.id != draft.id
-        ).first()
-        if not conflict:
-            draft.job_number = job_num or None
-    
-    if data.get('design_teams'):
-        draft.design_teams_requested = ', '.join(data['design_teams'])
-    
-    if data.get('brief_type'):
-        draft.brief_type = data['brief_type']
-    
-    if data.get('urgency'):
-        draft.urgency = data['urgency']
+        if data.get('cs_lead_id'):
+            draft.cs_lead_id = int(data['cs_lead_id'])
 
-    if data.get('required_output'):
-        draft.required_output = data['required_output']
+        if data.get('client_id'):
+            draft.client_id = int(data['client_id'])
 
-    if data.get('concept_deadline'):
-        draft.concept_deadline = date.fromisoformat(data['concept_deadline'])
-        
-    if data.get('concept_requirements') is not None:
-        draft.campaign_notes = data['concept_requirements']
+        if data.get('job_number'):
+            job_num = data['job_number'].strip()
+            conflict = Project.query.filter(
+                Project.job_number == job_num,
+                Project.id != draft.id
+            ).first()
+            if not conflict:
+                draft.job_number = job_num or None
 
-    if 'has_kv' in data:
-        draft.has_kv = bool(data['has_kv'])
+        if data.get('design_teams'):
+            draft.design_teams_requested = ', '.join(data['design_teams'])
 
-    if data.get('kv_requirements') is not None:
-        draft.kv_requirements = data['kv_requirements']
+        if data.get('brief_type'):
+            draft.brief_type = data['brief_type']
 
-    if data.get('kv_deadline'):
-        draft.kv_deadline = date.fromisoformat(data['kv_deadline'])
+        if data.get('urgency'):
+            draft.urgency = data['urgency']
 
-    if data.get('kv_options_required') is not None:
-        draft.kv_options_required = data['kv_options_required']    
+        if data.get('required_output'):
+            draft.required_output = data['required_output']
 
-    if data.get('briefing_date'):
-        draft.briefing_date = date.fromisoformat(data['briefing_date'])
+        if data.get('concept_deadline'):
+            draft.concept_deadline = date.fromisoformat(data['concept_deadline'])
 
-    if data.get('first_output_deadline'):
+        if data.get('concept_requirements') is not None:
+            draft.campaign_notes = data['concept_requirements']
 
-        draft.first_output_deadline = date.fromisoformat(data['first_output_deadline'])
+        if 'has_kv' in data:
+            draft.has_kv = bool(data['has_kv'])
 
-    if data.get('final_deadline'):
-        draft.design_needed_by = date.fromisoformat(data['final_deadline']) 
+        if data.get('kv_requirements') is not None:
+            draft.kv_requirements = data['kv_requirements']
 
-    if data.get('installation_date'):
-        draft.installation_date = date.fromisoformat(data['installation_date'])
-    
-    draft.last_autosaved_at = datetime.now()
+        if data.get('kv_deadline'):
+            draft.kv_deadline = date.fromisoformat(data['kv_deadline'])
 
-    db.session.commit()
+        if data.get('kv_options_required') is not None:
+            draft.kv_options_required = data['kv_options_required']
 
-    return jsonify({'success': True, 'draft_id': draft.id})
+        if data.get('briefing_date'):
+            draft.briefing_date = date.fromisoformat(data['briefing_date'])
+
+        if data.get('first_output_deadline'):
+            draft.first_output_deadline = date.fromisoformat(data['first_output_deadline'])
+
+        if data.get('final_deadline'):
+            draft.design_needed_by = date.fromisoformat(data['final_deadline'])
+
+        if data.get('installation_date'):
+            draft.installation_date = date.fromisoformat(data['installation_date'])
+
+        draft.last_autosaved_at = datetime.now()
+        db.session.commit()
+
+        return jsonify({'success': True, 'draft_id': draft.id})
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'Autosave failed'}), 500
 
 @projects.route('/projects/<int:project_id>')
 @login_required
@@ -295,6 +299,7 @@ def assign_designers(project_id):
             team_name=team,
             triggered_by=current_user
         )
+        log_activity('designer_assigned', f'{designer.name} assigned to {team} team on "{project.name}"', user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
 
     flash('Designer assignment updated successfully.', 'success')
     return redirect(url_for('projects.detail', project_id=project_id))
@@ -313,6 +318,14 @@ def assign_concept_kv(project_id):
         project.kv_designer_id = int(kv_id)
 
     db.session.commit()
+    if concept_id:
+        concept_designer = User.query.get(int(concept_id))
+        if concept_designer:
+            log_activity('designer_assigned', f'{concept_designer.name} assigned as Concept designer on "{project.name}"', user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
+    if kv_id:
+        kv_designer = User.query.get(int(kv_id))
+        if kv_designer:
+            log_activity('designer_assigned', f'{kv_designer.name} assigned as KV designer on "{project.name}"', user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
     return redirect(url_for('projects.detail', project_id=project.id))
 
 @projects.route('/projects/<int:project_id>/download-brief')
@@ -468,6 +481,7 @@ def add_deliverable_type():
             db.session.add(discipline)
 
         db.session.commit()
+        log_activity('deliverable_created', f'Custom deliverable type "{new_type.name}" created', user=current_user, entity_type='deliverable', entity_name=new_type.name, entity_id=new_type.id)
 
         return jsonify({
             'id': new_type.id,
@@ -592,37 +606,43 @@ def submit_project():
 
         db.session.commit()
 
-        # ── Notifications ────────────────────────────────────
-        selected_cs_id = int(data['cs_lead_id'])
-        if selected_cs_id != current_user.id:
-            cs_lead = User.query.get(selected_cs_id)
-            if cs_lead:
-                create_notification(
-                    recipient=cs_lead,
-                    message=f'You have been assigned as CS Lead on "{project.name}".',
-                    notification_type='project_assigned',
-                    project=project,
-                    triggered_by=current_user
-                )
+        # Notifications (non-blocking)
+        try:
+            selected_cs_id = int(data['cs_lead_id'])
+            if selected_cs_id != current_user.id:
+                cs_lead = User.query.get(selected_cs_id)
+                if cs_lead:
+                    create_notification(
+                        recipient=cs_lead,
+                        message=f'You have been assigned as CS Lead on "{project.name}".',
+                        notification_type='project_assigned',
+                        project=project,
+                        triggered_by=current_user
+                    )
 
-        disciplines_used = set()
-        for item in data['deliverables']:
-            if item.get('type_id') and item['type_id'] != 'custom':
-                dt = DeliverableType.query.get(int(item['type_id']))
-                if dt:
-                    for d in dt.disciplines:
-                        disciplines_used.add(d.team)
+            disciplines_used = set()
+            for item in data['deliverables']:
+                if item.get('type_id') and item['type_id'] != 'custom':
+                    dt = DeliverableType.query.get(int(item['type_id']))
+                    if dt:
+                        for d in dt.disciplines:
+                            disciplines_used.add(d.team)
 
-        team_leads = User.query.filter_by(role='team_lead').all()
-        for lead in team_leads:
-            if lead.team in disciplines_used:
-                create_notification(
-                    recipient=lead,
-                    message=f'New project "{project.name}" requires your team. Please assign designers.',
-                    notification_type='project_assigned',
-                    project=project,
-                    triggered_by=current_user
-                )
+            team_leads = User.query.filter_by(role='team_lead').all()
+            for lead in team_leads:
+                if lead.team in disciplines_used:
+                    create_notification(
+                        recipient=lead,
+                        message=f'New project "{project.name}" requires your team. Please assign designers.',
+                        notification_type='project_assigned',
+                        project=project,
+                        triggered_by=current_user
+                    )
+        except Exception as notif_err:
+            import traceback
+            traceback.print_exc()
+
+        log_activity('project_submitted', f'Project "{project.name}" submitted', user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
 
         return jsonify({
             'success': True,
@@ -636,3 +656,5 @@ def submit_project():
         traceback.print_exc()
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
 
+
+                        

@@ -14,27 +14,46 @@ def index():
     Role-aware dashboard router.
     Looks at the current user's role and renders the appropriate dashboard.
     """
-    if current_user.role in ['cs', 'admin']:
+
+    from flask import session
+    from app.models import User as UserModel
+    emulating_id = session.get('emulating_user_id')
+    if emulating_id and current_user.role == 'admin':
+        effective_role = UserModel.query.get(emulating_id).role
+    else:
+        effective_role = current_user.role
+
+    if effective_role in ['cs', 'admin']:
         return cs_dashboard()
-    elif current_user.role == 'designer':
+    elif effective_role == 'designer':
         return designer_dashboard()
-    elif current_user.role == 'team_lead':
+    elif effective_role == 'team_lead':
         return team_lead_dashboard()
     else:
-        return redirect(url_for('projects.index'))
+        return redirect(url_for('index'))
 
 
 def cs_dashboard():
     """Render the CS dashboard - own projects default, all projects toggle."""
+    from flask import session
+    from app.models import User as UserModel
+    
     today = date.today()
 
-    if current_user.role == 'admin':
+    emulating_id = session.get('emulating_user_id')
+
+    if emulating_id and current_user.role == 'admin':
+        effective_user = UserModel.query.get(emulating_id)
+    else:
+        effective_user = current_user
+    
+    if effective_user.role == 'admin':
         my_projects = Project.query.filter(
             Project.project_status != 'draft'
         ).order_by(Project.design_needed_by.asc()).all()
     else:
         my_projects = Project.query.filter(
-            Project.cs_lead_id == current_user.id,
+            Project.cs_lead_id == effective_user.id,
             Project.project_status != 'draft'
         ).order_by(Project.design_needed_by.asc()).all()
 
@@ -50,20 +69,28 @@ def cs_dashboard():
     ).order_by(User.name).all()
 
     return render_template(
-        'dashboards/cs.html',
-        projects=my_projects,
-        all_projects=all_projects,
-        cs_users=cs_users,
-        today=today
-    )
+    'dashboards/cs.html',
+    projects=my_projects,
+    all_projects=all_projects,
+    cs_users=cs_users,
+    today=today
+)
+
 
 
 def designer_dashboard():
-    """Render the designer dashboard - projects this designer is assigned to."""
-    # Get all project IDs this user is assigned to as a designer
+    from flask import session
+    from app.models import User as UserModel
+
+    emulating_id = session.get('emulating_user_id')
+    if emulating_id and current_user.role == 'admin':
+        effective_user = UserModel.query.get(emulating_id)
+    else:
+        effective_user = current_user
+
     assigned_project_ids = [
         pd.project_id for pd in
-        ProjectDesigner.query.filter_by(user_id=current_user.id).all()
+        ProjectDesigner.query.filter_by(user_id=effective_user.id).all()
     ]
 
     if assigned_project_ids:
@@ -91,12 +118,29 @@ def designer_dashboard():
 
 
 def team_lead_dashboard():
-    """Render the team lead dashboard - both team-wide and personal views."""
-    team = current_user.team
+    from flask import session
+    from app.models import User as UserModel
+
+    emulating_id = session.get('emulating_user_id')
+    if emulating_id and current_user.role == 'admin':
+        effective_user = UserModel.query.get(emulating_id)
+    else:
+        effective_user = current_user
+
+    team = effective_user.team
     today = date.today()
     tomorrow = today + timedelta(days=1)
 
-    # Team data: all projects requesting this team
+    if not team:
+        return render_template(
+            'dashboards/team_lead.html',
+            team_projects=[], team_active=0, team_due_today=0,
+            team_due_tomorrow=0, team_workload=[],
+            personal_projects=[], personal_active=0,
+            personal_due_today=0, personal_due_tomorrow=0,
+            today=today
+        )
+
     team_projects = Project.query.filter(
         Project.design_teams_requested.contains(team)
     ).order_by(Project.design_needed_by.asc()).all()
@@ -105,7 +149,6 @@ def team_lead_dashboard():
     team_due_today = sum(1 for p in team_projects if p.design_needed_by == today)
     team_due_tomorrow = sum(1 for p in team_projects if p.design_needed_by == tomorrow)
 
-    # Workload per designer in this team
     designers_in_team = User.query.filter(
         User.team == team,
         User.role.in_(['designer', 'team_lead'])
@@ -116,10 +159,9 @@ def team_lead_dashboard():
         count = ProjectDesigner.query.filter_by(user_id=designer.id).count()
         team_workload.append({'name': designer.name, 'count': count})
 
-    # Personal data: projects this team lead is assigned to as a designer
     personal_project_ids = [
         pd.project_id for pd in
-        ProjectDesigner.query.filter_by(user_id=current_user.id).all()
+        ProjectDesigner.query.filter_by(user_id=effective_user.id).all()
     ]
 
     if personal_project_ids:
@@ -146,3 +188,5 @@ def team_lead_dashboard():
         personal_due_tomorrow=personal_due_tomorrow,
         today=today
     )
+
+

@@ -1,0 +1,424 @@
+from flask import Blueprint, jsonify, session, url_for
+from flask_login import login_required, current_user
+from app.models import User
+from flask import Blueprint, jsonify, session, url_for, request
+from app.utils import log_activity
+from datetime import timezone, timedelta
+
+DUBAI_TZ = timezone(timedelta(hours=4))
+
+admin_bp = Blueprint('admin', __name__)
+
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != 'admin':
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+@admin_bp.route('/admin/api/users', methods=['GET'])
+@login_required
+@admin_required
+def list_users():
+    users = User.query.order_by(User.name).all()
+    return jsonify([{'id': u.id, 'name': u.name, 'email': u.email, 'role': u.role, 'team': u.team} for u in users])
+
+@admin_bp.route ('/admin/emulate/<int:user_id>', methods=['POST'])
+@login_required
+@admin_required
+def start_emulation(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.role == 'admin':
+     return jsonify({'success': False, 'error': 'Cannot emulate an admin account'}), 400
+    session['emulating_user_id'] = user.id
+    return jsonify({'success': True, 'redirect_url': url_for('main.index')})
+
+@admin_bp.route('/admin/emulate/exit', methods=['POST'])
+@login_required
+def exit_emulation():
+    session.pop('emulating_user_id', None)
+    return jsonify({'success': True, 'redirect_url': url_for('main.index')})
+
+@admin_bp.route('/admin/api/users', methods=['POST'])
+@login_required
+@admin_required
+def create_user():
+    from werkzeug.security import generate_password_hash
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    password = (data.get('password') or '').strip()
+    role = (data.get('role') or '').strip()
+    team = (data.get('team') or '').strip() or None
+
+    if not all([name, email, password, role]):
+        return jsonify({'success': False, 'error': 'All fields are required'}), 400
+
+    if User.query.filter_by(email=email).first():
+        return jsonify({'success': False, 'error': 'Email already exists'}), 400
+
+    if role not in ['designer', 'team_lead']:
+        team = None
+
+    from app import db
+    user = User(
+        name=name,
+        email=email,
+        password_hash=generate_password_hash(password),
+        role=role,
+        team=team
+    )
+    db.session.add(user)
+    db.session.commit()
+    log_activity('user_created', f'User "{user.name}" created with role {role}', user=current_user, entity_type='user', entity_name=user.name, entity_id=user.id)
+    return jsonify({'success': True, 'user': {'id': user.id, 'name': user.name, 'role': user.role, 'team': user.team}})
+
+
+@admin_bp.route('/admin/api/users/<int:user_id>', methods=['PATCH'])
+@login_required
+@admin_required
+def update_user(user_id):
+    from app import db
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    role = (data.get('role') or '').strip()
+    team = (data.get('team') or '').strip() or None
+    password = (data.get('password') or '').strip()
+
+    if not name or not email or not role:
+        return jsonify({'success': False, 'error': 'Name, email and role are required'}), 400
+
+    existing = User.query.filter_by(email=email).first()
+    if existing and existing.id != user_id:
+        return jsonify({'success': False, 'error': 'That email is already in use'}), 400
+
+    if role not in ['designer', 'team_lead']:
+        team = None
+
+    user.name = name
+    user.email = email
+    user.role = role
+    user.team = team
+
+    if password:
+        user.set_password(password)
+
+    db.session.commit()
+    return jsonify({'success': True, 'user': {'id': user.id, 'name': user.name, 'email': user.email, 'role': user.role, 'team': user.team}})
+
+
+@admin_bp.route('/admin/api/users/<int:user_id>/reset-password', methods=['POST'])
+@login_required
+@admin_required
+def admin_reset_password(user_id):
+    from app import db
+    user = User.query.get_or_404(user_id)
+    user.set_password('Vitamin2026!')
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/admin/api/users/<int:user_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_user(user_id):
+    from app import db
+    if user_id == current_user.id:
+        return jsonify({'success': False, 'error': 'Cannot delete your own account'}), 400
+    user = User.query.get_or_404(user_id)
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'success': True})
+
+# ── Project Tools ────────────────────────────────────────────────────────────
+
+@admin_bp.route('/admin/api/clients', methods=['GET'])
+@login_required
+@admin_required
+def list_clients():
+    from app.models import Client
+    clients = Client.query.order_by(Client.name).all()
+    return jsonify([{'id': c.id, 'name': c.name} for c in clients])
+
+@admin_bp.route('/admin/api/clients', methods=['POST'])
+@login_required
+@admin_required
+def create_client():
+    from app import db
+    from app.models import Client
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'Name is required'}), 400
+    if Client.query.filter_by(name=name).first():
+        return jsonify({'success': False, 'error': 'Client already exists'}), 400
+    client = Client(name=name, created_by=current_user)
+    db.session.add(client)
+    db.session.commit()
+    log_activity('client_created', f'Client "{client.name}" added', user=current_user, entity_type='client', entity_name=client.name, entity_id=client.id)
+    return jsonify({'success': True, 'client': {'id': client.id, 'name': client.name}})
+
+@admin_bp.route('/admin/api/clients/<int:client_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_client(client_id):
+    from app import db
+    from app.models import Client
+    client = Client.query.get_or_404(client_id)
+    name = client.name
+    db.session.delete(client)
+    db.session.commit()
+    log_activity('client_deleted', f'Client "{name}" deleted', user=current_user, entity_type='client', entity_name=name)
+    return jsonify({'success': True})
+
+@admin_bp.route('/admin/api/customers', methods=['GET'])
+@login_required
+@admin_required
+def list_customers():
+    from app.models import Customer
+    customers = Customer.query.order_by(Customer.region, Customer.name).all()
+    return jsonify([{'id': c.id, 'name': c.name, 'region': c.region} for c in customers])
+
+@admin_bp.route('/admin/api/customers', methods=['POST'])
+@login_required
+@admin_required
+def create_customer():
+    from app import db
+    from app.models import Customer
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    region = (data.get('region') or '').strip().lower()
+    if not name or not region:
+        return jsonify({'success': False, 'error': 'Name and region are required'}), 400
+    customer = Customer(name=name, region=region)
+    db.session.add(customer)
+    db.session.commit()
+    log_activity('customer_created', f'Customer "{customer.name}" ({customer.region}) added', user=current_user, entity_type='customer', entity_name=customer.name, entity_id=customer.id)
+    return jsonify({'success': True, 'customer': {'id': customer.id, 'name': customer.name, 'region': customer.region}})
+
+@admin_bp.route('/admin/api/customers/<int:customer_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_customer(customer_id):
+    from app import db
+    from app.models import Customer
+    customer = Customer.query.get_or_404(customer_id)
+    name = customer.name
+    db.session.delete(customer)
+    db.session.commit()
+    log_activity('customer_deleted', f'Customer "{name}" deleted', user=current_user, entity_type='customer', entity_name=name)
+    return jsonify({'success': True})
+
+@admin_bp.route('/admin/api/projects', methods=['GET'])
+@login_required
+@admin_required
+def list_projects():
+    from app.models import Project
+    projects = Project.query.filter_by(project_status='active').order_by(Project.name).all()
+    return jsonify([{'id': p.id, 'name': p.name, 'job_number': p.job_number, 'cs_lead': p.cs_lead.name if p.cs_lead else '—'} for p in projects])
+
+@admin_bp.route('/admin/api/projects/<int:project_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_project(project_id):
+    from app import db
+    from app.models import Project
+    project = Project.query.get_or_404(project_id)
+    name = project.name
+    db.session.delete(project)
+    db.session.commit()
+    log_activity('project_deleted', f'Project "{name}" deleted', user=current_user, entity_type='project', entity_name=name)
+    return jsonify({'success': True})
+
+@admin_bp.route('/admin/api/drafts', methods=['GET'])
+@login_required
+@admin_required
+def list_drafts():
+    from app.models import Project
+    drafts = Project.query.filter_by(project_status='draft').order_by(Project.name).all()
+    return jsonify([{'id': d.id, 'name': d.name, 'cs_lead': d.cs_lead.name if d.cs_lead else '—'} for d in drafts])
+
+@admin_bp.route('/admin/api/drafts/<int:draft_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_draft_admin(draft_id):
+    from app import db
+    from app.models import Project
+    draft = Project.query.get_or_404(draft_id)
+    name = draft.name
+    db.session.delete(draft)
+    db.session.commit()
+    log_activity('draft_deleted', f'Draft "{name}" deleted', user=current_user, entity_type='project', entity_name=name)
+    return jsonify({'success': True})
+
+@admin_bp.route('/admin/api/deliverable-types', methods=['GET'])
+@login_required
+@admin_required
+def list_deliverable_types():
+    from app.models import DeliverableType
+    types = DeliverableType.query.order_by(DeliverableType.name).all()
+    return jsonify([{
+        'id': dt.id,
+        'name': dt.name,
+        'client': dt.client.name if dt.client else '—',
+        'customer': dt.customer.name if dt.customer else '—',
+        'region': dt.customer.region if dt.customer else '—',
+        'disciplines': [d.team for d in dt.disciplines],
+        'is_custom': dt.is_custom
+    } for dt in types])
+    
+
+@admin_bp.route('/admin/api/deliverable-types/<int:type_id>', methods=['PATCH'])
+@login_required
+@admin_required
+def update_deliverable_type(type_id):
+    from app import db
+    from app.models import DeliverableType, DeliverableTypeDiscipline
+    dt = DeliverableType.query.get_or_404(type_id)
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    disciplines = data.get('disciplines', [])
+    if not name:
+        return jsonify({'success': False, 'error': 'Name is required'}), 400
+    dt.name = name
+    DeliverableTypeDiscipline.query.filter_by(deliverable_type_id=dt.id).delete()
+    for team in disciplines:
+        db.session.add(DeliverableTypeDiscipline(deliverable_type_id=dt.id, team=team))
+    db.session.commit()
+    log_activity('deliverable_updated', f'Deliverable type "{dt.name}" updated', user=current_user, entity_type='deliverable', entity_name=dt.name, entity_id=dt.id)
+    return jsonify({'success': True, 'type': {'id': dt.id, 'name': dt.name, 'disciplines': disciplines}})
+
+@admin_bp.route('/admin/api/deliverable-types', methods=['POST'])
+@login_required
+@admin_required
+def create_deliverable_type():
+    from app import db
+    from app.models import DeliverableType, DeliverableTypeDiscipline
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    client_id = data.get('client_id')
+    customer_id = data.get('customer_id')
+    disciplines = data.get('disciplines', [])
+    is_custom = bool(data.get('is_custom', False))
+    if not name or not client_id or not customer_id:
+        return jsonify({'success': False, 'error': 'Name, client, and customer are required'}), 400
+    dt = DeliverableType(
+        name=name,
+        client_id=int(client_id),
+        customer_id=int(customer_id),
+        is_custom=is_custom
+    )
+    db.session.add(dt)
+    db.session.flush()
+    for team in disciplines:
+        db.session.add(DeliverableTypeDiscipline(deliverable_type_id=dt.id, team=team))
+    db.session.commit()
+    log_activity('deliverable_created', f'Deliverable type "{dt.name}" created', user=current_user, entity_type='deliverable', entity_name=dt.name, entity_id=dt.id)
+    return jsonify({'success': True, 'type': {
+        'id': dt.id,
+        'name': dt.name,
+        'client': dt.client.name,
+        'customer': dt.customer.name,
+        'region': dt.customer.region,
+        'disciplines': disciplines,
+        'is_custom': dt.is_custom
+    }})
+
+@admin_bp.route('/admin/api/deliverable-types/<int:type_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_deliverable_type(type_id):
+    from app import db
+    from app.models import DeliverableType
+    dt = DeliverableType.query.get_or_404(type_id)
+    name = dt.name
+    db.session.delete(dt)
+    db.session.commit()
+    log_activity('deliverable_deleted', f'Deliverable type "{name}" deleted', user=current_user, entity_type='deliverable', entity_name=name)
+    return jsonify({'success': True})
+
+# Activity Log
+@admin_bp.route('/admin/api/activity', methods=['GET'])
+@login_required
+@admin_required
+def list_activity():
+    from app.models import ActivityLog
+    from app import db
+    from datetime import datetime
+    query = ActivityLog.query
+
+    search = request.args.get('search', '').strip()
+    from_date = request.args.get('from', '').strip()
+    to_date = request.args.get('to', '').strip()
+
+    if search:
+        pattern = f'%{search}%'
+        query = query.filter(
+            db.or_(
+                ActivityLog.description.ilike(pattern),
+                ActivityLog.entity_name.ilike(pattern)
+            )
+        )
+    if from_date:
+        from_dt_utc = datetime.fromisoformat(from_date) - timedelta(hours=4)
+        query = query.filter(ActivityLog.created_at >= from_dt_utc)
+    if to_date:
+        to_dt_utc = datetime.fromisoformat(to_date + ' 23:59:59') - timedelta(hours=4)
+        query = query.filter(ActivityLog.created_at <= to_dt_utc)
+
+    entries = query.order_by(ActivityLog.created_at.desc()).limit(500).all()
+    return jsonify([{
+        'id': e.id,
+        'action': e.action,
+        'description': e.description,
+        'entity_type': e.entity_type,
+        'entity_name': e.entity_name,
+        'entity_id': e.entity_id,
+        'user': e.user.name if e.user else 'System',
+        'created_at': e.created_at.replace(tzinfo=timezone.utc).astimezone(DUBAI_TZ).strftime('%d %b %Y, %H:%M')
+    } for e in entries])
+
+@admin_bp.route('/admin/api/activity/export', methods=['POST'])
+@login_required
+@admin_required
+def export_activity():
+    from app.models import ActivityLog
+    from flask import make_response
+    from datetime import datetime
+    entries = ActivityLog.query.order_by(ActivityLog.created_at.asc()).all()
+    if not entries:
+        return jsonify({'success': False, 'error': 'No entries to export'}), 400
+    lines = [f"{e.created_at.replace(tzinfo=timezone.utc).astimezone(DUBAI_TZ).strftime('%d-%m-%Y-%H-%M')} | {e.user.name if e.user else 'System'} | {e.description}" for e in entries]
+    content = '\n'.join(lines)
+    filename = f"activity-log-{datetime.now().strftime('%d-%m-%Y-%H-%M')}.txt"
+    response = make_response(content)
+    response.headers['Content-Type'] = 'text/plain'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+@admin_bp.route('/admin/api/activity/clear', methods=['POST'])
+@login_required
+@admin_required
+def clear_activity():
+    from app import db
+    from app.models import ActivityLog
+    ActivityLog.query.delete()
+    db.session.commit()
+    log_activity('log_cleared', f'Activity log wiped by {current_user.name}', user=current_user)
+    return jsonify({'success': True})
+
+@admin_bp.route('/admin/api/activity/<int:entry_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_activity(entry_id):
+    from app import db
+    from app.models import ActivityLog
+    entry = ActivityLog.query.get_or_404(entry_id)
+    db.session.delete(entry)
+    db.session.commit()
+    return jsonify({'success': True})

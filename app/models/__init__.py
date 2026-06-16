@@ -293,3 +293,17 @@ class DeliverableAssignment(db.Model):
 
     def __repr__(self):
         return f'<DeliverableAssignment deliverable={self.deliverable_id} designer={self.designer_id}>'
+    
+class ActivityLog(db.Model):
+    __tablename__ = 'activity_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    action = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    entity_type = db.Column(db.String(50), nullable=True)
+    entity_name = db.Column(db.String(200), nullable=True)
+    entity_id = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', foreign_keys=[user_id])
