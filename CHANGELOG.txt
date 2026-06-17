@@ -1,0 +1,44 @@
+================================================================================
+VITAMIN HELIX — CHANGELOG — 2026-06-17
+================================================================================
+
+STANDARD BRIEF — DELIVERABLES
+-------------------------------------
+- Each deliverable now has its own Design Deadline
+- CS can set deadlines per deliverable when building a brief,
+  with a quick button to apply the same date to all at once
+- Design Deadline now shows on the project view page
+- Deliverable form fields are now properly labelled (Name, Design Deadline)
+- CS can tag each deliverable with the team(s) responsible for it (2D, 3D, Technical)
+- Team tags display on each deliverable row once added
+
+DESIGNER ASSIGNMENT
+-------------------------------------
+- Assignment dropdowns now only show designers from the correct team
+  (e.g. a 3D deliverable only shows 3D designers)
+- Designers can now assign themselves to Standard Brief deliverables directly
+
+UI — TEAM TAG BUTTONS
+-------------------------------------
+- Team selectors throughout the app converted from checkboxes to clickable pill buttons
+- Buttons now have a visible background when unselected so they look clickable
+
+ADMIN PANEL
+-------------------------------------
+- New: Design Types section — admin can add, edit, and delete design types
+  and assign which team(s) they belong to
+- New: Design Directions section — admin can add, edit, and delete directions
+- Project list now correctly shows all active projects (was showing none)
+
+REVISION LABELS
+-------------------------------------
+- Revision badges now read "Revision 2" instead of "R2" across all project types
+
+BUG FIXES
+-------------------------------------
+- Flagging a project now correctly shows the name of the person who raised it,
+  even when an admin is acting on behalf of another user
+
+================================================================================
+END OF LOG
+================================================================================
