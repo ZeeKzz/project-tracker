@@ -219,8 +219,8 @@ def delete_customer(customer_id):
 @admin_required
 def list_projects():
     from app.models import Project
-    projects = Project.query.filter_by(project_status='active').order_by(Project.name).all()
-    return jsonify([{'id': p.id, 'name': p.name, 'job_number': p.job_number, 'cs_lead': p.cs_lead.name if p.cs_lead else '—'} for p in projects])
+    projects = Project.query.filter(Project.project_status != 'draft').order_by(Project.name).all()
+    return jsonify([{'id': p.id, 'name': p.name, 'job_number': p.job_number, 'cs_lead': p.cs_lead.name if p.cs_lead else '—', 'status': p.project_status} for p in projects])
 
 @admin_bp.route('/admin/api/projects/<int:project_id>', methods=['DELETE'])
 @login_required
@@ -422,3 +422,163 @@ def delete_activity(entry_id):
     db.session.delete(entry)
     db.session.commit()
     return jsonify({'success': True})
+
+
+# ── Design Types ─────────────────────────────────────────────────────────────
+
+@admin_bp.route('/admin/api/design-types', methods=['GET'])
+@login_required
+@admin_required
+def list_design_types():
+    from app.models import DesignType
+    types = DesignType.query.order_by(DesignType.name).all()
+    return jsonify([{'id': t.id, 'name': t.name, 'team': t.team} for t in types])
+
+@admin_bp.route('/admin/api/design-types', methods=['POST'])
+@login_required
+@admin_required
+def create_design_type():
+    from app import db
+    from app.models import DesignType
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    team = (data.get('team') or '').strip() or None
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    if DesignType.query.filter_by(name=name).first():
+        return jsonify({'error': 'Already exists'}), 409
+    t = DesignType(name=name, team=team)
+    db.session.add(t)
+    db.session.commit()
+    log_activity('design_type_created', f'Design type "{name}" created', user=current_user)
+    return jsonify({'id': t.id, 'name': t.name, 'team': t.team})
+
+@admin_bp.route('/admin/api/design-types/<int:type_id>', methods=['PATCH'])
+@login_required
+@admin_required
+def update_design_type(type_id):
+    from app import db
+    from app.models import DesignType
+    t = DesignType.query.get_or_404(type_id)
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    t.name = name
+    if 'team' in data:
+        t.team = (data.get('team') or '').strip() or None
+    db.session.commit()
+    return jsonify({'id': t.id, 'name': t.name, 'team': t.team})
+
+@admin_bp.route('/admin/api/design-types/<int:type_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_design_type(type_id):
+    from app import db
+    from app.models import DesignType
+    t = DesignType.query.get_or_404(type_id)
+    name = t.name
+    db.session.delete(t)
+    db.session.commit()
+    log_activity('design_type_deleted', f'Design type "{name}" deleted', user=current_user)
+    return jsonify({'success': True})
+
+
+# ── Design Directions ────────────────────────────────────────────────────────
+
+@admin_bp.route('/admin/api/design-directions', methods=['GET'])
+@login_required
+@admin_required
+def list_design_directions():
+    from app.models import DesignDirection
+    dirs = DesignDirection.query.order_by(DesignDirection.name).all()
+    return jsonify([{'id': d.id, 'name': d.name} for d in dirs])
+
+@admin_bp.route('/admin/api/design-directions', methods=['POST'])
+@login_required
+@admin_required
+def create_design_direction():
+    from app import db
+    from app.models import DesignDirection
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    if DesignDirection.query.filter_by(name=name).first():
+        return jsonify({'error': 'Already exists'}), 409
+    d = DesignDirection(name=name)
+    db.session.add(d)
+    db.session.commit()
+    log_activity('design_direction_created', f'Design direction "{name}" created', user=current_user)
+    return jsonify({'id': d.id, 'name': d.name})
+
+@admin_bp.route('/admin/api/design-directions/<int:dir_id>', methods=['PATCH'])
+@login_required
+@admin_required
+def update_design_direction(dir_id):
+    from app import db
+    from app.models import DesignDirection
+    d = DesignDirection.query.get_or_404(dir_id)
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    d.name = name
+    db.session.commit()
+    return jsonify({'id': d.id, 'name': d.name})
+
+@admin_bp.route('/admin/api/design-directions/<int:dir_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_design_direction(dir_id):
+    from app import db
+    from app.models import DesignDirection
+    d = DesignDirection.query.get_or_404(dir_id)
+    name = d.name
+    db.session.delete(d)
+    db.session.commit()
+    log_activity('design_direction_deleted', f'Design direction "{name}" deleted', user=current_user)
+    return jsonify({'success': True})
+
+
+# ── CS quick-add (Design Types + Directions) ─────────────────────────────────
+
+@admin_bp.route('/admin/api/design-types/quick-add', methods=['POST'])
+@login_required
+def quick_add_design_type():
+    """CS and admin can quickly add a design type from the brief form."""
+    from app import db
+    from app.models import DesignType
+    if current_user.role not in ('admin', 'cs'):
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    existing = DesignType.query.filter_by(name=name).first()
+    if existing:
+        return jsonify({'id': existing.id, 'name': existing.name})
+    t = DesignType(name=name)
+    db.session.add(t)
+    db.session.commit()
+    return jsonify({'id': t.id, 'name': t.name})
+
+@admin_bp.route('/admin/api/design-directions/quick-add', methods=['POST'])
+@login_required
+def quick_add_design_direction():
+    """CS and admin can quickly add a design direction from the brief form."""
+    from app import db
+    from app.models import DesignDirection
+    if current_user.role not in ('admin', 'cs'):
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.get_json()
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    existing = DesignDirection.query.filter_by(name=name).first()
+    if existing:
+        return jsonify({'id': existing.id, 'name': existing.name})
+    d = DesignDirection(name=name)
+    db.session.add(d)
+    db.session.commit()
+    return jsonify({'id': d.id, 'name': d.name})

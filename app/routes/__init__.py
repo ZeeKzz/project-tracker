@@ -95,7 +95,8 @@ def designer_dashboard():
 
     if assigned_project_ids:
         my_projects = Project.query.filter(
-            Project.id.in_(assigned_project_ids)
+            Project.id.in_(assigned_project_ids),
+            Project.project_status != 'draft'
         ).order_by(Project.design_needed_by.asc()).all()
     else:
         my_projects = []

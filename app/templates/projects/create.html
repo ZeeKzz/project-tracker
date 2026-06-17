@@ -6,6 +6,10 @@
 {# Pass customer and deliverable data to JavaScript as JSON #}
 <script>
     const CUSTOMERS_BY_REGION = {{ customers_by_region | tojson }};
+    const EDIT_MODE = {{ edit_mode | tojson if edit_mode is defined else 'false' }};
+    const EDIT_PROJECT_ID = {{ edit_project_id | tojson if edit_project_id is defined else 'null' }};
+    const EXISTING_CUSTOMERS = {{ existing_customers | tojson if existing_customers is defined else '[]' }};
+    const EXISTING_DELIVERABLES = {{ existing_deliverables | tojson if existing_deliverables is defined else '[]' }};
 </script>
 
 <div class="create-page">
@@ -13,7 +17,7 @@
     {# ── Sticky Subheader ── #}
     <div class="create-subheader">
         <div class="create-subheader-left">
-            <a href="{{ url_for('projects.drafts') if has_other_drafts else url_for('main.index') }}"
+            <a href="{{ url_for('projects.detail', project_id=edit_project_id) if edit_mode else (url_for('projects.drafts') if has_other_drafts else url_for('main.index')) }}"
                 class="btn btn--secondary">Back</a>
         </div>
         <div class="create-subheader-center">
@@ -28,7 +32,7 @@
     </div>
 
     <div class="create-body">
-        <h2 class="create-section-title" id="pageTitle">Project Brief</h2>
+        <h2 class="create-section-title" id="pageTitle">{% if edit_mode %}Edit Project{% else %}Project Brief{% endif %}</h2>
         {# ── Section 1: Project Basics ── #}
         <div class="create-section" id="sectionBasics">
             <h3 class="create-section-heading">Project Basics</h3>
@@ -92,21 +96,17 @@
 
             <div class="form-group">
                 <label class="form-label">Teams Required</label>
-                <div class="form-check-group">
-                    <label class="form-check">
-                        <input type="checkbox" name="design_teams" value="3D" {% if draft and
-                            draft.design_teams_requested and '3D' in draft.design_teams_requested %} checked{% endif %}>
+                <div class="team-tag-group">
+                    <label class="team-tag-toggle">
+                        <input type="checkbox" name="design_teams" value="3D" {% if draft and draft.design_teams_requested and '3D' in draft.design_teams_requested %}checked{% endif %}>
                         <span>3D</span>
                     </label>
-                    <label class="form-check">
-                        <input type="checkbox" name="design_teams" value="2D" {% if draft and
-                            draft.design_teams_requested and '2D' in draft.design_teams_requested %} checked{% endif %}>
+                    <label class="team-tag-toggle">
+                        <input type="checkbox" name="design_teams" value="2D" {% if draft and draft.design_teams_requested and '2D' in draft.design_teams_requested %}checked{% endif %}>
                         <span>2D</span>
                     </label>
-                    <label class="form-check">
-                        <input type="checkbox" name="design_teams" value="Technical" {% if draft and
-                            draft.design_teams_requested and 'Technical' in draft.design_teams_requested %} checked{%
-                            endif %}>
+                    <label class="team-tag-toggle">
+                        <input type="checkbox" name="design_teams" value="Technical" {% if draft and draft.design_teams_requested and 'Technical' in draft.design_teams_requested %}checked{% endif %}>
                         <span>Technical</span>
                     </label>
                 </div>
@@ -116,7 +116,8 @@
                 <div class="form-group">
                     <label class="form-label">Briefing Date</label>
                     <input type="date" id="briefing_date" name="briefing_date" class="form-input"
-                        value="{{ draft.briefing_date.isoformat() if draft and draft.briefing_date else '' }}">
+                        value="{{ draft.briefing_date.isoformat() if draft and draft.briefing_date else '' }}"
+                        {{ 'readonly' if edit_mode else '' }}>
                 </div>
                 <div class="form-group">
                     <label class="form-label">First Output Deadline</label>
@@ -155,33 +156,135 @@
                 value="{{ draft.brief_type if draft and draft.brief_type else '' }}">
         </div>
 
-        {# ── Section 2.5: Concept ── #}
-        <div class="create-section hidden" id="sectionConcept">
-            <h3 class="create-section-heading">Concept</h3>
+        {# ── Section 3: Standard Brief ── #}
+        <div class="create-section hidden" id="sectionStandard">
+            <h3 class="create-section-heading">Brief Details</h3>
 
-            <div class="form-group">
-                <label class="form-label">Concept Requirements</label>
-                <textarea id="concept_requirements" class="form-textarea" rows="4"
-                    placeholder="Describe the overall concept and any client requirements...">{{ draft.campaign_notes if draft and draft.campaign_notes else '' }}</textarea>
-            </div>
+            <div class="standard-brief-grid">
+                <div class="standard-brief-left">
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Concept Deadline</label>
-                    <input type="date" id="concept_deadline" class="form-input"
-                        value="{{ draft.concept_deadline.isoformat() if draft and draft.concept_deadline else '' }}">
+                    <div class="form-group">
+                        <label class="form-label">Type of Design</label>
+                        <div class="form-inline-add-row">
+                            <select id="design_type_id" name="design_type_id" class="form-select">
+                                <option value="">— Select —</option>
+                                {% for dt in design_types %}
+                                <option value="{{ dt.id }}" {% if draft and draft.design_type_id == dt.id %}selected{% endif %}>{{ dt.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if effective_user.role in ['admin', 'cs'] %}
+                            <button type="button" class="btn-add-inline-sm" onclick="openQuickAdd('design-type')">+ Add New Type</button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Design Direction</label>
+                        <div class="form-inline-add-row">
+                            <select id="design_direction_id" name="design_direction_id" class="form-select">
+                                <option value="">— Select —</option>
+                                {% for dd in design_directions %}
+                                <option value="{{ dd.id }}" {% if draft and draft.design_direction_id == dd.id %}selected{% endif %}>{{ dd.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if effective_user.role in ['admin', 'cs'] %}
+                            <button type="button" class="btn-add-inline-sm" onclick="openQuickAdd('design-direction')">+ Add New Direction</button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Client Expectation</label>
+                        <textarea id="client_expectation" name="client_expectation" class="form-textarea" rows="3"
+                            placeholder="What is the client expecting from this project?">{{ draft.client_expectation if draft and draft.client_expectation else '' }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">What to Avoid</label>
+                        <textarea id="what_to_avoid" name="what_to_avoid" class="form-textarea" rows="5"
+                            placeholder="List anything the design should not include or reference...">{{ draft.what_to_avoid if draft and draft.what_to_avoid else '' }}</textarea>
+                    </div>
+
+                </div>
+
+                <div class="standard-brief-right">
+                    <div class="form-group" style="height: 100%;">
+                        <label class="form-label">Additional Information <span class="form-label-sub">Sizes, Materials etc</span></label>
+                        <textarea id="additional_information" name="additional_information" class="form-textarea form-textarea--tall"
+                            placeholder="Any additional specifications, sizes, materials, or context...">{{ draft.additional_information if draft and draft.additional_information else '' }}</textarea>
+                    </div>
                 </div>
             </div>
 
-            <div class="kv-toggle-row">
-                <button type="button" class="btn btn--secondary" id="btnKVToggle">
-                    + Include Initial KV
-                </button>
+            <div class="form-group" style="margin-top: 1.5rem;">
+                <label class="form-label">Deliverables</label>
+                <div class="standard-deliverable-add-row" style="align-items: flex-end; flex-wrap: wrap;">
+                    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <label class="form-label-sub" for="standardDeliverableInput">Name</label>
+                        <input type="text" id="standardDeliverableInput" class="form-input"
+                            placeholder="e.g. Shelf Wobbler, 3m Banner..." style="max-width: 260px;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <label class="form-label-sub" for="standardDeliverableDeadline">Design Deadline</label>
+                        <input type="date" id="standardDeliverableDeadline" class="form-input" style="max-width: 160px;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <label class="form-label-sub">Teams</label>
+                        <div class="team-tag-group" id="standardDeliverableTeams">
+                            <button type="button" class="team-tag-btn" data-team="2D">2D</button>
+                            <button type="button" class="team-tag-btn" data-team="3D">3D</button>
+                            <button type="button" class="team-tag-btn" data-team="Technical">Technical</button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn--primary btn--sm" onclick="addStandardDeliverableToList()" style="margin-bottom: 1px;">+ Add</button>
+                </div>
+                <div style="margin-top: 0.4rem;">
+                    <button type="button" class="btn btn--tangerine btn--sm" onclick="applyDeadlineToAll()">Apply date to all</button>
+                </div>
+                <div id="standardDeliverablesList" style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem;"></div>
+                <input type="hidden" id="standard_deliverables_json" value="{{ existing_standard_deliverables | tojson if existing_standard_deliverables is defined else '[]' }}">
             </div>
 
-            <input type="hidden" id="has_kv" value="false">
+        </div>
 
-            <div class="kv-block hidden" id="kvBlock">
+        {# ── Section 3: C&CM Brief ── #}
+        <div class="create-section hidden" id="sectionCCM">
+            <h3 class="create-section-heading">Further Details</h3>
+
+            <div class="region-btn-group">
+                <button type="button" class="region-btn" id="btnConceptToggle">Concept</button>
+                <button type="button" class="region-btn" id="btnKVToggle">Initial KV</button>
+            </div>
+            <input type="hidden" id="has_concept" value="{{ 'true' if draft and draft.has_concept else 'false' }}">
+            <input type="hidden" id="has_kv" value="{{ 'true' if draft and draft.has_kv else 'false' }}">
+
+            {# ── Concept (inline, below buttons) ── #}
+            <div class="hidden" id="sectionConcept">
+                <h4 class="create-subsection-heading">Concept</h4>
+                <div class="form-group">
+                    <label class="form-label">Concept Requirements</label>
+                    <textarea id="concept_requirements" class="form-textarea" rows="4"
+                        placeholder="Describe the overall concept and any client requirements...">{{ draft.campaign_notes if draft and draft.campaign_notes else '' }}</textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Concept Deadline</label>
+                        <input type="date" id="concept_deadline" class="form-input"
+                            value="{{ draft.concept_deadline.isoformat() if draft and draft.concept_deadline else '' }}">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Options Required</label>
+                        <input type="number" id="concept_options_required" class="form-input" min="1" step="1"
+                            placeholder="e.g. 3"
+                            value="{{ draft.concept_options_required if draft and draft.concept_options_required else '' }}">
+                    </div>
+                </div>
+            </div>
+
+            {# ── Initial KV (inline, below concept) ── #}
+            <div class="hidden" id="kvBlock">
                 <h4 class="create-subsection-heading">Initial KV</h4>
                 <div class="form-group">
                     <label class="form-label">KV Requirements</label>
@@ -195,7 +298,6 @@
                             value="{{ draft.kv_deadline.isoformat() if draft and draft.kv_deadline else '' }}">
                     </div>
                 </div>
-
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Options Required</label>
@@ -205,11 +307,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        {# ── Section 3: C&CM Brief ── #}
-        <div class="create-section hidden" id="sectionCCM">
-            <h3 class="create-section-heading">Further Details</h3>
 
             <div class="form-row">
                 <div class="form-group">
@@ -238,7 +335,10 @@
 
             <div class="conditional-block hidden" id="blockUAECustomers">
                 <div class="form-group">
-                    <label class="form-label">UAE Customers</label>
+                    <div class="customer-list-header">
+                        <label class="form-label">UAE Customers</label>
+                        <button type="button" class="btn btn--secondary btn--sm" id="btnSelectAllUAE">Select All</button>
+                    </div>
                     <div class="customer-checklist" id="uaeCustomerList">
                     </div>
                 </div>
@@ -258,12 +358,6 @@
                 </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Campaign Notes</label>
-                <textarea id="campaign_notes" name="campaign_notes" class="form-textarea" rows="5"
-                    placeholder="Drop any relevant notes from the client meeting here...">{{ draft.campaign_notes if draft and draft.campaign_notes else '' }}</textarea>
-            </div>
-
         </div>
 
         {# ── Section 4: Deliverables ── #}
@@ -281,7 +375,7 @@
         <div class="create-section" id="sectionSubmit">
             <div class="form-actions">
                 <button type="button" class="btn btn--primary" id="btnReviewSubmit">
-                    Review &amp; Submit
+                    {% if edit_mode %}Save Changes{% else %}Review &amp; Submit{% endif %}
                 </button>
             </div>
         </div>
@@ -334,5 +428,185 @@
         </div>
     </div>
 </div>
+
+<!-- Quick-add modal for design types / directions -->
+<div id="quickAddModal" class="modal-overlay hidden" onclick="if(event.target===this) closeQuickAdd()">
+    <div class="modal-box">
+        <h3 class="modal-title" id="quickAddTitle">Add New Type</h3>
+        <input type="text" id="quickAddInput" class="form-input" placeholder="Enter name..." style="margin-top: 0.75rem;">
+        <div class="modal-actions" style="margin-top: 1rem;">
+            <button type="button" class="btn btn--secondary" onclick="closeQuickAdd()">Cancel</button>
+            <button type="button" class="btn btn--primary" onclick="submitQuickAdd()">Add</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var _quickAddTarget = null;
+
+function openQuickAdd(target) {
+    _quickAddTarget = target;
+    document.getElementById('quickAddTitle').textContent = target === 'design-type' ? 'Add New Design Type' : 'Add New Design Direction';
+    document.getElementById('quickAddInput').value = '';
+    document.getElementById('quickAddModal').classList.remove('hidden');
+    setTimeout(function() { document.getElementById('quickAddInput').focus(); }, 100);
+}
+
+function closeQuickAdd() {
+    document.getElementById('quickAddModal').classList.add('hidden');
+}
+
+function submitQuickAdd() {
+    var name = document.getElementById('quickAddInput').value.trim();
+    if (!name) return;
+    var url = _quickAddTarget === 'design-type'
+        ? '/admin/api/design-types/quick-add'
+        : '/admin/api/design-directions/quick-add';
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { alert(data.error); return; }
+        var selectId = _quickAddTarget === 'design-type' ? 'design_type_id' : 'design_direction_id';
+        var select = document.getElementById(selectId);
+        var existing = select.querySelector('option[value="' + data.id + '"]');
+        if (!existing) {
+            var opt = document.createElement('option');
+            opt.value = data.id;
+            opt.textContent = data.name;
+            select.appendChild(opt);
+        }
+        select.value = data.id;
+        closeQuickAdd();
+    })
+    .catch(function() { alert('Something went wrong.'); });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var inp = document.getElementById('quickAddInput');
+    if (inp) {
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') submitQuickAdd();
+            if (e.key === 'Escape') closeQuickAdd();
+        });
+    }
+
+    var stdInp = document.getElementById('standardDeliverableInput');
+    if (stdInp) {
+        stdInp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); addStandardDeliverableToList(); }
+        });
+        var stdDate = document.getElementById('standardDeliverableDeadline');
+        if (stdDate) {
+            stdDate.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); addStandardDeliverableToList(); }
+            });
+        }
+        // Restore existing deliverables on page load (edit mode / draft restore)
+        var jsonEl = document.getElementById('standard_deliverables_json');
+        if (jsonEl) {
+            try {
+                var existing = JSON.parse(jsonEl.value || '[]');
+                existing.forEach(function(item) {
+                    if (typeof item === 'string') {
+                        renderStandardDeliverableRow({ name: item, design_deadline: null, teams: [] });
+                    } else {
+                        renderStandardDeliverableRow(item);
+                    }
+                });
+            } catch(e) {}
+        }
+    }
+});
+
+function getStandardDeliverables() {
+    var jsonEl = document.getElementById('standard_deliverables_json');
+    try { return JSON.parse(jsonEl.value || '[]'); } catch(e) { return []; }
+}
+
+function saveStandardDeliverables(arr) {
+    document.getElementById('standard_deliverables_json').value = JSON.stringify(arr);
+}
+
+function formatDeadlineDisplay(isoDate) {
+    if (!isoDate) return '';
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var parts = isoDate.split('-');
+    if (parts.length !== 3) return isoDate;
+    return parseInt(parts[2], 10) + ' ' + months[parseInt(parts[1], 10) - 1] + ' ' + parts[0];
+}
+
+// Toggle team buttons in the deliverable add row
+document.querySelectorAll('#standardDeliverableTeams .team-tag-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { this.classList.toggle('active'); });
+});
+
+function getSelectedDeliverableTeams() {
+    return Array.from(document.querySelectorAll('#standardDeliverableTeams .team-tag-btn.active'))
+        .map(function(b) { return b.dataset.team; });
+}
+
+function clearDeliverableTeams() {
+    document.querySelectorAll('#standardDeliverableTeams .team-tag-btn').forEach(function(b) { b.classList.remove('active'); });
+}
+
+function renderStandardDeliverableRow(item) {
+    var list = document.getElementById('standardDeliverablesList');
+    var row = document.createElement('div');
+    row.className = 'std-del-chip';
+    row.dataset.name = item.name;
+    var deadlineText = item.design_deadline ? formatDeadlineDisplay(item.design_deadline) : '<span class="muted">No deadline</span>';
+    var teams = item.teams || [];
+    var teamTags = teams.map(function(t) { return '<span class="std-del-team-tag">' + t + '</span>'; }).join('');
+    row.innerHTML =
+        '<span class="std-del-chip-name">' + item.name + '</span>' +
+        (teamTags ? '<span class="std-del-chip-teams">' + teamTags + '</span>' : '') +
+        '<span class="std-del-chip-deadline">' + deadlineText + '</span>' +
+        '<button type="button" class="std-del-chip-remove" title="Remove">&times;</button>';
+    row.querySelector('.std-del-chip-remove').addEventListener('click', function() {
+        var arr = getStandardDeliverables().filter(function(i) { return i.name !== item.name; });
+        saveStandardDeliverables(arr);
+        row.remove();
+    });
+    list.appendChild(row);
+}
+
+function addStandardDeliverableToList() {
+    var inp = document.getElementById('standardDeliverableInput');
+    var dateInp = document.getElementById('standardDeliverableDeadline');
+    var name = inp.value.trim();
+    if (!name) { inp.focus(); return; }
+    var arr = getStandardDeliverables();
+    if (arr.some(function(i) { return i.name === name; })) { inp.select(); return; }
+    var item = {
+        name: name,
+        design_deadline: dateInp ? (dateInp.value || null) : null,
+        teams: getSelectedDeliverableTeams()
+    };
+    arr.push(item);
+    saveStandardDeliverables(arr);
+    renderStandardDeliverableRow(item);
+    inp.value = '';
+    if (dateInp) dateInp.value = '';
+    clearDeliverableTeams();
+    inp.focus();
+}
+
+function applyDeadlineToAll() {
+    var dateInp = document.getElementById('standardDeliverableDeadline');
+    if (!dateInp || !dateInp.value) { dateInp && dateInp.focus(); return; }
+    var deadline = dateInp.value;
+    var arr = getStandardDeliverables().map(function(i) {
+        return { name: i.name, design_deadline: deadline, teams: i.teams || [] };
+    });
+    saveStandardDeliverables(arr);
+    var list = document.getElementById('standardDeliverablesList');
+    list.innerHTML = '';
+    arr.forEach(function(item) { renderStandardDeliverableRow(item); });
+}
+</script>
 
 {% endblock %}

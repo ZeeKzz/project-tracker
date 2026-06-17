@@ -19,15 +19,7 @@
 
         <ul class="nav-links">
             {% if current_user.is_authenticated %}
-            <li><a href="{{ url_for('main.index') }}">Dashboard</a></li>
-
-            {% if current_user.role == 'admin' %}
-            <li><a href="{{ url_for('auth.register') }}">Register User</a></li>
-            <li><a href="{{ url_for('auth.admin_users') }}">Users</a></li>
-            {% endif %}
-
-
-
+            <li><a href="{{ url_for('main.index') }}">Projects</a></li>
             {% endif %}
         </ul>
 
@@ -203,6 +195,8 @@
                     <button class="pt-tab-btn" data-pt="projects">Projects</button>
                     <button class="pt-tab-btn" data-pt="drafts">Drafts</button>
                     <button class="pt-tab-btn" data-pt="deliverables">Del. Types</button>
+                    <button class="pt-tab-btn" data-pt="design-types">Design Types</button>
+                    <button class="pt-tab-btn" data-pt="design-directions">Directions</button>
                 </div>
 
                 <div class="pt-panel" id="pt-panel-clients">
@@ -266,9 +260,9 @@
                             <option value="">Select customer...</option>
                         </select>
                         <div class="pt-discipline-checks">
-                            <label><input type="checkbox" value="2d"> 2D</label>
-                            <label><input type="checkbox" value="3d"> 3D</label>
-                            <label><input type="checkbox" value="technical"> TECHNICAL</label>
+                            <label><input type="checkbox" value="2D"> 2D</label>
+                            <label><input type="checkbox" value="3D"> 3D</label>
+                            <label><input type="checkbox" value="Technical"> Technical</label>
                         </div>
                         <label class="pt-custom-label">
                             <input type="checkbox" id="pt-new-del-custom"> Mark as custom
@@ -295,6 +289,38 @@
                         </select>
                     </div>
                     <div id="pt-deliverables-list" class="accounts-user-list"></div>
+                </div>
+
+                <div class="pt-panel hidden" id="pt-panel-design-types">
+                    <button type="button" class="accounts-add-btn" id="pt-add-dt-toggle">+ Add Design Type</button>
+                    <form id="pt-add-dt-form" class="add-user-form hidden">
+                        <input type="text" id="pt-new-dt-name" class="form-input"
+                            placeholder="e.g. 3D Rendering, 2D Illustration">
+                        <p class="form-label-sub" style="margin: 0.4rem 0 0.2rem;">Teams (select all that apply)</p>
+                        <div class="pt-discipline-checks" id="pt-new-dt-teams">
+                            <label><input type="checkbox" value="2D"> 2D</label>
+                            <label><input type="checkbox" value="3D"> 3D</label>
+                            <label><input type="checkbox" value="Technical"> Technical</label>
+                        </div>
+                        <div class="add-user-actions">
+                            <button type="submit" class="btn-primary">Create</button>
+                            <button type="button" id="pt-add-dt-cancel">Cancel</button>
+                        </div>
+                    </form>
+                    <div id="pt-design-types-list" class="accounts-user-list"></div>
+                </div>
+
+                <div class="pt-panel hidden" id="pt-panel-design-directions">
+                    <button type="button" class="accounts-add-btn" id="pt-add-dd-toggle">+ Add Direction</button>
+                    <form id="pt-add-dd-form" class="add-user-form hidden">
+                        <input type="text" id="pt-new-dd-name" class="form-input"
+                            placeholder="e.g. Front-Facing, Side Profile">
+                        <div class="add-user-actions">
+                            <button type="submit" class="btn-primary">Create</button>
+                            <button type="button" id="pt-add-dd-cancel">Cancel</button>
+                        </div>
+                    </form>
+                    <div id="pt-design-directions-list" class="accounts-user-list"></div>
                 </div>
             </div>
             <div class="admin-section hidden" id="admin-section-accounts">

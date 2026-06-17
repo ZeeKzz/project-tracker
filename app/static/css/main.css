@@ -638,6 +638,88 @@ textarea {
     cursor: pointer;
 }
 
+/* ── Team tag pill buttons ─────────────────────────────────── */
+.team-tag-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+}
+
+/* Checkbox-based (Teams Required — submits with form) */
+.team-tag-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.9rem;
+    border: 2px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    color: var(--text-primary);
+    background: var(--surface-hover);
+    user-select: none;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.team-tag-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.team-tag-toggle:has(input:checked) {
+    border-color: var(--tangerine);
+    background: var(--tangerine);
+    color: white;
+}
+
+.team-tag-toggle:hover:not(:has(input:checked)) {
+    border-color: var(--grey-mid);
+    background: var(--grey-light);
+}
+
+/* Button-based (deliverable team picker — JS toggled) */
+.team-tag-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.9rem;
+    border: 2px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    color: var(--text-primary);
+    background: var(--surface-hover);
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.team-tag-btn:hover:not(.active) {
+    border-color: var(--grey-mid);
+    background: var(--grey-light);
+}
+
+.team-tag-btn.active {
+    border-color: var(--tangerine);
+    background: var(--tangerine);
+    color: white;
+}
+
+/* Small inline team tag chips (on deliverable rows in chip/list view) */
+.std-del-team-tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: var(--tangerine);
+    color: white;
+    white-space: nowrap;
+}
+
 .form-actions {
     display: flex;
     align-items: center;
@@ -855,6 +937,34 @@ textarea {
     border-color: var(--pine);
     background: var(--pine);
     color: white;
+}
+
+.customer-list-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.customer-list-header .form-label {
+    margin-bottom: 0;
+}
+
+.gulf-country-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--ashen);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.gulf-country-block {
+    margin-bottom: 1.25rem;
+}
+
+.gulf-country-block .btn--sm {
+    margin-bottom: 0.5rem;
 }
 
 /* =====================
@@ -1546,6 +1656,25 @@ textarea {
     opacity: 0.85;
 }
 
+.btn--tangerine {
+    background: var(--tangerine);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-family: 'Public Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: opacity 0.2s ease;
+}
+
+.btn--tangerine:hover {
+    opacity: 0.85;
+}
+
 /* --- Delete Confirmation Overlay --- */
 
 .draft-confirm-overlay {
@@ -1890,7 +2019,7 @@ textarea {
 
 .deliverables-region-heading {
     font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
+    font-size: 1.44rem;
     color: var(--tangerine);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -2129,11 +2258,53 @@ textarea {
 .brief-assignment-chip {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.4rem;
     background: white;
     border: 1px solid #e8e2d8;
     border-radius: 4px;
     padding: 0.2rem 0.5rem;
+}
+
+.chip-assign-form {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: auto;
+}
+
+.chip-assign-select {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    padding: 0.15rem 0.3rem;
+    border: 1px solid #d0c8bc;
+    border-radius: 4px;
+    background: var(--sandstone);
+    color: var(--color-text);
+    cursor: pointer;
+    max-width: 120px;
+}
+
+.chip-assign-select:focus {
+    outline: none;
+    border-color: var(--tangerine);
+}
+
+.chip-assign-btn {
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: var(--tangerine);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: opacity 0.15s;
+}
+
+.chip-assign-btn:hover {
+    opacity: 0.85;
 }
 
 .brief-assignment-name {
@@ -2275,6 +2446,446 @@ textarea {
 
 .expandable-row {
     cursor: pointer;
+}
+
+/* ── Status Select ───────────────────────────────── */
+.status-select {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.3rem 0.6rem 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.4rem center;
+    padding-right: 1.4rem;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.status-select:focus {
+    outline: none;
+    border-color: var(--tangerine);
+}
+
+.status-select.s-briefed {
+    background-color: #f0ece5;
+    color: #7a6a55;
+    border-color: #d9cfc3;
+}
+
+.status-select.s-in_queue {
+    background-color: #eef2f7;
+    color: #4a6080;
+    border-color: #c5d3e0;
+}
+
+.status-select.s-in_progress {
+    background-color: #fff8ec;
+    color: #a06020;
+    border-color: #f5d89a;
+}
+
+.status-select.s-submitted {
+    background-color: #edf7f1;
+    color: #2e7a50;
+    border-color: #a8d9bc;
+}
+
+.status-select.s-revision_in_queue {
+    background-color: #fdf0f2;
+    color: #a03040;
+    border-color: #f0b8c0;
+}
+
+.status-select.s-revision_in_progress {
+    background-color: #fde8eb;
+    color: #8a1a28;
+    border-color: #e8909a;
+}
+
+.status-select.s-approved {
+    background-color: #f0f6ee;
+    color: #3a6b30;
+    border-color: #9ecb90;
+}
+
+/* ── Revision System ─────────────────────────────── */
+
+.revision-count-badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    background: #fde8eb;
+    color: #8a1a28;
+    border: 1.5px solid #e8909a;
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
+
+.revision-flagged-badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: #fde8eb;
+    color: #8a1a28;
+    border: 1.5px solid #e8909a;
+    border-radius: 6px;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+}
+
+.btn-flag-revision {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: transparent;
+    color: #a03040;
+    border: 1.5px solid #e8909a;
+    border-radius: 6px;
+    padding: 0.25rem 0.55rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+
+.btn-flag-revision:hover {
+    background: #fde8eb;
+    color: #8a1a28;
+}
+
+/* ── Brief Flag System ────────────────────────────── */
+
+.btn-brief-flag {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    background: transparent;
+    color: #b45309;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.btn-brief-flag:hover {
+    background: #fef3c7;
+}
+
+.brief-flag-indicator {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    padding: 0.18rem 0.5rem;
+    cursor: default;
+    white-space: nowrap;
+}
+
+/* Open flags panel */
+.flag-panel {
+    margin: 1.5rem 0;
+    padding: 1.25rem 1.5rem;
+    background: var(--card-bg);
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+}
+
+.flag-panel-title {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    color: #92400e;
+    margin: 0 0 1rem;
+    letter-spacing: 0.04em;
+}
+
+.flag-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.flag-card:last-child {
+    margin-bottom: 0;
+}
+
+.flag-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.flag-type-badge {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.flag-type-project {
+    background: #fde68a;
+    color: #78350f;
+}
+
+.flag-type-concept {
+    background: #ddd6fe;
+    color: #4c1d95;
+}
+
+.flag-type-kv {
+    background: #bfdbfe;
+    color: #1e3a5f;
+}
+
+.flag-type-deliverable {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.flag-subject {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.flag-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.flag-open-badge {
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #f59e0b;
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+}
+
+.flag-resolved-badge {
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+}
+
+/* Thread */
+.flag-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.flag-thread--compact {
+    padding-top: 0.5rem;
+}
+
+.flag-message {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 0.65rem 0.85rem;
+}
+
+.flag-message--mine {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.flag-message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.3rem;
+    gap: 0.5rem;
+}
+
+.flag-message-author {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.flag-message-time {
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.flag-message-text {
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+/* Reply form */
+.flag-reply-form {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.flag-reply-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.55rem 0.75rem;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    resize: vertical;
+    min-height: 60px;
+}
+
+.flag-reply-input:focus {
+    outline: none;
+    border-color: #f59e0b;
+}
+
+.flag-reply-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.flag-section-btn-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.btn-flag-resolve {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    padding: 0.28rem 0.65rem;
+    border: 1px solid #6ee7b7;
+    border-radius: 4px;
+    background: transparent;
+    color: #065f46;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-flag-resolve:hover {
+    background: #d1fae5;
+}
+
+.btn-flag-reply-submit {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    padding: 0.3rem 0.85rem;
+    border: none;
+    border-radius: 4px;
+    background: #f27f55;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.15s;
+}
+
+.btn-flag-reply-submit:hover {
+    opacity: 0.85;
+}
+
+/* Flag divider in history */
+.flag-divider {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 1rem 0;
+}
+
+/* Flag history section */
+.flag-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+}
+
+.flag-history-toggle {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.flag-history-entry {
+    padding: 0.75rem 0;
+}
+
+.flag-resolved {
+    opacity: 0.65;
+}
+
+/* Creation modal */
+.flag-modal-context {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 0 0 0.75rem;
+}
+
+.flag-create-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.65rem 0.85rem;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    resize: vertical;
+    min-height: 90px;
+}
+
+.flag-create-textarea:focus {
+    outline: none;
+    border-color: #f59e0b;
+}
+
+.btn-brief-flag-submit {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    padding: 0.4rem 1rem;
+    border: none;
+    border-radius: 4px;
+    background: #f59e0b;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.15s;
+}
+
+.btn-brief-flag-submit:hover {
+    opacity: 0.85;
 }
 
 /* ── Admin Panel ─────────────────────────────────── */
@@ -2756,6 +3367,14 @@ textarea {
     transition: border-color;
 }
 
+.pt-inline-edit {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    flex-wrap: wrap;
+}
+
 .accounts-group-label {
     font-family: var(--font-mono);
     font-size: 0.65rem;
@@ -2773,6 +3392,7 @@ textarea {
 
 .pt-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.25rem;
     margin-bottom: 1.25rem;
     border-bottom: 1px solid var(--border-subtle);
@@ -3019,4 +3639,167 @@ textarea {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--grey-mid);
+}
+
+/* ── Standard Brief Form ───────────────────────────────────── */
+
+.standard-brief-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .standard-brief-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.standard-brief-left,
+.standard-brief-right {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.standard-brief-right {
+    height: 100%;
+}
+
+.standard-brief-right .form-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    height: 100%;
+}
+
+.form-inline-add-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.form-inline-add-row .form-select {
+    flex: 1;
+}
+
+.btn-add-inline-sm {
+    white-space: nowrap;
+    font-size: 0.78rem;
+    padding: 0.3rem 0.7rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-add-inline-sm:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--border-active);
+}
+
+.form-label-sub {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 0.4rem;
+}
+
+.form-textarea--tall {
+    flex: 1;
+    min-height: 260px;
+    resize: vertical;
+}
+
+/* Standard deliverable chips (create form) */
+.std-del-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.7rem;
+    width: fit-content;
+    max-width: 560px;
+}
+
+.std-del-chip-name {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.std-del-chip-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0.1rem;
+}
+
+.std-del-chip-remove:hover {
+    color: var(--rose);
+}
+
+.std-del-chip-teams {
+    display: inline-flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.std-del-chip-deadline {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.std-deadline-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.std-deadline-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.std-deadline-heading {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Standard deliverable add row */
+.standard-deliverable-add-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+/* Quick-add modal */
+.modal-box {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    min-width: 320px;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
 }

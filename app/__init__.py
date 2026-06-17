@@ -1,11 +1,13 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
+from flask_mail import Mail
 from config import Config
 import os
 
 db = SQLAlchemy()
 login_manager = LoginManager()
+mail = Mail()
 
 def create_app():
     app = Flask(__name__)
@@ -13,13 +15,14 @@ def create_app():
 
     db.init_app(app)
     login_manager.init_app(app)
+    mail.init_app(app)
 
     login_manager.login_view = 'auth.login'
     login_manager.login_message_category = 'info'
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog)
+    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection)
     from app.routes import main
     from app.routes.auth import auth
     from app.routes.projects import projects
@@ -43,32 +46,37 @@ def create_app():
     
     @app.context_processor
     def inject_notifications():
-      from flask_login import current_user
-      from app.models import Notification
+        from flask import session
+        from flask_login import current_user
+        from app.models import Notification
 
-      if current_user.is_authenticated:
-        active_notifications = Notification.query.filter_by(
-            recipient_id=current_user.id,
-            is_archived=False
-        ).order_by(Notification.created_at.desc()).all()
+        if current_user.is_authenticated:
+            # Use the emulated user's ID when in emulation mode
+            emulating_id = session.get('emulating_user_id')
+            notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
 
-        archived_notifications = Notification.query.filter_by(
-            recipient_id=current_user.id,
-            is_archived=True
-        ).order_by(Notification.created_at.desc()).limit(50).all()
+            active_notifications = Notification.query.filter_by(
+                recipient_id=notif_user_id,
+                is_archived=False
+            ).order_by(Notification.created_at.desc()).all()
 
-        unread_count = sum(1 for n in active_notifications if not n.is_read)
+            archived_notifications = Notification.query.filter_by(
+                recipient_id=notif_user_id,
+                is_archived=True
+            ).order_by(Notification.created_at.desc()).limit(50).all()
 
+            unread_count = sum(1 for n in active_notifications if not n.is_read)
+
+            return {
+                'user_notifications': active_notifications,
+                'archived_notifications': archived_notifications,
+                'unread_count': unread_count
+            }
         return {
-            'user_notifications': active_notifications,
-            'archived_notifications': archived_notifications,
-            'unread_count': unread_count
+            'user_notifications': [],
+            'archived_notifications': [],
+            'unread_count': 0
         }
-      return {
-        'user_notifications': [],
-        'archived_notifications': [],
-        'unread_count': 0
-    }
 
     @app.context_processor
     def inject_effective_user():

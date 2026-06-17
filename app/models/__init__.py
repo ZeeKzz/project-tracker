@@ -52,6 +52,25 @@ class Notification(db.Model):
     def __repr__(self):
         return f'<Notification {self.id} for user {self.recipient_id}>'
     
+class DesignType(db.Model):
+    __tablename__ = 'design_types'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    team = db.Column(db.String(50), nullable=True)  # '2D', '3D', 'Technical', or None = all teams
+
+    def __repr__(self):
+        return f'<DesignType {self.name}>'
+
+
+class DesignDirection(db.Model):
+    __tablename__ = 'design_directions'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+
+    def __repr__(self):
+        return f'<DesignDirection {self.name}>'
+
+
 class Scope(db.Model):
     __tablename__ = 'scopes'
 
@@ -91,6 +110,8 @@ class Project(db.Model):
     installation_date = db.Column(db.Date, nullable=True)
     last_autosaved_at = db.Column(db.DateTime, nullable=True)
     concept_deadline = db.Column(db.Date, nullable=True)
+    has_concept = db.Column(db.Boolean, default=False, nullable=False)
+    concept_options_required = db.Column(db.Integer, nullable=True)
     has_kv = db.Column(db.Boolean, default=False, nullable=False)
     kv_deadline = db.Column(db.Date, nullable=True)
     kv_requirements = db.Column(db.Text, nullable=True)
@@ -112,6 +133,16 @@ class Project(db.Model):
     hours_accumulated = db.Column(db.Float, default=0.0)
     timer_started_at = db.Column(db.DateTime, nullable=True)
 
+    # Revision tracking
+    revision_count = db.Column(db.Integer, default=0, nullable=False)
+
+    # Standard brief fields
+    design_type_id = db.Column(db.Integer, db.ForeignKey('design_types.id'), nullable=True)
+    design_direction_id = db.Column(db.Integer, db.ForeignKey('design_directions.id'), nullable=True)
+    client_expectation = db.Column(db.Text, nullable=True)
+    what_to_avoid = db.Column(db.Text, nullable=True)
+    additional_information = db.Column(db.Text, nullable=True)
+
     # Relationships
     cs_lead = db.relationship('User', foreign_keys=[cs_lead_id])
     creator = db.relationship('User', foreign_keys=[created_by_id])
@@ -124,7 +155,8 @@ class Project(db.Model):
     project_deliverables = db.relationship('Deliverable', backref='project_ref', cascade='all, delete-orphan')
     concept_designer = db.relationship('User', foreign_keys=[concept_designer_id])
     kv_designer = db.relationship('User', foreign_keys=[kv_designer_id])
-    
+    design_type = db.relationship('DesignType', backref='projects')
+    design_direction = db.relationship('DesignDirection', backref='projects')
 
     def __repr__(self):
         return f'<Project {self.name}>'
@@ -239,6 +271,7 @@ class ProjectCustomer(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     design_deadline = db.Column(db.Date, nullable=True)
     installation_date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(50), default='briefed', nullable=False)
 
     project = db.relationship('Project')
     customer = db.relationship('Customer', backref='customer_projects')
@@ -258,12 +291,17 @@ class Deliverable(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    project_customer_id = db.Column(db.Integer, db.ForeignKey('project_customers.id'), nullable=False)
+    project_customer_id = db.Column(db.Integer, db.ForeignKey('project_customers.id'), nullable=True)
     deliverable_type_id = db.Column(db.Integer, db.ForeignKey('deliverable_types.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     reference_image = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(50), default='in_progress', nullable=False)
+    design_deadline = db.Column(db.Date, nullable=True)
+    installation_deadline = db.Column(db.Date, nullable=True)
+    teams = db.Column(db.String(100), nullable=True)  # comma-separated e.g. "3D,Technical"
     revision_comment = db.Column(db.Text, nullable=True)
+    revision_count = db.Column(db.Integer, default=0, nullable=False)
+    flagged_for_revision = db.Column(db.Boolean, default=False, nullable=False)
     brief_flag = db.Column(db.Text, nullable=True)
     brief_flag_resolved = db.Column(db.Boolean, default=False, nullable=False)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -294,6 +332,44 @@ class DeliverableAssignment(db.Model):
     def __repr__(self):
         return f'<DeliverableAssignment deliverable={self.deliverable_id} designer={self.designer_id}>'
     
+class BriefFlag(db.Model):
+    __tablename__ = 'brief_flags'
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    deliverable_id = db.Column(db.Integer, db.ForeignKey('deliverables.id'), nullable=True)
+    flag_type = db.Column(db.String(20), nullable=False)  # 'project', 'deliverable', 'concept', 'kv'
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_resolved = db.Column(db.Boolean, default=False, nullable=False)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    project = db.relationship('Project', backref='brief_flags')
+    deliverable = db.relationship('Deliverable', backref='brief_flags')
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    resolved_by = db.relationship('User', foreign_keys=[resolved_by_id])
+    messages = db.relationship('BriefFlagMessage', backref='flag', cascade='all, delete-orphan', order_by='BriefFlagMessage.created_at')
+
+    def __repr__(self):
+        return f'<BriefFlag project={self.project_id} type={self.flag_type} resolved={self.is_resolved}>'
+
+
+class BriefFlagMessage(db.Model):
+    __tablename__ = 'brief_flag_messages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    flag_id = db.Column(db.Integer, db.ForeignKey('brief_flags.id'), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    author = db.relationship('User', foreign_keys=[author_id])
+
+    def __repr__(self):
+        return f'<BriefFlagMessage flag={self.flag_id} author={self.author_id}>'
+
+
 class ActivityLog(db.Model):
     __tablename__ = 'activity_logs'
 

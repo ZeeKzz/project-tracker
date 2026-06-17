@@ -3,7 +3,8 @@ console.log("Vitamin Helix loaded.");
 
 // Clickable row logic
 document.querySelectorAll('.clickable').forEach(row => {
-    row.addEventListener('click', function () {
+    row.addEventListener('click', function (e) {
+        if (e.target.closest('a, button, select')) return;
         window.location = this.dataset.href;
     });
 });
@@ -415,6 +416,13 @@ if (document.getElementById('sectionBasics')) {
     var currentCompletion = 0;
 
     function calculateCompletion() {
+        if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
+            document.getElementById('completionBarFill').style.width = '100%';
+            document.getElementById('completionLabel').textContent = '100% Complete';
+            currentCompletion = 100;
+            return;
+        }
+
         let score = 0;
 
         const basicChecks = [
@@ -439,12 +447,20 @@ if (document.getElementById('sectionBasics')) {
                 function () { return document.getElementById('urgency').value !== ''; },
                 function () { return document.querySelector('.region-btn[data-region].active') !== null; },
                 function () { return document.querySelectorAll('.customer-pill.selected').length > 0; },
-                function () { return document.getElementById('campaign_notes').value.trim() !== ''; },
                 function () { return document.querySelectorAll('.deliverable-row').length > 0; },
             ];
             var ccmWeight = 75 / ccmChecks.length;
             ccmChecks.forEach(function (check) {
                 if (check()) score += ccmWeight;
+            });
+        } else if (briefType === 'standard') {
+            var standardChecks = [
+                function () { return document.getElementById('design_type_id') && document.getElementById('design_type_id').value !== ''; },
+                function () { return document.getElementById('design_direction_id') && document.getElementById('design_direction_id').value !== ''; },
+            ];
+            var standardWeight = 75 / standardChecks.length;
+            standardChecks.forEach(function (check) {
+                if (check()) score += standardWeight;
             });
         }
 
@@ -468,9 +484,19 @@ if (document.getElementById('sectionBasics')) {
         });
 
         var isCCM = type === 'ccm';
-        document.getElementById('sectionConcept').classList.toggle('hidden', !isCCM);
+        document.getElementById('sectionConcept').classList.add('hidden');
+        document.getElementById('kvBlock').classList.add('hidden');
         document.getElementById('sectionCCM').classList.toggle('hidden', !isCCM);
+        var hasKvEl = document.getElementById('has_kv');
+        if (hasKvEl) hasKvEl.value = 'false';
+        var kvToggleBtn = document.getElementById('btnKVToggle');
+        if (kvToggleBtn) kvToggleBtn.classList.remove('active');
+        var conceptToggleBtn = document.getElementById('btnConceptToggle');
+        if (conceptToggleBtn) conceptToggleBtn.classList.remove('active');
+        var hasConceptEl2 = document.getElementById('has_concept');
+        if (hasConceptEl2) hasConceptEl2.value = 'false';
         document.getElementById('sectionDeliverables').classList.toggle('hidden', true);
+        document.getElementById('sectionStandard').classList.toggle('hidden', type !== 'standard');
 
         if (briefSavedState[type]) {
             restoreBriefState(type, briefSavedState[type]);
@@ -484,7 +510,6 @@ if (document.getElementById('sectionBasics')) {
         if (type === 'ccm') {
             return {
                 urgency: document.getElementById('urgency').value,
-                campaign_notes: document.getElementById('campaign_notes').value,
                 region_uae: document.getElementById('region_uae').classList.contains('active'),
                 region_gulf: document.getElementById('region_gulf').classList.contains('active'),
                 gulf_kuwait: document.getElementById('gulf_kuwait').classList.contains('active'),
@@ -499,7 +524,6 @@ if (document.getElementById('sectionBasics')) {
     function restoreBriefState(type, state) {
         if (type === 'ccm') {
             document.getElementById('urgency').value = state.urgency || '';
-            document.getElementById('campaign_notes').value = state.campaign_notes || '';
 
             var uaeBtn = document.getElementById('region_uae');
             var gulfBtn = document.getElementById('region_gulf');
@@ -552,6 +576,31 @@ if (document.getElementById('sectionBasics')) {
         });
     }
 
+    function selectAllCustomers(containerId, btn) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+        var pills = container.querySelectorAll('.customer-pill');
+        var allSelected = Array.from(pills).every(function (p) { return p.classList.contains('selected'); });
+
+        if (allSelected) {
+            pills.forEach(function (pill) {
+                pill.classList.remove('selected');
+                handleCustomerToggle(pill);
+            });
+            if (btn) btn.textContent = 'Select All';
+        } else {
+            pills.forEach(function (pill) {
+                if (!pill.classList.contains('selected')) {
+                    pill.classList.add('selected');
+                    handleCustomerToggle(pill);
+                }
+            });
+            if (btn) btn.textContent = 'Deselect All';
+        }
+        calculateCompletion();
+        scheduleAutosave();
+    }
+
     function buildGulfCountryCustomers(country) {
         var grid = document.getElementById('gulfCustomerGrid');
         if (grid.querySelector('[data-country="' + country + '"]')) return;
@@ -572,6 +621,15 @@ if (document.getElementById('sectionBasics')) {
         checklist.className = 'customer-checklist';
         checklist.id = 'gulfCustomers_' + country;
         block.appendChild(checklist);
+
+        var selectAllBtn = document.createElement('button');
+        selectAllBtn.type = 'button';
+        selectAllBtn.className = 'btn btn--secondary btn--sm';
+        selectAllBtn.textContent = 'Select All';
+        selectAllBtn.addEventListener('click', function () {
+            selectAllCustomers('gulfCustomers_' + country, this);
+        });
+        block.insertBefore(selectAllBtn, checklist);
 
         grid.appendChild(block);
         buildCustomerChecklist(country, 'gulfCustomers_' + country);
@@ -992,11 +1050,22 @@ if (document.getElementById('sectionBasics')) {
             required_output: document.getElementById('required_output') ? document.getElementById('required_output').value || null : null,
             concept_requirements: document.getElementById('concept_requirements') ? document.getElementById('concept_requirements').value.trim() || null : null,
             concept_deadline: document.getElementById('concept_deadline') ? document.getElementById('concept_deadline').value || null : null,
+            has_concept: document.getElementById('has_concept') ? document.getElementById('has_concept').value === 'true' : false,
+            concept_options_required: document.getElementById('concept_options_required') ? parseInt(document.getElementById('concept_options_required').value) || null : null,
             has_kv: hasKv,
             kv_requirements: document.getElementById('kv_requirements') ? document.getElementById('kv_requirements').value.trim() || null : null,
             kv_deadline: document.getElementById('kv_deadline') ? document.getElementById('kv_deadline').value || null : null,
             kv_options_required: document.getElementById('kv_options_required') ? parseInt(document.getElementById('kv_options_required').value) || null : null,
+            briefing_date: document.getElementById('briefing_date') ? document.getElementById('briefing_date').value || null : null,
+            first_output_deadline: document.getElementById('first_output_deadline') ? document.getElementById('first_output_deadline').value || null : null,
+            final_deadline: document.getElementById('final_deadline') ? document.getElementById('final_deadline').value || null : null,
             customer_dates: customerDates,
+            standard_deliverables: (function() { var el = document.getElementById('standard_deliverables_json'); try { return el ? JSON.parse(el.value || '[]') : []; } catch(e) { return []; } })(),
+            design_type_id: document.getElementById('design_type_id') ? document.getElementById('design_type_id').value || null : null,
+            design_direction_id: document.getElementById('design_direction_id') ? document.getElementById('design_direction_id').value || null : null,
+            client_expectation: document.getElementById('client_expectation') ? document.getElementById('client_expectation').value.trim() || null : null,
+            what_to_avoid: document.getElementById('what_to_avoid') ? document.getElementById('what_to_avoid').value.trim() || null : null,
+            additional_information: document.getElementById('additional_information') ? document.getElementById('additional_information').value.trim() || null : null,
         };
     }
 
@@ -1034,6 +1103,7 @@ if (document.getElementById('sectionBasics')) {
     }
 
     function scheduleAutosave() {
+        if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) return;
         clearTimeout(autosaveTimeout);
         autosaveTimeout = setTimeout(autosave, 5000);
     }
@@ -1112,6 +1182,17 @@ if (document.getElementById('sectionBasics')) {
         var list = document.getElementById('reviewDeliverablesList');
         list.innerHTML = '';
 
+        if (briefType === 'standard') {
+            var dtEl = document.getElementById('design_type_id');
+            var ddEl2 = document.getElementById('design_direction_id');
+            var dtText = dtEl && dtEl.options[dtEl.selectedIndex] ? dtEl.options[dtEl.selectedIndex].text : '—';
+            var ddText = ddEl2 && ddEl2.options[ddEl2.selectedIndex] ? ddEl2.options[ddEl2.selectedIndex].text : '—';
+            var note = document.createElement('div');
+            note.className = 'review-customer-item';
+            note.innerHTML = '<div class="review-meta-grid" style="margin:0"><div class="review-meta-item"><span class="review-meta-label">Type of Design</span><span class="review-meta-value">' + dtText + '</span></div><div class="review-meta-item"><span class="review-meta-label">Design Direction</span><span class="review-meta-value">' + ddText + '</span></div></div><p style="margin-top:0.75rem;font-size:0.85rem;color:var(--text-muted)">Deliverables are added after the project is created.</p>';
+            list.appendChild(note);
+        }
+
         var regionSections = document.querySelectorAll('.deliverables-region-section');
 
         regionSections.forEach(function (regionSection) {
@@ -1164,6 +1245,136 @@ if (document.getElementById('sectionBasics')) {
         document.getElementById('reviewModalOverlay').classList.remove('hidden');
     }
 
+    // ── Edit Mode: Restore State ─────────────────────────────
+    function restoreEditState() {
+        var briefTypeEl = document.getElementById('brief_type');
+        if (briefTypeEl && briefTypeEl.value) {
+            switchBriefType(briefTypeEl.value);
+        }
+
+        var hasConceptEl = document.getElementById('has_concept');
+        if (hasConceptEl && hasConceptEl.value === 'true') {
+            document.getElementById('sectionConcept').classList.remove('hidden');
+            var conceptBtn = document.getElementById('btnConceptToggle');
+            if (conceptBtn) conceptBtn.classList.add('active');
+        }
+
+        var hasKvEl = document.getElementById('has_kv');
+        if (hasKvEl && hasKvEl.value === 'true') {
+            document.getElementById('kvBlock').classList.remove('hidden');
+            var kvBtn = document.getElementById('btnKVToggle');
+            if (kvBtn) kvBtn.classList.add('active');
+        }
+
+        if (!EXISTING_CUSTOMERS || EXISTING_CUSTOMERS.length === 0) {
+            calculateCompletion();
+            return;
+        }
+
+        var hasUAE = EXISTING_CUSTOMERS.some(function (c) { return c.region === 'uae'; });
+        var gulfCountries = ['kuwait', 'qatar', 'bahrain', 'oman'];
+        var activeGulfCountries = gulfCountries.filter(function (country) {
+            return EXISTING_CUSTOMERS.some(function (c) { return c.region === country; });
+        });
+
+        if (hasUAE) {
+            var uaeBtn = document.getElementById('region_uae');
+            if (uaeBtn) {
+                uaeBtn.classList.add('active');
+                document.getElementById('blockUAECustomers').classList.remove('hidden');
+                buildCustomerChecklist('uae', 'uaeCustomerList');
+            }
+        }
+
+        if (activeGulfCountries.length > 0) {
+            var gulfBtn = document.getElementById('region_gulf');
+            if (gulfBtn) {
+                gulfBtn.classList.add('active');
+                document.getElementById('blockGulf').classList.remove('hidden');
+            }
+            activeGulfCountries.forEach(function (country) {
+                var btn = document.getElementById('gulf_' + country);
+                if (btn) {
+                    btn.classList.add('active');
+                    buildGulfCountryCustomers(country);
+                }
+            });
+        }
+
+        EXISTING_CUSTOMERS.forEach(function (ec) {
+            var pill = document.querySelector('.customer-pill[data-customer-id="' + ec.customer_id + '"]');
+            if (pill && !pill.classList.contains('selected')) {
+                pill.classList.add('selected');
+                addDeliverableBlock(ec.customer_id, pill.dataset.customerName, ec.region);
+            }
+            var ddEl = document.getElementById('design_deadline_' + ec.customer_id);
+            var instEl = document.getElementById('installation_date_' + ec.customer_id);
+            if (ddEl && ec.design_deadline) ddEl.value = ec.design_deadline;
+            if (instEl && ec.installation_date) instEl.value = ec.installation_date;
+        });
+
+        EXISTING_DELIVERABLES.forEach(function (ed) {
+            addDeliverableRow(ed.customer_id, ed.type_id, ed.name, ed.disciplines);
+        });
+
+        calculateCompletion();
+    }
+
+    // ── Edit Mode: Submit ────────────────────────────────────
+    function submitEditedProject() {
+        var btn = document.getElementById('btnReviewSubmit');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+        var formData = collectFormData();
+
+        var regions = [];
+        var uaeBtn2 = document.getElementById('region_uae');
+        if (uaeBtn2 && uaeBtn2.classList.contains('active')) regions.push('uae');
+        var gulfBtn2 = document.getElementById('region_gulf');
+        if (gulfBtn2 && gulfBtn2.classList.contains('active')) {
+            ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
+                var b = document.getElementById('gulf_' + country);
+                if (b && b.classList.contains('active')) regions.push(country);
+            });
+        }
+
+        var deliverables = [];
+        document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
+            var customerId = block.dataset.customerId;
+            var regionSection = block.closest('.deliverables-region-section');
+            var region = regionSection.dataset.region;
+            block.querySelectorAll('.deliverable-row').forEach(function (row) {
+                deliverables.push({
+                    customer_id: customerId,
+                    region: region,
+                    type_id: row.dataset.typeId,
+                    name: row.dataset.name
+                });
+            });
+        });
+
+        var payload = Object.assign({}, formData, { regions: regions, deliverables: deliverables });
+
+        fetch('/projects/' + EDIT_PROJECT_ID + '/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+                    return;
+                }
+                window.location.href = data.redirect_url + '?toast=Project+updated+successfully';
+            })
+            .catch(function () {
+                showToast('Something went wrong. Please try again.', 'error');
+                if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+            });
+    }
+
     // ── Event Listeners ──────────────────────────────────────
 
     document.querySelectorAll('.brief-type-btn').forEach(function (btn) {
@@ -1180,13 +1391,13 @@ if (document.getElementById('sectionBasics')) {
     var btnKVToggle = document.getElementById('btnKVToggle');
     if (btnKVToggle) {
         btnKVToggle.addEventListener('click', function () {
-            var kvBlock = document.getElementById('kvBlock');
+            var kvSection = document.getElementById('kvBlock');
             var hasKvInput = document.getElementById('has_kv');
-            var isOpen = !kvBlock.classList.contains('hidden');
+            var isOpen = !kvSection.classList.contains('hidden');
 
-            kvBlock.classList.toggle('hidden', isOpen);
+            kvSection.classList.toggle('hidden', isOpen);
             hasKvInput.value = isOpen ? 'false' : 'true';
-            btnKVToggle.textContent = isOpen ? '+ Include Initial KV' : '− Remove KV';
+            btnKVToggle.classList.toggle('active', !isOpen);
             scheduleAutosave();
         });
     }
@@ -1237,10 +1448,25 @@ if (document.getElementById('sectionBasics')) {
         });
     });
 
-    var campaignNotes = document.getElementById('campaign_notes');
-    if (campaignNotes) {
-        campaignNotes.addEventListener('keyup', function () {
+    document.querySelectorAll(
+        '#sectionStandard select, #sectionStandard textarea'
+    ).forEach(function (el) {
+        el.addEventListener('change', function () {
             calculateCompletion();
+            scheduleAutosave();
+        });
+    });
+
+    var btnConceptToggle = document.getElementById('btnConceptToggle');
+    if (btnConceptToggle) {
+        btnConceptToggle.addEventListener('click', function () {
+            var conceptSection = document.getElementById('sectionConcept');
+            var hasConceptInput = document.getElementById('has_concept');
+            var isOpen = !conceptSection.classList.contains('hidden');
+
+            conceptSection.classList.toggle('hidden', isOpen);
+            hasConceptInput.value = isOpen ? 'false' : 'true';
+            btnConceptToggle.classList.toggle('active', !isOpen);
             scheduleAutosave();
         });
     }
@@ -1248,7 +1474,9 @@ if (document.getElementById('sectionBasics')) {
     var btnReviewSubmit = document.getElementById('btnReviewSubmit');
     if (btnReviewSubmit) {
         btnReviewSubmit.addEventListener('click', function () {
-            if (currentCompletion < 100) {
+            if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
+                submitEditedProject();
+            } else if (currentCompletion < 100) {
                 showSubmitBlockedMessage();
             } else {
                 openReviewModal();
@@ -1339,6 +1567,13 @@ if (document.getElementById('sectionBasics')) {
     }
 
     // ── Initialise ───────────────────────────────────────────
+    var btnSelectAllUAE = document.getElementById('btnSelectAllUAE');
+    if (btnSelectAllUAE) {
+        btnSelectAllUAE.addEventListener('click', function () {
+            selectAllCustomers('uaeCustomerList', this);
+        });
+    }
+
     setupAddClient();
 
     var urlParams = new URLSearchParams(window.location.search);
@@ -1349,6 +1584,20 @@ if (document.getElementById('sectionBasics')) {
         if (briefTypeEl && briefTypeEl.value) {
             switchBriefType(briefTypeEl.value);
         }
+        var hasConceptEl = document.getElementById('has_concept');
+        if (hasConceptEl && hasConceptEl.value === 'true') {
+            document.getElementById('sectionConcept').classList.remove('hidden');
+            var conceptToggleBtn = document.getElementById('btnConceptToggle');
+            if (conceptToggleBtn) conceptToggleBtn.classList.add('active');
+        }
+        var hasKvRestoreEl = document.getElementById('has_kv');
+        if (hasKvRestoreEl && hasKvRestoreEl.value === 'true') {
+            document.getElementById('kvBlock').classList.remove('hidden');
+            var kvToggleBtnRestore = document.getElementById('btnKVToggle');
+            if (kvToggleBtnRestore) kvToggleBtnRestore.classList.add('active');
+        }
+    } else if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
+        restoreEditState();
     }
 
     calculateCompletion();
@@ -1365,14 +1614,79 @@ if (toastMsg) {
 // ── Expandable customer rows ──────────────────────────────
 document.querySelectorAll('tr[data-expand]').forEach(function (row) {
     row.addEventListener('click', function (e) {
-        if (e.target.closest('a, button')) return;
+        if (e.target.closest('a, button, select')) return;
         var expandRow = this.nextElementSibling;
         if (!expandRow || !expandRow.classList.contains('expansion-row')) return;
         expandRow.classList.toggle('hidden');
         var icon = this.querySelector('.chevron-icon');
         if (icon) icon.classList.toggle('rotated');
+        var expandRow = this.nextElementSibling;
     });
 });
+
+// ── Status dropdowns ─────────────────────────────────────
+function updateStatus(select) {
+    var url = select.dataset.url;
+    var status = select.value;
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: status })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.error) {
+                showToast(data.error, 'error');
+            } else {
+                applyStatusClass(select, status);
+                showToast('Status updated', 'success');
+            }
+        })
+        .catch(function () {
+            showToast('Something went wrong', 'error');
+        });
+}
+
+
+
+function applyStatusClass(select, status) {
+    var classes = ['s-briefed', 's-in_queue', 's-in_progress', 's-submitted',
+        's-revision_in_queue', 's-revision_in_progress', 's-approved'];
+    select.classList.remove.apply(select.classList, classes);
+    select.classList.add('s-' + status);
+}
+
+document.querySelectorAll('.status-select').forEach(function (select) {
+    applyStatusClass(select, select.value);
+});
+
+function flagRevision(deliverableId, projectId) {
+    var url = '/projects/' + projectId + '/deliverable/' + deliverableId + '/flag-revision';
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.error) {
+                showToast(data.error, 'error');
+            } else {
+                showToast('Deliverable flagged for revision', 'warning');
+                // Swap the flag button for the Flagged badge and update the status dropdown
+                var btn = document.querySelector('[onclick="flagRevision(' + deliverableId + ', ' + projectId + ')"]');
+                if (btn) {
+                    var badge = document.createElement('span');
+                    badge.className = 'revision-flagged-badge';
+                    badge.textContent = '⚑ Flagged';
+                    btn.replaceWith(badge);
+                }
+                // Update the status dropdown to revision_in_queue
+                var row = document.querySelector('[data-url*="/deliverable/' + deliverableId + '/set-status"]');
+                if (row) {
+                    row.value = 'revision_in_queue';
+                    applyStatusClass(row, 'revision_in_queue');
+                }
+            }
+        })
+        .catch(function() { showToast('Something went wrong', 'error'); });
+}
 
 // Admin panel open / close
 var adminTrigger = document.getElementById('admin-panel-trigger');
@@ -1807,6 +2121,8 @@ function loadPTPanel(name) {
     else if (name === 'projects') loadPTProjects();
     else if (name === 'drafts') loadPTDrafts();
     else if (name === 'deliverables') loadPTDeliverables();
+    else if (name === 'design-types') loadPTDesignTypes();
+    else if (name === 'design-directions') loadPTDesignDirections();
 }
 
 // ── Clients ───────────────────────────────────────────────────
@@ -1959,11 +2275,12 @@ function loadPTProjects() {
                 list.innerHTML = '<p class="empty-state">No active projects.</p>';
                 return;
             }
+            var statusLabel = { briefed: 'Briefed', in_queue: 'In Queue', in_progress: 'In Progress', submitted: 'Submitted', revision_in_queue: 'Revision in Queue', revision_in_progress: 'Revision in Progress', approved: 'Approved', completed: 'Completed' };
             list.innerHTML = projects.map(function (p) {
                 return '<div class="account-user-row" id="pt-project-' + p.id + '">' +
                     '<div class="account-user-info">' +
                     '<span class="account-user-name">' + p.name + '</span>' +
-                    '<span class="account-user-role">' + (p.job_number || 'No job #') + ' · ' + p.cs_lead + '</span>' +
+                    '<span class="account-user-role">' + (p.job_number || 'No job #') + ' · ' + p.cs_lead + ' · ' + (statusLabel[p.status] || p.status) + '</span>' +
                     '</div>' +
                     '<div class="account-user-actions">' +
                     '<button type="button" class="account-delete-btn" data-id="' + p.id + '" data-name="' + p.name + '">&times;</button>' +
@@ -2129,6 +2446,160 @@ function loadPTDeliverables() {
             ptAllDeliverableTypes = types;
             populatePTDelClientFilter(types);
             renderPTDeliverableRows(types);
+        });
+}
+
+// ── Design Types ──────────────────────────────────────────────
+function loadPTDesignTypes() {
+    fetch('/admin/api/design-types')
+        .then(function (r) { return r.json(); })
+        .then(function (types) {
+            var list = document.getElementById('pt-design-types-list');
+            list.innerHTML = types.length === 0 ? '<p class="empty-state">No design types yet.</p>' :
+                types.map(function (t) {
+                    return '<div class="account-user-row" id="pt-dt-' + t.id + '">' +
+                        '<div class="account-user-info">' +
+                        '<span class="account-user-name">' + t.name + '</span>' +
+                        '<span class="account-user-role">' + (t.team ? t.team.split(',').join(' + ') : 'No team set') + '</span>' +
+                        '</div>' +
+                        '<div class="account-user-actions">' +
+                        '<button class="account-edit-btn pt-dt-edit" data-id="' + t.id + '" data-name="' + t.name + '" data-team="' + (t.team || '') + '">Edit</button>' +
+                        '<button class="account-delete-btn pt-dt-delete" data-id="' + t.id + '" data-name="' + t.name + '">&times;</button>' +
+                        '</div></div>';
+                }).join('');
+            list.querySelectorAll('.pt-dt-delete').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete design type "' + this.dataset.name + '"?')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/design-types/' + id, { method: 'DELETE' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) { if (d.success) { document.getElementById('pt-dt-' + id).remove(); } else { alert(d.error); } });
+                });
+            });
+            list.querySelectorAll('.pt-dt-edit').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = this.dataset.id;
+                    var row = document.getElementById('pt-dt-' + id);
+                    var currentName = this.dataset.name;
+                    var currentTeam = this.dataset.team;
+                    var currentTeams = currentTeam ? currentTeam.split(',') : [];
+                    row.innerHTML =
+                        '<div class="pt-inline-edit">' +
+                        '<input type="text" class="form-input pt-edit-name" value="' + currentName + '" style="max-width:180px;">' +
+                        '<div class="pt-discipline-checks pt-edit-teams">' +
+                        ['2D','3D','Technical'].map(function(t) {
+                            return '<label><input type="checkbox" value="' + t + '"' + (currentTeams.indexOf(t) !== -1 ? ' checked' : '') + '> ' + t + '</label>';
+                        }).join('') +
+                        '</div>' +
+                        '<button class="btn-primary pt-dt-save" data-id="' + id + '">Save</button>' +
+                        '<button class="account-delete-btn pt-dt-cancel" data-id="' + id + '">Cancel</button>' +
+                        '</div>';
+                    row.querySelector('.pt-dt-save').addEventListener('click', function () {
+                        var newName = row.querySelector('.pt-edit-name').value.trim();
+                        var newTeam = Array.from(row.querySelectorAll('.pt-edit-teams input:checked')).map(function(cb) { return cb.value; }).join(',') || null;
+                        if (!newName) return;
+                        fetch('/admin/api/design-types/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, team: newTeam }) })
+                            .then(function (r) { return r.json(); })
+                            .then(function () { loadPTDesignTypes(); });
+                    });
+                    row.querySelector('.pt-dt-cancel').addEventListener('click', function () { loadPTDesignTypes(); });
+                });
+            });
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var addDtToggle = document.getElementById('pt-add-dt-toggle');
+    var addDtForm = document.getElementById('pt-add-dt-form');
+    var addDtCancel = document.getElementById('pt-add-dt-cancel');
+    if (addDtToggle) {
+        addDtToggle.addEventListener('click', function () { addDtForm.classList.toggle('hidden'); });
+        addDtCancel.addEventListener('click', function () { addDtForm.classList.add('hidden'); });
+        addDtForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var name = document.getElementById('pt-new-dt-name').value.trim();
+            var checked = Array.from(document.querySelectorAll('#pt-new-dt-teams input:checked')).map(function(cb) { return cb.value; });
+            var team = checked.join(',') || null;
+            if (!name) return;
+            fetch('/admin/api/design-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, team: team }) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.error) { alert(d.error); return; }
+                    document.getElementById('pt-new-dt-name').value = '';
+                    document.querySelectorAll('#pt-new-dt-teams input').forEach(function(cb) { cb.checked = false; });
+                    addDtForm.classList.add('hidden');
+                    loadPTDesignTypes();
+                });
+        });
+    }
+
+    // ── Design Directions ──────────────────────────────────────
+    var addDdToggle = document.getElementById('pt-add-dd-toggle');
+    var addDdForm = document.getElementById('pt-add-dd-form');
+    var addDdCancel = document.getElementById('pt-add-dd-cancel');
+    if (addDdToggle) {
+        addDdToggle.addEventListener('click', function () { addDdForm.classList.toggle('hidden'); });
+        addDdCancel.addEventListener('click', function () { addDdForm.classList.add('hidden'); });
+        addDdForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var name = document.getElementById('pt-new-dd-name').value.trim();
+            if (!name) return;
+            fetch('/admin/api/design-directions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.error) { alert(d.error); return; }
+                    document.getElementById('pt-new-dd-name').value = '';
+                    addDdForm.classList.add('hidden');
+                    loadPTDesignDirections();
+                });
+        });
+    }
+});
+
+function loadPTDesignDirections() {
+    fetch('/admin/api/design-directions')
+        .then(function (r) { return r.json(); })
+        .then(function (dirs) {
+            var list = document.getElementById('pt-design-directions-list');
+            list.innerHTML = dirs.length === 0 ? '<p class="empty-state">No design directions yet.</p>' :
+                dirs.map(function (d) {
+                    return '<div class="account-user-row" id="pt-dd-' + d.id + '">' +
+                        '<div class="account-user-info"><span class="account-user-name">' + d.name + '</span></div>' +
+                        '<div class="account-user-actions">' +
+                        '<button class="account-edit-btn pt-dd-edit" data-id="' + d.id + '" data-name="' + d.name + '">Edit</button>' +
+                        '<button class="account-delete-btn pt-dd-delete" data-id="' + d.id + '" data-name="' + d.name + '">&times;</button>' +
+                        '</div></div>';
+                }).join('');
+            list.querySelectorAll('.pt-dd-delete').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete design direction "' + this.dataset.name + '"?')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/design-directions/' + id, { method: 'DELETE' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) { if (d.success) { document.getElementById('pt-dd-' + id).remove(); } else { alert(d.error); } });
+                });
+            });
+            list.querySelectorAll('.pt-dd-edit').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = this.dataset.id;
+                    var row = document.getElementById('pt-dd-' + id);
+                    var currentName = this.dataset.name;
+                    row.innerHTML =
+                        '<div class="pt-inline-edit">' +
+                        '<input type="text" class="form-input pt-edit-name" value="' + currentName + '" style="max-width:240px;">' +
+                        '<button class="btn-primary pt-dd-save" data-id="' + id + '">Save</button>' +
+                        '<button class="account-delete-btn pt-dd-cancel">Cancel</button>' +
+                        '</div>';
+                    row.querySelector('.pt-dd-save').addEventListener('click', function () {
+                        var newName = row.querySelector('.pt-edit-name').value.trim();
+                        if (!newName) return;
+                        fetch('/admin/api/design-directions/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }) })
+                            .then(function (r) { return r.json(); })
+                            .then(function () { loadPTDesignDirections(); });
+                    });
+                    row.querySelector('.pt-dd-cancel').addEventListener('click', function () { loadPTDesignDirections(); });
+                });
+            });
         });
 }
 
