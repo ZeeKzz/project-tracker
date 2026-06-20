@@ -28,31 +28,52 @@ def _send_notification_email(recipient, message, project=None):
 
         # HTML email body using inline styles (required for email client compatibility)
         html_body = f"""
-        <div style="background-color:#f5f5f5;padding:40px 20px;">
-            <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="background-color:#f5f5f5;">
+            <tr>
+                <td align="center" style="padding:40px 20px;">
 
-                <!-- Header -->
-                <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
-                    <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;letter-spacing:2px;">Vitamin-E</h1>
-                </div>
+                    <table width="480" cellpadding="0" cellspacing="0" border="0"
+                           style="max-width:480px;width:100%;">
 
-                <!-- Body -->
-                <div style="background-color:#E5D259;padding:36px 32px;text-align:center;">
-                    <p style="margin:0 0 20px;color:#1A1A1A;font-size:16px;">Hi {recipient.name},</p>
-                    <p style="margin:0;color:#1A1A1A;font-size:15px;line-height:1.6;">{message}</p>
-                    {project_line}
-                </div>
+                        <!-- Header -->
+                        <tr>
+                            <td bgcolor="#F27F55" align="center"
+                                style="background-color:#F27F55;padding:28px 32px;">
+                                <h1 style="margin:0;color:#ffffff;font-size:24px;
+                                           font-weight:bold;letter-spacing:2px;
+                                           font-family:Arial,sans-serif;">Vitamin-E</h1>
+                            </td>
+                        </tr>
 
-                <!-- Button -->
-                <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
-                    <a href="{button_url}"
-                       style="color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;">
-                        Go to Vitamin-E →
-                    </a>
-                </div>
+                        <!-- Body -->
+                        <tr>
+                            <td bgcolor="#E5D259" align="center"
+                                style="background-color:#E5D259;padding:36px 32px;">
+                                <p style="margin:0 0 20px 0;color:#1A1A1A;font-size:16px;
+                                          font-family:Arial,sans-serif;">Hi {recipient.name},</p>
+                                <p style="margin:0;color:#1A1A1A;font-size:15px;
+                                          line-height:1.6;font-family:Arial,sans-serif;">{message}</p>
+                                {project_line}
+                            </td>
+                        </tr>
 
-            </div>
-        </div>
+                        <!-- Button -->
+                        <tr>
+                            <td bgcolor="#F27F55" align="center"
+                                style="background-color:#F27F55;padding:28px 32px;">
+                                <a href="{button_url}"
+                                   style="color:#ffffff;text-decoration:none;font-size:16px;
+                                          font-weight:bold;font-family:Arial,sans-serif;">
+                                    Go to Vitamin-E &#8594;
+                                </a>
+                            </td>
+                        </tr>
+
+                    </table>
+                </td>
+            </tr>
+        </table>
         """
 
         # Plain text fallback for email clients that don't render HTML
