@@ -28,33 +28,27 @@ def _send_notification_email(recipient, message, project=None):
 
         # HTML email body using inline styles (required for email client compatibility)
         html_body = f"""
-        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #E0D9D2;border-radius:8px;overflow:hidden;">
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border-radius:10px;overflow:hidden;">
 
             <!-- Header -->
-            <div style="background-color:#F27F55;padding:24px 32px;">
-                <h1 style="margin:0;color:#ffffff;font-size:22px;letter-spacing:1px;">HELIX</h1>
-                <p style="margin:4px 0 0;color:#ffffff;font-size:12px;opacity:0.85;">Vitamin Dubai</p>
+            <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
+                <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;letter-spacing:2px;">Vitamin-E</h1>
             </div>
 
             <!-- Body -->
-            <div style="padding:32px;background-color:#ffffff;">
-                <p style="margin:0 0 16px;color:#1A1A1A;font-size:15px;">Hi {recipient.name},</p>
-                <p style="margin:0 0 20px;color:#333333;font-size:14px;line-height:1.6;">{message}</p>
+            <div style="background-color:#E5D259;padding:36px 32px;text-align:center;">
+                <p style="margin:0 0 20px;color:#1A1A1A;font-size:16px;">Hi {recipient.name},</p>
+                <p style="margin:0;color:#1A1A1A;font-size:15px;line-height:1.6;">{message}</p>
                 {project_line}
-
-                <!-- Button -->
-                <a href="{button_url}"
-                   style="display:inline-block;background-color:#F27F55;color:#ffffff;text-decoration:none;
-                          padding:12px 28px;border-radius:6px;font-size:14px;font-weight:bold;margin-top:8px;">
-                    Open in Helix →
-                </a>
             </div>
 
-            <!-- Footer -->
-            <div style="padding:16px 32px;background-color:#F8F5F2;border-top:1px solid #E0D9D2;">
-                <p style="margin:0;color:#999999;font-size:12px;">
-                    You're receiving this because you have an active Helix account.
-                </p>
+            <!-- Button -->
+            <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
+                <a href="{button_url}"
+                   style="display:inline-block;background-color:#F27F55;color:#ffffff;text-decoration:none;
+                          font-size:16px;font-weight:bold;">
+                    Go to Vitamin-E →
+                </a>
             </div>
 
         </div>
@@ -64,10 +58,10 @@ def _send_notification_email(recipient, message, project=None):
         text_body = f"Hi {recipient.name},\n\n{message}"
         if project:
             text_body += f"\nProject: {project.name}"
-        text_body += f"\n\nOpen Helix: {button_url}\n\n— Vitamin Helix"
+        text_body += f"\n\nOpen Vitamin-E: {button_url}\n\n— Vitamin-E"
 
         msg = MailMessage(
-            subject=f'[Helix] {message[:60]}{"..." if len(message) > 60 else ""}',
+            subject=f'[Vitamin-E] {message[:60]}{"..." if len(message) > 60 else ""}',
             recipients=[recipient.email],
             body=text_body,
             html=html_body
