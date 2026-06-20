@@ -307,7 +307,9 @@ class Deliverable(db.Model):
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    project = db.relationship('Project', backref='deliverables')
+    # overlaps= tells SQLAlchemy these relationships intentionally share the same
+    # foreign key — project_deliverables and project_ref are the other side of this mapping
+    project = db.relationship('Project', backref='deliverables', overlaps='project_deliverables,project_ref')
     deliverable_type = db.relationship('DeliverableType', backref='deliverables')
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     disciplines = db.relationship('DeliverableAssignment', backref='deliverable', cascade='all, delete-orphan')

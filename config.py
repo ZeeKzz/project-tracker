@@ -13,12 +13,12 @@ class Config:
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32 MB limit for file uploads
 
-    # Email (Outlook / Office 365)
-    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.office365.com')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
-    MAIL_USE_TLS = True
-    MAIL_USE_SSL = False
+    # Email configuration — reads from .env so switching providers requires no code changes
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.resend.com')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', 465))
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'false').lower() == 'true'
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'true').lower() == 'true'
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_USERNAME')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', os.environ.get('MAIL_USERNAME'))
     MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'true'

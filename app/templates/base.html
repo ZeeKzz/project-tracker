@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Helix{% endblock %}</title>
+    <title>{% block title %}Vitamin-E{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 
@@ -130,15 +130,17 @@
             <div class="archived-toolbar">
                 <button type="button" id="archived-remove-btn" class="archived-remove-btn hidden">Remove</button>
                 <button type="button" id="archived-select-btn" class="archived-select-btn">Select</button>
-
             </div>
             {% for notification in archived_notifications %}
-            <div class=" notification-item notification-item--archived" data-id="{{ notification.id }}">
+            <div class="notification-item notification-item--archived" data-id="{{ notification.id }}">
                 <input type="checkbox" class="notif-checkbox hidden" value="{{ notification.id }}">
                 <div class="notification-content">
                     <p class="notification-message">{{ notification.message }}</p>
                     <span class="notification-time">{{ notification.created_at.strftime('%d %b %Y, %H:%M') }}</span>
                 </div>
+                <!-- Restore button — moves notification back to inbox -->
+                <button type="button" class="notification-restore-btn" data-id="{{ notification.id }}"
+                    title="Restore to inbox">↩</button>
             </div>
             {% endfor %}
             {% else %}

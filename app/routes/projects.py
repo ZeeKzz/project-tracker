@@ -64,6 +64,7 @@ def create():
         has_other_drafts=has_other_drafts,
         design_types=design_types,
         design_directions=design_directions,
+        today=date.today().isoformat(),
     )
 
 @projects.route('/projects/<int:project_id>/edit', methods=['GET'])
@@ -140,6 +141,7 @@ def edit_project(project_id):
         design_types=design_types,
         design_directions=design_directions,
         existing_standard_deliverables=existing_standard_deliverables,
+        today=date.today().isoformat(),
     )
 
 
@@ -891,10 +893,10 @@ def assign_designers(project_id):
 def assign_concept_kv(project_id):
     project = Project.query.get_or_404(project_id)
 
+    # Only admin and 2D team lead can assign concept/KV designers
     is_allowed = (
         current_user.role == 'admin' or
-        (current_user.role == 'team_lead' and current_user.team == '2D') or
-        current_user.id == project.cs_lead_id
+        (current_user.role == 'team_lead' and current_user.team == '2D')
     )
     if not is_allowed:
         abort(403)

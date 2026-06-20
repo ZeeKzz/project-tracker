@@ -55,46 +55,164 @@ document.querySelectorAll('.notification-item:not(.notification-item--archived)'
     });
 });
 
+//-----------Notification Helpers------------------------------
+
+// Builds a new archived notification element from existing data
+// Called after archiving so the item appears in the Archived tab immediately
+function buildArchivedItem(id, message, time) {
+    var div = document.createElement('div');
+    div.className = 'notification-item notification-item--archived';
+    div.dataset.id = id;
+
+    // Inner HTML matches the server rendered archived item structure
+    div.innerHTML = `
+        <input type="checkbox" class="notif-checkbox hidden" value="${id}">
+        <div class="notification-content">
+            <p class="notification-message">${message}</p>
+            <span class="notification-time">${time}</span>
+        </div>
+        <button type="button" class="notification-restore-btn" data-id="${id}" title="Restore to inbox">↩</button>
+    `;
+
+    // Attach the restore listener on the new button immediately
+    // (querySelectorAll only runs on page load, so new elements need manual binding)
+    div.querySelector('.notification-restore-btn').addEventListener('click', handleRestore);
+
+    return div;
+}
+
+// Builds a new inbox notification element from existing data
+// Called after restoring so the item appears in the Inbox tab immediately
+function buildInboxItem(id, message, time) {
+    var div = document.createElement('div');
+    div.className = 'notification-item';
+    div.dataset.id = id;
+
+    div.innerHTML = `
+        <div class="notification-content">
+            <p class="notification-message">${message}</p>
+            <span class="notification-time">${time}</span>
+        </div>
+        <button type="button" class="notification-archive-btn" data-id="${id}" title="Archive">×</button>
+    `;
+
+    // Attach the archive listener to the new button immediately
+    div.querySelector('.notification-archive-btn').addEventListener('click', handleArchive);
+
+    return div;
+}
+
 // Archive a notification
+function handleArchive(e) {
+    e.stopPropagation();
+
+    var notificationId = this.dataset.id;
+    var item = this.closest('.notification-item');
+
+    // Read the message and time text before removing the item from DOM
+    var message = item.querySelector('.notification-message').textContent;
+    var time = item.querySelector('.notification-time').textContent;
+
+    fetch('/notifications/' + notificationId + '/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) return;
+
+            // Update the unread badge count if this was an unread notification
+            var badge = document.querySelector('.bell-badge');
+            if (badge && item.classList.contains('unread')) {
+                var count = parseInt(badge.textContent) - 1;
+                if (count <= 0) { badge.remove(); } else { badge.textContent = count; }
+            }
+
+            //Remove from inbox
+            item.remove();
+
+            //Remove inbox empty state if present, the nadd the item to archived tab
+            var archivedView = document.getElementById('notif-archived-view');
+            var emptyMsg = archivedView.querySelector('.no-notifications');
+            if (emptyMsg) emptyMsg.remove();
+
+            // Insert new archived item at the top of the archived list (after toolbar)
+            var toolbar = archivedView.querySelector('.archived-toolbar');
+            var newItem = buildArchivedItem(notificationId, message, time);
+
+            if (toolbar) {
+                toolbar.insertAdjacentElement('afterend', newItem);
+            } else {
+                archivedView.prepend(newItem);
+            }
+
+            // Show inbox empty state if nothing left in inbox
+            var inboxView = document.getElementById('notif-inbox-view');
+            if (inboxView && inboxView.querySelectorAll('.notification-item').length === 0) {
+                var empty = document.createElement('p');
+                empty.className = 'no-notifications';
+                empty.textContent = 'No notifications';
+                inboxView.appendChild(empty);
+            }
+        });
+}
+
+// Attach to all existing archive buttons on page load
 document.querySelectorAll('.notification-archive-btn').forEach(function (btn) {
-    btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        var notificationId = this.dataset.id;
-        var item = this.closest('.notification-item');
+    btn.addEventListener('click', handleArchive);
+})
 
-        fetch('/notifications/' + notificationId + '/archive', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+// Named function so dynamically created restore buttons can reuse the same logic
+function handleRestore(e) {
+    e.stopPropagation();
+
+    var id = this.dataset.id;
+    var item = this.closest('.notification-item');
+
+    // Read message and time before removing from DOM
+    var message = item.querySelector('.notification-message').textContent;
+    var time = item.querySelector('.notification-time').textContent;
+
+    fetch('/notifications/' + id + '/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) return;
+
+            // Remove from archived tab
+            item.remove();
+
+            // Remove archived empty state if present, then add item to inbox tab
+            var inboxView = document.getElementById('notif-inbox-view');
+            var emptyMsg = inboxView.querySelector('.no-notifications');
+            if (emptyMsg) emptyMsg.remove();
+
+            // Insert restored item at top of inbox
+            var newItem = buildInboxItem(id, message, time);
+            inboxView.prepend(newItem);
+
+            // Show archived empty state if nothing left in archived tab
+            var archivedView = document.getElementById('notif-archived-view');
+            if (archivedView && archivedView.querySelectorAll('.notification-item').length === 0) {
+                var empty = document.createElement('p');
+                empty.className = 'no-notifications';
+                empty.textContent = 'No archived notifications';
+                archivedView.appendChild(empty);
+            }
         })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!data.success) return;
+        .catch(function (err) {
+            console.error('Restore failed:', err);
+        });
+}
 
-                // Update badge count
-                var badge = document.querySelector('.bell-badge');
-                if (badge && item.classList.contains('unread')) {
-                    var count = parseInt(badge.textContent) - 1;
-                    if (count <= 0) {
-                        badge.remove();
-                    } else {
-                        badge.textContent = count;
-                    }
-                }
-
-                // Remove from active list
-                item.remove();
-
-                // Show empty state if nothing left
-                var activeList = document.getElementById('active-notifications');
-                if (activeList && activeList.querySelectorAll('.notification-item').length === 0) {
-                    var empty = document.createElement('p');
-                    empty.className = 'no-notifications';
-                    empty.textContent = 'No notifications';
-                    activeList.appendChild(empty);
-                }
-            });
-    });
+// Attach to all existing restore buttons on page load
+document.querySelectorAll('.notification-restore-btn').forEach(function (btn) {
+    btn.addEventListener('click', handleRestore);
 });
+
 
 // Inbox / Archived Toggle
 var btnInbox = document.getElementById('btn-notif-inbox');
@@ -330,7 +448,7 @@ if (draftItems.length > 0) {
                                 if (remaining.length === 0) {
                                     window.location.href = '/';
                                 }
-                            }, 620);
+                            }, 850);
                         }
                         pendingDeleteId = null;
                         pendingDeleteRow = null;
@@ -1060,7 +1178,7 @@ if (document.getElementById('sectionBasics')) {
             first_output_deadline: document.getElementById('first_output_deadline') ? document.getElementById('first_output_deadline').value || null : null,
             final_deadline: document.getElementById('final_deadline') ? document.getElementById('final_deadline').value || null : null,
             customer_dates: customerDates,
-            standard_deliverables: (function() { var el = document.getElementById('standard_deliverables_json'); try { return el ? JSON.parse(el.value || '[]') : []; } catch(e) { return []; } })(),
+            standard_deliverables: (function () { var el = document.getElementById('standard_deliverables_json'); try { return el ? JSON.parse(el.value || '[]') : []; } catch (e) { return []; } })(),
             design_type_id: document.getElementById('design_type_id') ? document.getElementById('design_type_id').value || null : null,
             design_direction_id: document.getElementById('design_direction_id') ? document.getElementById('design_direction_id').value || null : null,
             client_expectation: document.getElementById('client_expectation') ? document.getElementById('client_expectation').value.trim() || null : null,
@@ -1663,8 +1781,8 @@ document.querySelectorAll('.status-select').forEach(function (select) {
 function flagRevision(deliverableId, projectId) {
     var url = '/projects/' + projectId + '/deliverable/' + deliverableId + '/flag-revision';
     fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
             if (data.error) {
                 showToast(data.error, 'error');
             } else {
@@ -1685,7 +1803,7 @@ function flagRevision(deliverableId, projectId) {
                 }
             }
         })
-        .catch(function() { showToast('Something went wrong', 'error'); });
+        .catch(function () { showToast('Something went wrong', 'error'); });
 }
 
 // Admin panel open / close
@@ -2487,7 +2605,7 @@ function loadPTDesignTypes() {
                         '<div class="pt-inline-edit">' +
                         '<input type="text" class="form-input pt-edit-name" value="' + currentName + '" style="max-width:180px;">' +
                         '<div class="pt-discipline-checks pt-edit-teams">' +
-                        ['2D','3D','Technical'].map(function(t) {
+                        ['2D', '3D', 'Technical'].map(function (t) {
                             return '<label><input type="checkbox" value="' + t + '"' + (currentTeams.indexOf(t) !== -1 ? ' checked' : '') + '> ' + t + '</label>';
                         }).join('') +
                         '</div>' +
@@ -2496,7 +2614,7 @@ function loadPTDesignTypes() {
                         '</div>';
                     row.querySelector('.pt-dt-save').addEventListener('click', function () {
                         var newName = row.querySelector('.pt-edit-name').value.trim();
-                        var newTeam = Array.from(row.querySelectorAll('.pt-edit-teams input:checked')).map(function(cb) { return cb.value; }).join(',') || null;
+                        var newTeam = Array.from(row.querySelectorAll('.pt-edit-teams input:checked')).map(function (cb) { return cb.value; }).join(',') || null;
                         if (!newName) return;
                         fetch('/admin/api/design-types/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, team: newTeam }) })
                             .then(function (r) { return r.json(); })
@@ -2518,7 +2636,7 @@ document.addEventListener('DOMContentLoaded', function () {
         addDtForm.addEventListener('submit', function (e) {
             e.preventDefault();
             var name = document.getElementById('pt-new-dt-name').value.trim();
-            var checked = Array.from(document.querySelectorAll('#pt-new-dt-teams input:checked')).map(function(cb) { return cb.value; });
+            var checked = Array.from(document.querySelectorAll('#pt-new-dt-teams input:checked')).map(function (cb) { return cb.value; });
             var team = checked.join(',') || null;
             if (!name) return;
             fetch('/admin/api/design-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, team: team }) })
@@ -2526,7 +2644,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(function (d) {
                     if (d.error) { alert(d.error); return; }
                     document.getElementById('pt-new-dt-name').value = '';
-                    document.querySelectorAll('#pt-new-dt-teams input').forEach(function(cb) { cb.checked = false; });
+                    document.querySelectorAll('#pt-new-dt-teams input').forEach(function (cb) { cb.checked = false; });
                     addDtForm.classList.add('hidden');
                     loadPTDesignTypes();
                 });

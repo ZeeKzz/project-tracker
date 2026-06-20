@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}New Project — Vitamin Helix{% endblock %}
+{% block title %}New Project — Vitamin-E{% endblock %}
 
 {% block content %}
 
@@ -32,7 +32,8 @@
     </div>
 
     <div class="create-body">
-        <h2 class="create-section-title" id="pageTitle">{% if edit_mode %}Edit Project{% else %}Project Brief{% endif %}</h2>
+        <h2 class="create-section-title" id="pageTitle">{% if edit_mode %}Edit Project{% else %}Project Brief{% endif %}
+        </h2>
         {# ── Section 1: Project Basics ── #}
         <div class="create-section" id="sectionBasics">
             <h3 class="create-section-heading">Project Basics</h3>
@@ -98,15 +99,19 @@
                 <label class="form-label">Teams Required</label>
                 <div class="team-tag-group">
                     <label class="team-tag-toggle">
-                        <input type="checkbox" name="design_teams" value="3D" {% if draft and draft.design_teams_requested and '3D' in draft.design_teams_requested %}checked{% endif %}>
+                        <input type="checkbox" name="design_teams" value="3D" {% if draft and
+                            draft.design_teams_requested and '3D' in draft.design_teams_requested %}checked{% endif %}>
                         <span>3D</span>
                     </label>
                     <label class="team-tag-toggle">
-                        <input type="checkbox" name="design_teams" value="2D" {% if draft and draft.design_teams_requested and '2D' in draft.design_teams_requested %}checked{% endif %}>
+                        <input type="checkbox" name="design_teams" value="2D" {% if draft and
+                            draft.design_teams_requested and '2D' in draft.design_teams_requested %}checked{% endif %}>
                         <span>2D</span>
                     </label>
                     <label class="team-tag-toggle">
-                        <input type="checkbox" name="design_teams" value="Technical" {% if draft and draft.design_teams_requested and 'Technical' in draft.design_teams_requested %}checked{% endif %}>
+                        <input type="checkbox" name="design_teams" value="Technical" {% if draft and
+                            draft.design_teams_requested and 'Technical' in draft.design_teams_requested %}checked{%
+                            endif %}>
                         <span>Technical</span>
                     </label>
                 </div>
@@ -116,7 +121,7 @@
                 <div class="form-group">
                     <label class="form-label">Briefing Date</label>
                     <input type="date" id="briefing_date" name="briefing_date" class="form-input"
-                        value="{{ draft.briefing_date.isoformat() if draft and draft.briefing_date else '' }}"
+                        value="{{ draft.briefing_date.isoformat() if draft and draft.briefing_date else today }}"
                         {{ 'readonly' if edit_mode else '' }}>
                 </div>
                 <div class="form-group">
@@ -169,26 +174,13 @@
                             <select id="design_type_id" name="design_type_id" class="form-select">
                                 <option value="">— Select —</option>
                                 {% for dt in design_types %}
-                                <option value="{{ dt.id }}" {% if draft and draft.design_type_id == dt.id %}selected{% endif %}>{{ dt.name }}</option>
+                                <option value="{{ dt.id }}" {% if draft and draft.design_type_id==dt.id %}selected{%
+                                    endif %}>{{ dt.name }}</option>
                                 {% endfor %}
                             </select>
                             {% if effective_user.role in ['admin', 'cs'] %}
-                            <button type="button" class="btn-add-inline-sm" onclick="openQuickAdd('design-type')">+ Add New Type</button>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Design Direction</label>
-                        <div class="form-inline-add-row">
-                            <select id="design_direction_id" name="design_direction_id" class="form-select">
-                                <option value="">— Select —</option>
-                                {% for dd in design_directions %}
-                                <option value="{{ dd.id }}" {% if draft and draft.design_direction_id == dd.id %}selected{% endif %}>{{ dd.name }}</option>
-                                {% endfor %}
-                            </select>
-                            {% if effective_user.role in ['admin', 'cs'] %}
-                            <button type="button" class="btn-add-inline-sm" onclick="openQuickAdd('design-direction')">+ Add New Direction</button>
+                            <button type="button" class="btn-add-inline-sm" onclick="openQuickAdd('design-type')">+ Add
+                                New Type</button>
                             {% endif %}
                         </div>
                     </div>
@@ -209,8 +201,10 @@
 
                 <div class="standard-brief-right">
                     <div class="form-group" style="height: 100%;">
-                        <label class="form-label">Additional Information <span class="form-label-sub">Sizes, Materials etc</span></label>
-                        <textarea id="additional_information" name="additional_information" class="form-textarea form-textarea--tall"
+                        <label class="form-label">Additional Information <span class="form-label-sub">Sizes, Materials
+                                etc</span></label>
+                        <textarea id="additional_information" name="additional_information"
+                            class="form-textarea form-textarea--tall"
                             placeholder="Any additional specifications, sizes, materials, or context...">{{ draft.additional_information if draft and draft.additional_information else '' }}</textarea>
                     </div>
                 </div>
@@ -226,7 +220,8 @@
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.3rem;">
                         <label class="form-label-sub" for="standardDeliverableDeadline">Design Deadline</label>
-                        <input type="date" id="standardDeliverableDeadline" class="form-input" style="max-width: 160px;">
+                        <input type="date" id="standardDeliverableDeadline" class="form-input"
+                            style="max-width: 160px;">
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 0.3rem;">
                         <label class="form-label-sub">Teams</label>
@@ -236,13 +231,17 @@
                             <button type="button" class="team-tag-btn" data-team="Technical">Technical</button>
                         </div>
                     </div>
-                    <button type="button" class="btn btn--primary btn--sm" onclick="addStandardDeliverableToList()" style="margin-bottom: 1px;">+ Add</button>
+                    <button type="button" class="btn btn--primary btn--sm" onclick="addStandardDeliverableToList()"
+                        style="margin-bottom: 1px;">+ Add</button>
                 </div>
                 <div style="margin-top: 0.4rem;">
-                    <button type="button" class="btn btn--tangerine btn--sm" onclick="applyDeadlineToAll()">Apply date to all</button>
+                    <button type="button" class="btn btn--tangerine btn--sm" onclick="applyDeadlineToAll()">Apply date
+                        to all</button>
                 </div>
-                <div id="standardDeliverablesList" style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem;"></div>
-                <input type="hidden" id="standard_deliverables_json" value="{{ existing_standard_deliverables | tojson if existing_standard_deliverables is defined else '[]' }}">
+                <div id="standardDeliverablesList"
+                    style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem;"></div>
+                <input type="hidden" id="standard_deliverables_json"
+                    value="{{ existing_standard_deliverables | tojson if existing_standard_deliverables is defined else '[]' }}">
             </div>
 
         </div>
@@ -337,7 +336,8 @@
                 <div class="form-group">
                     <div class="customer-list-header">
                         <label class="form-label">UAE Customers</label>
-                        <button type="button" class="btn btn--secondary btn--sm" id="btnSelectAllUAE">Select All</button>
+                        <button type="button" class="btn btn--secondary btn--sm" id="btnSelectAllUAE">Select
+                            All</button>
                     </div>
                     <div class="customer-checklist" id="uaeCustomerList">
                     </div>
@@ -433,7 +433,8 @@
 <div id="quickAddModal" class="modal-overlay hidden" onclick="if(event.target===this) closeQuickAdd()">
     <div class="modal-box">
         <h3 class="modal-title" id="quickAddTitle">Add New Type</h3>
-        <input type="text" id="quickAddInput" class="form-input" placeholder="Enter name..." style="margin-top: 0.75rem;">
+        <input type="text" id="quickAddInput" class="form-input" placeholder="Enter name..."
+            style="margin-top: 0.75rem;">
         <div class="modal-actions" style="margin-top: 1rem;">
             <button type="button" class="btn btn--secondary" onclick="closeQuickAdd()">Cancel</button>
             <button type="button" class="btn btn--primary" onclick="submitQuickAdd()">Add</button>
@@ -442,171 +443,171 @@
 </div>
 
 <script>
-var _quickAddTarget = null;
+    var _quickAddTarget = null;
 
-function openQuickAdd(target) {
-    _quickAddTarget = target;
-    document.getElementById('quickAddTitle').textContent = target === 'design-type' ? 'Add New Design Type' : 'Add New Design Direction';
-    document.getElementById('quickAddInput').value = '';
-    document.getElementById('quickAddModal').classList.remove('hidden');
-    setTimeout(function() { document.getElementById('quickAddInput').focus(); }, 100);
-}
-
-function closeQuickAdd() {
-    document.getElementById('quickAddModal').classList.add('hidden');
-}
-
-function submitQuickAdd() {
-    var name = document.getElementById('quickAddInput').value.trim();
-    if (!name) return;
-    var url = _quickAddTarget === 'design-type'
-        ? '/admin/api/design-types/quick-add'
-        : '/admin/api/design-directions/quick-add';
-    fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) { alert(data.error); return; }
-        var selectId = _quickAddTarget === 'design-type' ? 'design_type_id' : 'design_direction_id';
-        var select = document.getElementById(selectId);
-        var existing = select.querySelector('option[value="' + data.id + '"]');
-        if (!existing) {
-            var opt = document.createElement('option');
-            opt.value = data.id;
-            opt.textContent = data.name;
-            select.appendChild(opt);
-        }
-        select.value = data.id;
-        closeQuickAdd();
-    })
-    .catch(function() { alert('Something went wrong.'); });
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    var inp = document.getElementById('quickAddInput');
-    if (inp) {
-        inp.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') submitQuickAdd();
-            if (e.key === 'Escape') closeQuickAdd();
-        });
+    function openQuickAdd(target) {
+        _quickAddTarget = target;
+        document.getElementById('quickAddTitle').textContent = target === 'design-type' ? 'Add New Design Type' : 'Add New Design Direction';
+        document.getElementById('quickAddInput').value = '';
+        document.getElementById('quickAddModal').classList.remove('hidden');
+        setTimeout(function () { document.getElementById('quickAddInput').focus(); }, 100);
     }
 
-    var stdInp = document.getElementById('standardDeliverableInput');
-    if (stdInp) {
-        stdInp.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') { e.preventDefault(); addStandardDeliverableToList(); }
-        });
-        var stdDate = document.getElementById('standardDeliverableDeadline');
-        if (stdDate) {
-            stdDate.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); addStandardDeliverableToList(); }
+    function closeQuickAdd() {
+        document.getElementById('quickAddModal').classList.add('hidden');
+    }
+
+    function submitQuickAdd() {
+        var name = document.getElementById('quickAddInput').value.trim();
+        if (!name) return;
+        var url = _quickAddTarget === 'design-type'
+            ? '/admin/api/design-types/quick-add'
+            : '/admin/api/design-directions/quick-add';
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.error) { alert(data.error); return; }
+                var selectId = _quickAddTarget === 'design-type' ? 'design_type_id' : 'design_direction_id';
+                var select = document.getElementById(selectId);
+                var existing = select.querySelector('option[value="' + data.id + '"]');
+                if (!existing) {
+                    var opt = document.createElement('option');
+                    opt.value = data.id;
+                    opt.textContent = data.name;
+                    select.appendChild(opt);
+                }
+                select.value = data.id;
+                closeQuickAdd();
+            })
+            .catch(function () { alert('Something went wrong.'); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var inp = document.getElementById('quickAddInput');
+        if (inp) {
+            inp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') submitQuickAdd();
+                if (e.key === 'Escape') closeQuickAdd();
             });
         }
-        // Restore existing deliverables on page load (edit mode / draft restore)
-        var jsonEl = document.getElementById('standard_deliverables_json');
-        if (jsonEl) {
-            try {
-                var existing = JSON.parse(jsonEl.value || '[]');
-                existing.forEach(function(item) {
-                    if (typeof item === 'string') {
-                        renderStandardDeliverableRow({ name: item, design_deadline: null, teams: [] });
-                    } else {
-                        renderStandardDeliverableRow(item);
-                    }
+
+        var stdInp = document.getElementById('standardDeliverableInput');
+        if (stdInp) {
+            stdInp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); addStandardDeliverableToList(); }
+            });
+            var stdDate = document.getElementById('standardDeliverableDeadline');
+            if (stdDate) {
+                stdDate.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') { e.preventDefault(); addStandardDeliverableToList(); }
                 });
-            } catch(e) {}
+            }
+            // Restore existing deliverables on page load (edit mode / draft restore)
+            var jsonEl = document.getElementById('standard_deliverables_json');
+            if (jsonEl) {
+                try {
+                    var existing = JSON.parse(jsonEl.value || '[]');
+                    existing.forEach(function (item) {
+                        if (typeof item === 'string') {
+                            renderStandardDeliverableRow({ name: item, design_deadline: null, teams: [] });
+                        } else {
+                            renderStandardDeliverableRow(item);
+                        }
+                    });
+                } catch (e) { }
+            }
         }
+    });
+
+    function getStandardDeliverables() {
+        var jsonEl = document.getElementById('standard_deliverables_json');
+        try { return JSON.parse(jsonEl.value || '[]'); } catch (e) { return []; }
     }
-});
 
-function getStandardDeliverables() {
-    var jsonEl = document.getElementById('standard_deliverables_json');
-    try { return JSON.parse(jsonEl.value || '[]'); } catch(e) { return []; }
-}
+    function saveStandardDeliverables(arr) {
+        document.getElementById('standard_deliverables_json').value = JSON.stringify(arr);
+    }
 
-function saveStandardDeliverables(arr) {
-    document.getElementById('standard_deliverables_json').value = JSON.stringify(arr);
-}
+    function formatDeadlineDisplay(isoDate) {
+        if (!isoDate) return '';
+        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var parts = isoDate.split('-');
+        if (parts.length !== 3) return isoDate;
+        return parseInt(parts[2], 10) + ' ' + months[parseInt(parts[1], 10) - 1] + ' ' + parts[0];
+    }
 
-function formatDeadlineDisplay(isoDate) {
-    if (!isoDate) return '';
-    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var parts = isoDate.split('-');
-    if (parts.length !== 3) return isoDate;
-    return parseInt(parts[2], 10) + ' ' + months[parseInt(parts[1], 10) - 1] + ' ' + parts[0];
-}
+    // Toggle team buttons in the deliverable add row
+    document.querySelectorAll('#standardDeliverableTeams .team-tag-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () { this.classList.toggle('active'); });
+    });
 
-// Toggle team buttons in the deliverable add row
-document.querySelectorAll('#standardDeliverableTeams .team-tag-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { this.classList.toggle('active'); });
-});
+    function getSelectedDeliverableTeams() {
+        return Array.from(document.querySelectorAll('#standardDeliverableTeams .team-tag-btn.active'))
+            .map(function (b) { return b.dataset.team; });
+    }
 
-function getSelectedDeliverableTeams() {
-    return Array.from(document.querySelectorAll('#standardDeliverableTeams .team-tag-btn.active'))
-        .map(function(b) { return b.dataset.team; });
-}
+    function clearDeliverableTeams() {
+        document.querySelectorAll('#standardDeliverableTeams .team-tag-btn').forEach(function (b) { b.classList.remove('active'); });
+    }
 
-function clearDeliverableTeams() {
-    document.querySelectorAll('#standardDeliverableTeams .team-tag-btn').forEach(function(b) { b.classList.remove('active'); });
-}
+    function renderStandardDeliverableRow(item) {
+        var list = document.getElementById('standardDeliverablesList');
+        var row = document.createElement('div');
+        row.className = 'std-del-chip';
+        row.dataset.name = item.name;
+        var deadlineText = item.design_deadline ? formatDeadlineDisplay(item.design_deadline) : '<span class="muted">No deadline</span>';
+        var teams = item.teams || [];
+        var teamTags = teams.map(function (t) { return '<span class="std-del-team-tag">' + t + '</span>'; }).join('');
+        row.innerHTML =
+            '<span class="std-del-chip-name">' + item.name + '</span>' +
+            (teamTags ? '<span class="std-del-chip-teams">' + teamTags + '</span>' : '') +
+            '<span class="std-del-chip-deadline">' + deadlineText + '</span>' +
+            '<button type="button" class="std-del-chip-remove" title="Remove">&times;</button>';
+        row.querySelector('.std-del-chip-remove').addEventListener('click', function () {
+            var arr = getStandardDeliverables().filter(function (i) { return i.name !== item.name; });
+            saveStandardDeliverables(arr);
+            row.remove();
+        });
+        list.appendChild(row);
+    }
 
-function renderStandardDeliverableRow(item) {
-    var list = document.getElementById('standardDeliverablesList');
-    var row = document.createElement('div');
-    row.className = 'std-del-chip';
-    row.dataset.name = item.name;
-    var deadlineText = item.design_deadline ? formatDeadlineDisplay(item.design_deadline) : '<span class="muted">No deadline</span>';
-    var teams = item.teams || [];
-    var teamTags = teams.map(function(t) { return '<span class="std-del-team-tag">' + t + '</span>'; }).join('');
-    row.innerHTML =
-        '<span class="std-del-chip-name">' + item.name + '</span>' +
-        (teamTags ? '<span class="std-del-chip-teams">' + teamTags + '</span>' : '') +
-        '<span class="std-del-chip-deadline">' + deadlineText + '</span>' +
-        '<button type="button" class="std-del-chip-remove" title="Remove">&times;</button>';
-    row.querySelector('.std-del-chip-remove').addEventListener('click', function() {
-        var arr = getStandardDeliverables().filter(function(i) { return i.name !== item.name; });
+    function addStandardDeliverableToList() {
+        var inp = document.getElementById('standardDeliverableInput');
+        var dateInp = document.getElementById('standardDeliverableDeadline');
+        var name = inp.value.trim();
+        if (!name) { inp.focus(); return; }
+        var arr = getStandardDeliverables();
+        if (arr.some(function (i) { return i.name === name; })) { inp.select(); return; }
+        var item = {
+            name: name,
+            design_deadline: dateInp ? (dateInp.value || null) : null,
+            teams: getSelectedDeliverableTeams()
+        };
+        arr.push(item);
         saveStandardDeliverables(arr);
-        row.remove();
-    });
-    list.appendChild(row);
-}
+        renderStandardDeliverableRow(item);
+        inp.value = '';
+        if (dateInp) dateInp.value = '';
+        clearDeliverableTeams();
+        inp.focus();
+    }
 
-function addStandardDeliverableToList() {
-    var inp = document.getElementById('standardDeliverableInput');
-    var dateInp = document.getElementById('standardDeliverableDeadline');
-    var name = inp.value.trim();
-    if (!name) { inp.focus(); return; }
-    var arr = getStandardDeliverables();
-    if (arr.some(function(i) { return i.name === name; })) { inp.select(); return; }
-    var item = {
-        name: name,
-        design_deadline: dateInp ? (dateInp.value || null) : null,
-        teams: getSelectedDeliverableTeams()
-    };
-    arr.push(item);
-    saveStandardDeliverables(arr);
-    renderStandardDeliverableRow(item);
-    inp.value = '';
-    if (dateInp) dateInp.value = '';
-    clearDeliverableTeams();
-    inp.focus();
-}
-
-function applyDeadlineToAll() {
-    var dateInp = document.getElementById('standardDeliverableDeadline');
-    if (!dateInp || !dateInp.value) { dateInp && dateInp.focus(); return; }
-    var deadline = dateInp.value;
-    var arr = getStandardDeliverables().map(function(i) {
-        return { name: i.name, design_deadline: deadline, teams: i.teams || [] };
-    });
-    saveStandardDeliverables(arr);
-    var list = document.getElementById('standardDeliverablesList');
-    list.innerHTML = '';
-    arr.forEach(function(item) { renderStandardDeliverableRow(item); });
-}
+    function applyDeadlineToAll() {
+        var dateInp = document.getElementById('standardDeliverableDeadline');
+        if (!dateInp || !dateInp.value) { dateInp && dateInp.focus(); return; }
+        var deadline = dateInp.value;
+        var arr = getStandardDeliverables().map(function (i) {
+            return { name: i.name, design_deadline: deadline, teams: i.teams || [] };
+        });
+        saveStandardDeliverables(arr);
+        var list = document.getElementById('standardDeliverablesList');
+        list.innerHTML = '';
+        arr.forEach(function (item) { renderStandardDeliverableRow(item); });
+    }
 </script>
 
 {% endblock %}

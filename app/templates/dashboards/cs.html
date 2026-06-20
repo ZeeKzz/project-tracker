@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard — Vitamin Helix{% endblock %}
+{% block title %}Dashboard — Vitamin-E{% endblock %}
 
 {% block content %}
 
@@ -66,13 +66,21 @@
                                 <select class="status-select"
                                     data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
                                     onchange="updateStatus(this)">
-                                    <option value="briefed" {% if project.project_status == 'briefed' %}selected{% endif %}>Briefed</option>
-                                    <option value="in_queue" {% if project.project_status == 'in_queue' %}selected{% endif %}>In Queue</option>
-                                    <option value="in_progress" {% if project.project_status == 'in_progress' %}selected{% endif %}>In Progress</option>
-                                    <option value="submitted" {% if project.project_status == 'submitted' %}selected{% endif %}>Submitted</option>
-                                    <option value="revision_in_queue" {% if project.project_status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
-                                    <option value="revision_in_progress" {% if project.project_status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
-                                    <option value="approved" {% if project.project_status == 'approved' %}selected{% endif %}>Approved</option>
+                                    <option value="briefed" {% if project.project_status=='briefed' %}selected{% endif
+                                        %}>Briefed</option>
+                                    <option value="in_queue" {% if project.project_status=='in_queue' %}selected{% endif
+                                        %}>In Queue</option>
+                                    <option value="in_progress" {% if project.project_status=='in_progress' %}selected{%
+                                        endif %}>In Progress</option>
+                                    <option value="submitted" {% if project.project_status=='submitted' %}selected{%
+                                        endif %}>Submitted</option>
+                                    <option value="revision_in_queue" {% if project.project_status=='revision_in_queue'
+                                        %}selected{% endif %}>Revision in Queue</option>
+                                    <option value="revision_in_progress" {% if
+                                        project.project_status=='revision_in_progress' %}selected{% endif %}>Revision in
+                                        Progress</option>
+                                    <option value="approved" {% if project.project_status=='approved' %}selected{% endif
+                                        %}>Approved</option>
                                 </select>
                             </td>
                             <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
@@ -110,9 +118,14 @@
                                                             %}selected{% endif %}>In Progress</option>
                                                         <option value="submitted" {% if pc.status=='submitted'
                                                             %}selected{% endif %}>Submitted</option>
-                                                        <option value="revision_in_queue" {% if pc.status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
-                                                        <option value="revision_in_progress" {% if pc.status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
-                                                        <option value="approved" {% if pc.status == 'approved' %}selected{% endif %}>Approved</option>
+                                                        <option value="revision_in_queue" {% if
+                                                            pc.status=='revision_in_queue' %}selected{% endif %}>
+                                                            Revision in Queue</option>
+                                                        <option value="revision_in_progress" {% if
+                                                            pc.status=='revision_in_progress' %}selected{% endif %}>
+                                                            Revision in Progress</option>
+                                                        <option value="approved" {% if pc.status=='approved'
+                                                            %}selected{% endif %}>Approved</option>
                                                     </select>
                                                 </td>
                                             </tr>
@@ -146,13 +159,22 @@
                                     <select class="status-select"
                                         data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
                                         onchange="updateStatus(this)">
-                                        <option value="briefed" {% if project.project_status == 'briefed' %}selected{% endif %}>Briefed</option>
-                                        <option value="in_queue" {% if project.project_status == 'in_queue' %}selected{% endif %}>In Queue</option>
-                                        <option value="in_progress" {% if project.project_status == 'in_progress' %}selected{% endif %}>In Progress</option>
-                                        <option value="submitted" {% if project.project_status == 'submitted' %}selected{% endif %}>Submitted</option>
-                                        <option value="revision_in_queue" {% if project.project_status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
-                                        <option value="revision_in_progress" {% if project.project_status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
-                                        <option value="approved" {% if project.project_status == 'approved' %}selected{% endif %}>Approved</option>
+                                        <option value="briefed" {% if project.project_status=='briefed' %}selected{%
+                                            endif %}>Briefed</option>
+                                        <option value="in_queue" {% if project.project_status=='in_queue' %}selected{%
+                                            endif %}>In Queue</option>
+                                        <option value="in_progress" {% if project.project_status=='in_progress'
+                                            %}selected{% endif %}>In Progress</option>
+                                        <option value="submitted" {% if project.project_status=='submitted' %}selected{%
+                                            endif %}>Submitted</option>
+                                        <option value="revision_in_queue" {% if
+                                            project.project_status=='revision_in_queue' %}selected{% endif %}>Revision
+                                            in Queue</option>
+                                        <option value="revision_in_progress" {% if
+                                            project.project_status=='revision_in_progress' %}selected{% endif %}>
+                                            Revision in Progress</option>
+                                        <option value="approved" {% if project.project_status=='approved' %}selected{%
+                                            endif %}>Approved</option>
                                     </select>
                                 </td>
                                 <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
@@ -233,13 +255,21 @@
                             <select class="status-select"
                                 data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
                                 onchange="updateStatus(this)">
-                                <option value="briefed" {% if project.project_status == 'briefed' %}selected{% endif %}>Briefed</option>
-                                <option value="in_queue" {% if project.project_status == 'in_queue' %}selected{% endif %}>In Queue</option>
-                                <option value="in_progress" {% if project.project_status == 'in_progress' %}selected{% endif %}>In Progress</option>
-                                <option value="submitted" {% if project.project_status == 'submitted' %}selected{% endif %}>Submitted</option>
-                                <option value="revision_in_queue" {% if project.project_status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
-                                <option value="revision_in_progress" {% if project.project_status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
-                                <option value="approved" {% if project.project_status == 'approved' %}selected{% endif %}>Approved</option>
+                                <option value="briefed" {% if project.project_status=='briefed' %}selected{% endif %}>
+                                    Briefed</option>
+                                <option value="in_queue" {% if project.project_status=='in_queue' %}selected{% endif %}>
+                                    In Queue</option>
+                                <option value="in_progress" {% if project.project_status=='in_progress' %}selected{%
+                                    endif %}>In Progress</option>
+                                <option value="submitted" {% if project.project_status=='submitted' %}selected{% endif
+                                    %}>Submitted</option>
+                                <option value="revision_in_queue" {% if project.project_status=='revision_in_queue'
+                                    %}selected{% endif %}>Revision in Queue</option>
+                                <option value="revision_in_progress" {% if
+                                    project.project_status=='revision_in_progress' %}selected{% endif %}>Revision in
+                                    Progress</option>
+                                <option value="approved" {% if project.project_status=='approved' %}selected{% endif %}>
+                                    Approved</option>
                             </select>
                         </td>
                         <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
@@ -270,13 +300,21 @@
                                 <select class="status-select"
                                     data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
                                     onchange="updateStatus(this)">
-                                    <option value="briefed" {% if project.project_status == 'briefed' %}selected{% endif %}>Briefed</option>
-                                    <option value="in_queue" {% if project.project_status == 'in_queue' %}selected{% endif %}>In Queue</option>
-                                    <option value="in_progress" {% if project.project_status == 'in_progress' %}selected{% endif %}>In Progress</option>
-                                    <option value="submitted" {% if project.project_status == 'submitted' %}selected{% endif %}>Submitted</option>
-                                    <option value="revision_in_queue" {% if project.project_status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
-                                    <option value="revision_in_progress" {% if project.project_status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
-                                    <option value="approved" {% if project.project_status == 'approved' %}selected{% endif %}>Approved</option>
+                                    <option value="briefed" {% if project.project_status=='briefed' %}selected{% endif
+                                        %}>Briefed</option>
+                                    <option value="in_queue" {% if project.project_status=='in_queue' %}selected{% endif
+                                        %}>In Queue</option>
+                                    <option value="in_progress" {% if project.project_status=='in_progress' %}selected{%
+                                        endif %}>In Progress</option>
+                                    <option value="submitted" {% if project.project_status=='submitted' %}selected{%
+                                        endif %}>Submitted</option>
+                                    <option value="revision_in_queue" {% if project.project_status=='revision_in_queue'
+                                        %}selected{% endif %}>Revision in Queue</option>
+                                    <option value="revision_in_progress" {% if
+                                        project.project_status=='revision_in_progress' %}selected{% endif %}>Revision in
+                                        Progress</option>
+                                    <option value="approved" {% if project.project_status=='approved' %}selected{% endif
+                                        %}>Approved</option>
                                 </select>
                             </td>
                             <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
@@ -308,13 +346,22 @@
                                                 <select class="status-select"
                                                     data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
                                                     onchange="updateStatus(this)">
-                                                    <option value="briefed" {% if pc.status == 'briefed' %}selected{% endif %}>Briefed</option>
-                                                    <option value="in_queue" {% if pc.status == 'in_queue' %}selected{% endif %}>In Queue</option>
-                                                    <option value="in_progress" {% if pc.status == 'in_progress' %}selected{% endif %}>In Progress</option>
-                                                    <option value="submitted" {% if pc.status == 'submitted' %}selected{% endif %}>Submitted</option>
-                                                    <option value="revision_in_queue" {% if pc.status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
-                                                    <option value="revision_in_progress" {% if pc.status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
-                                                    <option value="approved" {% if pc.status == 'approved' %}selected{% endif %}>Approved</option>
+                                                    <option value="briefed" {% if pc.status=='briefed' %}selected{%
+                                                        endif %}>Briefed</option>
+                                                    <option value="in_queue" {% if pc.status=='in_queue' %}selected{%
+                                                        endif %}>In Queue</option>
+                                                    <option value="in_progress" {% if pc.status=='in_progress'
+                                                        %}selected{% endif %}>In Progress</option>
+                                                    <option value="submitted" {% if pc.status=='submitted' %}selected{%
+                                                        endif %}>Submitted</option>
+                                                    <option value="revision_in_queue" {% if
+                                                        pc.status=='revision_in_queue' %}selected{% endif %}>Revision in
+                                                        Queue</option>
+                                                    <option value="revision_in_progress" {% if
+                                                        pc.status=='revision_in_progress' %}selected{% endif %}>Revision
+                                                        in Progress</option>
+                                                    <option value="approved" {% if pc.status=='approved' %}selected{%
+                                                        endif %}>Approved</option>
                                                 </select>
                                             </td>
                                         </tr>

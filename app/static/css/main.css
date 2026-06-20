@@ -3795,11 +3795,38 @@ textarea {
     padding: 1.5rem;
     min-width: 320px;
     max-width: 420px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
 }
 
 .modal-actions {
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;
+}
+
+/* Restore button — appears on archived notifications, sends them back to inbox */
+.notification-restore-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 16px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    flex-shrink: 0;
+    /* keeps the button vertically centred without stretching the row */
+    align-self: center;
+}
+
+
+/* Show the restore button when hovering over the notification item */
+.notification-item--archived:hover .notification-restore-btn {
+    opacity: 1;
+}
+
+/* Highlight on direct hover */
+.notification-restore-btn:hover {
+    color: var(--pine);
 }
