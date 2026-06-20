@@ -28,29 +28,30 @@ def _send_notification_email(recipient, message, project=None):
 
         # HTML email body using inline styles (required for email client compatibility)
         html_body = f"""
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border-radius:10px;overflow:hidden;">
+        <div style="background-color:#f5f5f5;padding:40px 20px;">
+            <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
 
-            <!-- Header -->
-            <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
-                <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;letter-spacing:2px;">Vitamin-E</h1>
+                <!-- Header -->
+                <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
+                    <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;letter-spacing:2px;">Vitamin-E</h1>
+                </div>
+
+                <!-- Body -->
+                <div style="background-color:#E5D259;padding:36px 32px;text-align:center;">
+                    <p style="margin:0 0 20px;color:#1A1A1A;font-size:16px;">Hi {recipient.name},</p>
+                    <p style="margin:0;color:#1A1A1A;font-size:15px;line-height:1.6;">{message}</p>
+                    {project_line}
+                </div>
+
+                <!-- Button -->
+                <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
+                    <a href="{button_url}"
+                       style="color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;">
+                        Go to Vitamin-E →
+                    </a>
+                </div>
+
             </div>
-
-            <!-- Body -->
-            <div style="background-color:#E5D259;padding:36px 32px;text-align:center;">
-                <p style="margin:0 0 20px;color:#1A1A1A;font-size:16px;">Hi {recipient.name},</p>
-                <p style="margin:0;color:#1A1A1A;font-size:15px;line-height:1.6;">{message}</p>
-                {project_line}
-            </div>
-
-            <!-- Button -->
-            <div style="background-color:#F27F55;padding:28px 32px;text-align:center;">
-                <a href="{button_url}"
-                   style="display:inline-block;background-color:#F27F55;color:#ffffff;text-decoration:none;
-                          font-size:16px;font-weight:bold;">
-                    Go to Vitamin-E →
-                </a>
-            </div>
-
         </div>
         """
 
