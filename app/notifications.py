@@ -1,22 +1,79 @@
 from app import db
 from app.models import Notification, User
 
-
 def _send_notification_email(recipient, message, project=None):
-    """Send an email alongside an in-app notification. Silent fail if email is disabled or misconfigured."""
+    """
+    Send an HTML email alongside an in-app notification.
+    Silently does nothing if email is disabled or misconfigured.
+    """
     from flask import current_app
+    # If email is turned off in .env, skip silently
     if not current_app.config.get('MAIL_ENABLED'):
         return
+    # If the user has no email address, skip
     if not recipient.email:
         return
     try:
         from flask_mail import Message as MailMessage
         from app import mail
-        subject = '[Helix] New notification'
-        project_line = f'\nProject: {project.name}' if project else ''
-        body = f"Hi {recipient.name},\n\n{message}{project_line}\n\n— Vitamin Helix"
-        msg = MailMessage(subject=subject, recipients=[recipient.email], body=body)
+
+        # Build the URL — link directly to the project if one is attached
+        app_url = 'https://app.vitamin-e.work'
+        if project:
+            button_url = f'{app_url}/projects/{project.id}'
+        else:
+            button_url = app_url
+
+        project_line = f'<p style="margin:0 0 12px;color:#555555;font-size:14px;"><strong>Project:</strong> {project.name}</p>' if project else ''
+
+        # HTML email body using inline styles (required for email client compatibility)
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #E0D9D2;border-radius:8px;overflow:hidden;">
+
+            <!-- Header -->
+            <div style="background-color:#F27F55;padding:24px 32px;">
+                <h1 style="margin:0;color:#ffffff;font-size:22px;letter-spacing:1px;">HELIX</h1>
+                <p style="margin:4px 0 0;color:#ffffff;font-size:12px;opacity:0.85;">Vitamin Dubai</p>
+            </div>
+
+            <!-- Body -->
+            <div style="padding:32px;background-color:#ffffff;">
+                <p style="margin:0 0 16px;color:#1A1A1A;font-size:15px;">Hi {recipient.name},</p>
+                <p style="margin:0 0 20px;color:#333333;font-size:14px;line-height:1.6;">{message}</p>
+                {project_line}
+
+                <!-- Button -->
+                <a href="{button_url}"
+                   style="display:inline-block;background-color:#F27F55;color:#ffffff;text-decoration:none;
+                          padding:12px 28px;border-radius:6px;font-size:14px;font-weight:bold;margin-top:8px;">
+                    Open in Helix →
+                </a>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding:16px 32px;background-color:#F8F5F2;border-top:1px solid #E0D9D2;">
+                <p style="margin:0;color:#999999;font-size:12px;">
+                    You're receiving this because you have an active Helix account.
+                </p>
+            </div>
+
+        </div>
+        """
+
+        # Plain text fallback for email clients that don't render HTML
+        text_body = f"Hi {recipient.name},\n\n{message}"
+        if project:
+            text_body += f"\nProject: {project.name}"
+        text_body += f"\n\nOpen Helix: {button_url}\n\n— Vitamin Helix"
+
+        msg = MailMessage(
+            subject=f'[Helix] {message[:60]}{"..." if len(message) > 60 else ""}',
+            recipients=[recipient.email],
+            body=text_body,
+            html=html_body
+        )
         mail.send(msg)
+
     except Exception as e:
         current_app.logger.warning(f'Helix email notification failed for {recipient.email}: {e}')
 
