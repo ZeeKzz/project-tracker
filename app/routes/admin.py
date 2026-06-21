@@ -226,10 +226,21 @@ def list_projects():
 @login_required
 @admin_required
 def delete_project(project_id):
+    import os
+    from flask import current_app
     from app import db
-    from app.models import Project
+    from app.models import Project, ProjectFile
+
     project = Project.query.get_or_404(project_id)
     name = project.name
+
+    # Remove uploaded reference files from disk — cascade handles the DB rows
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    for ref_file in project.reference_files:
+        file_path = os.path.join(upload_folder, ref_file.filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
     db.session.delete(project)
     db.session.commit()
     log_activity('project_deleted', f'Project "{name}" deleted', user=current_user, entity_type='project', entity_name=name)
@@ -355,6 +366,22 @@ def list_activity():
     search = request.args.get('search', '').strip()
     from_date = request.args.get('from', '').strip()
     to_date = request.args.get('to', '').strip()
+    category = request.args.get('category', '').strip()  # Creation / Flags / Deletions / Assignments / Edits / Other
+
+    # Category → action keyword mapping.
+    # Each category maps to a list of action strings that belong to it.
+    # "Other" is a special sentinel handled below — it matches anything NOT
+    # in any of the other categories.
+    CATEGORY_KEYWORDS = {
+        'creation':    ['created', 'uploaded', 'added', 'internal_review_submitted', 'submission_uploaded'],
+        'flags':       ['flagged', 'submission_flagged'],
+        'deletions':   ['deleted'],
+        'assignments': ['assigned'],
+        'edits':       ['updated', 'changed', 'status_changed', 'deliverable_status_changed',
+                        'submitted_to_client', 'internal_review_submitted'],
+    }
+    # Collect every keyword that belongs to a named category (used to invert for "Other")
+    ALL_NAMED_KEYWORDS = [kw for kws in CATEGORY_KEYWORDS.values() for kw in kws]
 
     if search:
         pattern = f'%{search}%'
@@ -370,6 +397,19 @@ def list_activity():
     if to_date:
         to_dt_utc = datetime.fromisoformat(to_date + ' 23:59:59') - timedelta(hours=4)
         query = query.filter(ActivityLog.created_at <= to_dt_utc)
+
+    if category and category != 'all':
+        cat_lower = category.lower()
+        if cat_lower == 'other':
+            # "Other" = actions that don't match any keyword in any named category
+            query = query.filter(
+                ~db.or_(*[ActivityLog.action.ilike(f'%{kw}%') for kw in ALL_NAMED_KEYWORDS])
+            )
+        elif cat_lower in CATEGORY_KEYWORDS:
+            keywords = CATEGORY_KEYWORDS[cat_lower]
+            query = query.filter(
+                db.or_(*[ActivityLog.action.ilike(f'%{kw}%') for kw in keywords])
+            )
 
     entries = query.order_by(ActivityLog.created_at.desc()).limit(500).all()
     return jsonify([{

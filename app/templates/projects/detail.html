@@ -1,4 +1,4 @@
-handleArceff{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block title %}{{ project.name }} — Vitamin-E{% endblock %}
 
@@ -64,12 +64,23 @@ handleArceff{% extends "base.html" %}
                             Progress</option>
                         <option value="submitted" {% if project.project_status=='submitted' %}selected{% endif %}>
                             Submitted</option>
+                        <option value="internal_review" {% if project.project_status=='internal_review' %}selected{%
+                            endif %}>
+                            Internal Review</option>
+                        <option value="internal_revision" {% if project.project_status=='internal_revision' %}selected{%
+                            endif %}>
+                            Internal Revision</option>
+                        <option value="submitted_to_client" {% if project.project_status=='submitted_to_client'
+                            %}selected{% endif %}>
+                            Submitted to Client</option>
                         <option value="revision_in_queue" {% if project.project_status=='revision_in_queue' %}selected{%
-                            endif %}>Revision in Queue</option>
+                            endif %}>
+                            Revision in Queue</option>
                         <option value="revision_in_progress" {% if project.project_status=='revision_in_progress'
-                            %}selected{% endif %}>Revision in Progress</option>
-                        <option value="approved" {% if project.project_status=='approved' %}selected{% endif %}>Approved
-                        </option>
+                            %}selected{% endif %}>
+                            Revision in Progress</option>
+                        <option value="approved" {% if project.project_status=='approved' %}selected{% endif %}>
+                            Approved</option>
                     </select>
                 </div>
                 {% endif %}
@@ -268,345 +279,427 @@ handleArceff{% extends "base.html" %}
         </form>
         {% endif %}
 
-        {% if project.campaign_notes %}
-        <div class="brief-notes">
-            <span class="detail-label">Concept Requirements</span>
-            <p class="brief-notes-text">{{ project.campaign_notes }}</p>
-        </div>
-        {% endif %}
+    </div>
 
-        {% if effective_user.role in ['designer', 'team_lead'] %}
-        <div class="flag-section-btn-row">
-            <button class="btn-brief-flag" data-flag-type="concept" data-project-id="{{ project.id }}"
-                data-context="Concept" onclick="openFlagModalFromBtn(this)">⚑ Flag Concept Issue</button>
-        </div>
-        {% endif %}
-
-        {% if project.has_kv %}
-        <div class="brief-kv-block">
-            <h3 class="brief-section-heading">Key Visual (KV)</h3>
-            <div class="detail-fields">
-                <div class="detail-field">
-                    <span class="detail-label">KV Deadline</span>
-                    <span class="detail-value mono">{{ project.kv_deadline.strftime('%d %b %Y') if project.kv_deadline
-                        else
-                        '—' }}</span>
-                </div>
-                <div class="detail-field">
-                    <span class="detail-label">Options Required</span>
-                    <span class="detail-value">{{ project.kv_options_required if project.kv_options_required else '—'
-                        }}</span>
-                </div>
-
-                <div class="detail-field">
-                    <span class="detail-label">KV Designer</span>
-                    <span class="detail-value">
-                        {% if project.kv_designer %}{{ project.kv_designer.name }}
-                        {% else %}<span class="badge badge-rose">Pending</span>{% endif %}
-                    </span>
-                </div>
-            </div>
-            {% if project.kv_requirements %}
-            <div class="brief-notes">
-                <span class="detail-label">KV Requirements</span>
-                <p class="brief-notes-text">{{ project.kv_requirements }}</p>
-            </div>
-            {% endif %}
-            {% if effective_user.role in ['designer', 'team_lead'] %}
-            <div class="flag-section-btn-row">
-                <button class="btn-brief-flag" data-flag-type="kv" data-project-id="{{ project.id }}"
-                    data-context="Key Visual (KV)" onclick="openFlagModalFromBtn(this)">⚑ Flag KV Issue</button>
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        {% for region_key in ['uae', 'kuwait', 'qatar', 'bahrain', 'oman'] %}
-        {% if region_key in brief_sections %}
-        <div class="brief-region-block">
-            <h3 class="brief-region-heading">{{ region_key | upper }}</h3>
-            {% for pc in brief_sections[region_key] %}
-            <div class="brief-customer-block">
-                <div class="brief-customer-header">
-                    <h4 class="brief-customer-name">{{ pc.customer.name }}</h4>
-                    <div class="brief-customer-dates">
-                        <span class="brief-date-item">
-                            <span class="brief-date-label">Design Deadline</span>
-                            <span class="brief-date-value mono">{{ pc.design_deadline.strftime('%d %b %Y') if
-                                pc.design_deadline else '—' }}</span>
-                        </span>
-                        <span class="brief-date-item">
-                            <span class="brief-date-label">Installation</span>
-                            <span class="brief-date-value mono">{{ pc.installation_date.strftime('%d %b %Y') if
-                                pc.installation_date else '—' }}</span>
-                        </span>
-                    </div>
-                </div>
-                <div class="brief-deliverables">
-                    {% for deliverable in pc.deliverables %}
-                    <div class="brief-deliverable-row">
-                        <span class="brief-deliverable-name">
-                            {{ deliverable.name }}
-                            {% if deliverable.revision_count > 0 %}
-                            <span class="revision-count-badge">Revision {{ deliverable.revision_count }}</span>
-                            {% endif %}
-                        </span>
-                        <div class="brief-deliverable-assignments">
-                            {% if deliverable.deliverable_type %}
-                            {% for d in deliverable.deliverable_type.disciplines %}
-                            {% set asgn = assignments_by_deliverable.get(deliverable.id, {}).get(d.team) %}
-                            <div class="brief-assignment-chip">
-                                <span class="team-tag team-{{ d.team | lower }}">{{ d.team }}</span>
-                                <span class="brief-assignment-name {{ 'muted' if not asgn }}">
-                                    {{ asgn.designer.name if asgn else 'Pending' }}
-                                </span>
-                                {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
-                                <form method="POST"
-                                    action="{{ url_for('projects.assign_deliverable', project_id=project.id, d_id=deliverable.id) }}"
-                                    class="chip-assign-form">
-                                    <input type="hidden" name="team" value="{{ d.team }}">
-                                    <select name="designer_id" class="chip-assign-select">
-                                        <option value="">— assign —</option>
-                                        {% for designer in designers_by_team.get(d.team, []) %}
-                                        <option value="{{ designer.id }}" {{ 'selected' if asgn and
-                                            asgn.designer_id==designer.id }}>{{ designer.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="chip-assign-btn">✓</button>
-                                </form>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-                            {% else %}
-                            <span class="muted">Pending</span>
-                            {% endif %}
-                        </div>
-                        {% if effective_user.role in ['admin', 'cs'] %}
-                        {% if deliverable.flagged_for_revision %}
-                        <span class="revision-flagged-badge">⚑ Flagged</span>
-                        {% else %}
-                        <button class="btn-flag-revision"
-                            onclick="flagRevision({{ deliverable.id}}, {{ project.id }})">Flag Revision</button>
-                        {% endif %}
-                        {% endif %}
-                        {% if effective_user.role in ['designer', 'team_lead'] %}
-                        {% set d_open_flags = open_flags | selectattr('deliverable_id', 'equalto', deliverable.id) |
-                        list %}
-                        {% if d_open_flags %}
-                        <span class="brief-flag-indicator"
-                            title="{{ d_open_flags|length }} open flag(s) on this deliverable">⚑ {{ d_open_flags|length
-                            }}</span>
-                        {% endif %}
-                        <button class="btn-brief-flag" data-flag-type="deliverable" data-project-id="{{ project.id }}"
-                            data-deliverable-id="{{ deliverable.id }}" data-context="{{ deliverable.name }}"
-                            onclick="openFlagModalFromBtn(this)">⚑ Flag Issue</button>
-                        {% endif %}
-                        <select class="status-select"
-                            data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=deliverable.id) }}"
-                            onchange="updateStatus(this)">
-                            <option value="in_queue" {% if deliverable.status=='in_queue' %}selected{% endif %}>In Queue
-                            </option>
-                            <option value="in_progress" {% if deliverable.status=='in_progress' %}selected{% endif %}>In
-                                Progress</option>
-                            <option value="submitted" {% if deliverable.status=='submitted' %}selected{% endif %}>
-                                Submitted</option>
-                            <option value="revision_in_queue" {% if deliverable.status=='revision_in_queue' %}selected{%
-                                endif %}>Revision
-                                in Queue</option>
-                            <option value="revision_in_progress" {% if deliverable.status=='revision_in_progress'
-                                %}selected{% endif %}>
-                                Revision in Progress</option>
-                            <option value="approved" {% if deliverable.status=='approved' %}selected{% endif %}>Approved
-                            </option>
-                        </select>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        {% endfor %}
-
+    {% if project.campaign_notes %}
+    <div class="brief-notes">
+        <span class="detail-label">Concept Requirements</span>
+        <p class="brief-notes-text">{{ project.campaign_notes }}</p>
     </div>
     {% endif %}
 
-    {% if project.brief_type == 'standard' %}
-    <div class="detail-card detail-card--full">
-        <h2 class="detail-card-title">Standard Brief</h2>
+    {% if effective_user.role in ['designer', 'team_lead'] %}
+    <div class="flag-section-btn-row">
+        <button class="btn-brief-flag" data-flag-type="concept" data-project-id="{{ project.id }}"
+            data-context="Concept" onclick="openFlagModalFromBtn(this)">⚑ Flag Concept Issue</button>
+    </div>
+    {% endif %}
 
+    {% if project.has_kv %}
+    <div class="brief-kv-block">
+        <h3 class="brief-section-heading">Key Visual (KV)</h3>
         <div class="detail-fields">
             <div class="detail-field">
-                <span class="detail-label">Client</span>
-                <span class="detail-value">{{ project.client_brand.name if project.client_brand else '—' }}</span>
+                <span class="detail-label">KV Deadline</span>
+                <span class="detail-value mono">{{ project.kv_deadline.strftime('%d %b %Y') if project.kv_deadline
+                    else
+                    '—' }}</span>
             </div>
             <div class="detail-field">
-                <span class="detail-label">Type of Design</span>
-                <span class="detail-value">{{ project.design_type.name if project.design_type else '—' }}</span>
+                <span class="detail-label">Options Required</span>
+                <span class="detail-value">{{ project.kv_options_required if project.kv_options_required else '—'
+                    }}</span>
             </div>
+
             <div class="detail-field">
-                <span class="detail-label">Briefing Date</span>
-                <span class="detail-value mono">{{ project.briefing_date.strftime('%d %b %Y') if project.briefing_date
+                <span class="detail-label">KV Designer</span>
+                <span class="detail-value">
+                    {% if project.kv_designer %}{{ project.kv_designer.name }}
+                    {% else %}<span class="badge badge-rose">Pending</span>{% endif %}
+                </span>
+            </div>
+        </div>
+        {% if project.kv_requirements %}
+        <div class="brief-notes">
+            <span class="detail-label">KV Requirements</span>
+            <p class="brief-notes-text">{{ project.kv_requirements }}</p>
+        </div>
+        {% endif %}
+        {% if effective_user.role in ['designer', 'team_lead'] %}
+        <div class="flag-section-btn-row">
+            <button class="btn-brief-flag" data-flag-type="kv" data-project-id="{{ project.id }}"
+                data-context="Key Visual (KV)" onclick="openFlagModalFromBtn(this)">⚑ Flag KV Issue</button>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% for region_key in ['uae', 'kuwait', 'qatar', 'bahrain', 'oman'] %}
+    {% if region_key in brief_sections %}
+    <div class="brief-region-block">
+        <h3 class="brief-region-heading">{{ region_key | upper }}</h3>
+        {% for pc in brief_sections[region_key] %}
+        <div class="brief-customer-block">
+            <div class="brief-customer-header">
+                <h4 class="brief-customer-name">{{ pc.customer.name }}</h4>
+                <div class="brief-customer-dates">
+                    <span class="brief-date-item">
+                        <span class="brief-date-label">Design Deadline</span>
+                        <span class="brief-date-value mono">{{ pc.design_deadline.strftime('%d %b %Y') if
+                            pc.design_deadline else '—' }}</span>
+                    </span>
+                    <span class="brief-date-item">
+                        <span class="brief-date-label">Installation</span>
+                        <span class="brief-date-value mono">{{ pc.installation_date.strftime('%d %b %Y') if
+                            pc.installation_date else '—' }}</span>
+                    </span>
+                </div>
+            </div>
+            <div class="brief-deliverables">
+                {% for deliverable in pc.deliverables %}
+                <div class="brief-deliverable-row">
+                    <span class="brief-deliverable-name">
+                        {{ deliverable.name }}
+                        {% if deliverable.revision_count > 0 %}
+                        <span class="revision-count-badge">Revision {{ deliverable.revision_count }}</span>
+                        {% endif %}
+                    </span>
+                    <div class="brief-deliverable-assignments">
+                        {% if deliverable.deliverable_type %}
+                        {% for d in deliverable.deliverable_type.disciplines %}
+                        {% set asgn = assignments_by_deliverable.get(deliverable.id, {}).get(d.team) %}
+                        <div class="brief-assignment-chip">
+                            <span class="team-tag team-{{ d.team | lower }}">{{ d.team }}</span>
+                            <span class="brief-assignment-name {{ 'muted' if not asgn }}">
+                                {{ asgn.designer.name if asgn else 'Pending' }}
+                            </span>
+                            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+                            <form method="POST"
+                                action="{{ url_for('projects.assign_deliverable', project_id=project.id, d_id=deliverable.id) }}"
+                                class="chip-assign-form">
+                                <input type="hidden" name="team" value="{{ d.team }}">
+                                <select name="designer_id" class="chip-assign-select">
+                                    <option value="">— assign —</option>
+                                    {% for designer in designers_by_team.get(d.team, []) %}
+                                    <option value="{{ designer.id }}" {{ 'selected' if asgn and
+                                        asgn.designer_id==designer.id }}>{{ designer.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="chip-assign-btn">✓</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <span class="muted">Pending</span>
+                        {% endif %}
+                    </div>
+                    {% if effective_user.role in ['admin', 'cs'] %}
+                    {% if deliverable.flagged_for_revision %}
+                    <span class="revision-flagged-badge">⚑ Flagged</span>
+                    {% else %}
+                    <button class="btn-flag-revision" onclick="flagRevision({{ deliverable.id}}, {{ project.id }})">Flag
+                        Revision</button>
+                    {% endif %}
+                    {% endif %}
+                    {% if effective_user.role in ['designer', 'team_lead'] %}
+                    {% set d_open_flags = open_flags | selectattr('deliverable_id', 'equalto', deliverable.id) |
+                    list %}
+                    {% if d_open_flags %}
+                    <span class="brief-flag-indicator"
+                        title="{{ d_open_flags|length }} open flag(s) on this deliverable">⚑ {{ d_open_flags|length
+                        }}</span>
+                    {% endif %}
+                    <button class="btn-brief-flag" data-flag-type="deliverable" data-project-id="{{ project.id }}"
+                        data-deliverable-id="{{ deliverable.id }}" data-context="{{ deliverable.name }}"
+                        onclick="openFlagModalFromBtn(this)">⚑ Flag Issue</button>
+                    {% endif %}
+                    <select class="status-select"
+                        data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=deliverable.id) }}"
+                        onchange="updateStatus(this)">
+                        <option value="in_queue" {% if deliverable.status=='in_queue' %}selected{% endif %}>In Queue
+                        </option>
+                        <option value="in_progress" {% if deliverable.status=='in_progress' %}selected{% endif %}>In
+                            Progress</option>
+                        <option value="submitted" {% if deliverable.status=='submitted' %}selected{% endif %}>Submitted
+                        </option>
+                        <option value="internal_review" {% if deliverable.status=='internal_review' %}selected{% endif
+                            %}>Internal Review</option>
+                        <option value="internal_revision" {% if deliverable.status=='internal_revision' %}selected{%
+                            endif %}>Internal Revision</option>
+                        <option value="submitted_to_client" {% if deliverable.status=='submitted_to_client' %}selected{%
+                            endif %}>Submitted to Client</option>
+                        <option value="revision_in_queue" {% if deliverable.status=='revision_in_queue' %}selected{%
+                            endif %}>Revision in Queue</option>
+                        <option value="revision_in_progress" {% if deliverable.status=='revision_in_progress'
+                            %}selected{% endif %}>Revision in Progress</option>
+                        <option value="approved" {% if deliverable.status=='approved' %}selected{% endif %}>Approved
+                        </option>
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+
+</div>
+{% endif %}
+
+{% if project.brief_type == 'standard' %}
+<div class="detail-card detail-card--full">
+    <h2 class="detail-card-title">Standard Brief</h2>
+
+    <div class="detail-fields">
+        <div class="detail-field">
+            <span class="detail-label">Client</span>
+            <span class="detail-value">{{ project.client_brand.name if project.client_brand else '—' }}</span>
+        </div>
+        <div class="detail-field">
+            <span class="detail-label">Type of Design</span>
+            <span class="detail-value">{{ project.design_type.name if project.design_type else '—' }}</span>
+        </div>
+        <div class="detail-field">
+            <span class="detail-label">Briefing Date</span>
+            <span class="detail-value mono">{{ project.briefing_date.strftime('%d %b %Y') if project.briefing_date
+                else '—' }}</span>
+        </div>
+        <div class="detail-field">
+            <span class="detail-label">First Output Deadline</span>
+            <span class="detail-value mono">{{ project.first_output_deadline.strftime('%d %b %Y') if
+                project.first_output_deadline else '—' }}</span>
+        </div>
+    </div>
+
+    {% if project.client_expectation %}
+    <div class="brief-notes" style="margin-top: 1rem;">
+        <span class="detail-label">Client Expectation</span>
+        <p class="brief-notes-text">{{ project.client_expectation }}</p>
+    </div>
+    {% endif %}
+
+    {% if project.what_to_avoid %}
+    <div class="brief-notes">
+        <span class="detail-label">What to Avoid</span>
+        <p class="brief-notes-text">{{ project.what_to_avoid }}</p>
+    </div>
+    {% endif %}
+
+    {% if project.additional_information %}
+    <div class="brief-notes">
+        <span class="detail-label">Additional Information</span>
+        <p class="brief-notes-text">{{ project.additional_information }}</p>
+    </div>
+    {% endif %}
+
+    <h3 class="brief-section-heading" style="margin-top: 1.5rem;">Deliverables</h3>
+
+    {% if standard_deliverables %}
+    <div class="brief-deliverables" style="margin-top: 1rem;">
+        {% for d in standard_deliverables %}
+        {% set asgn = standard_assignments_by_deliverable.get(d.id) %}
+        {% set d_open_flags = open_flags | selectattr('deliverable_id', 'equalto', d.id) | list %}
+        <div class="brief-deliverable-row" id="std-del-row-{{ d.id }}">
+            <span class="brief-deliverable-name">
+                {{ d.name }}
+                {% if d.revision_count > 0 %}
+                <span class="revision-count-badge">Revision {{ d.revision_count }}</span>
+                {% endif %}
+                {% if d_open_flags %}
+                <span class="brief-flag-indicator" title="{{ d_open_flags|length }} open flag(s)">⚑ {{
+                    d_open_flags|length }}</span>
+                {% endif %}
+                {% if d.teams %}
+                {% for t in d.teams.split(',') %}
+                <span class="std-del-team-tag">{{ t.strip() }}</span>
+                {% endfor %}
+                {% endif %}
+            </span>
+            <div class="brief-deliverable-assignments">
+                {% set d_designers = standard_designers_by_deliverable.get(d.id, standard_designers) %}
+                <div class="brief-assignment-chip">
+                    {% if asgn %}
+                    <span class="team-tag team-{{ asgn.designer.team | lower }}">{{ asgn.designer.team }}</span>
+                    {% endif %}
+                    <span class="brief-assignment-name {{ 'muted' if not asgn }}">
+                        {{ asgn.designer.name if asgn else 'Pending' }}
+                    </span>
+                    {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+                    <form method="POST"
+                        action="{{ url_for('projects.assign_standard_deliverable', project_id=project.id, d_id=d.id) }}"
+                        class="chip-assign-form">
+                        <select name="designer_id" class="chip-assign-select">
+                            <option value="">— assign —</option>
+                            {% for designer in d_designers %}
+                            <option value="{{ designer.id }}" {{ 'selected' if asgn and asgn.designer_id==designer.id
+                                }}>{{ designer.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="chip-assign-btn">✓</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% if effective_user.role in ['admin', 'cs'] %}
+            {% if d.flagged_for_revision %}
+            <span class="revision-flagged-badge">⚑ Flagged</span>
+            {% else %}
+            <button class="btn-flag-revision" onclick="flagRevision({{ d.id }}, {{ project.id }})">Flag
+                Revision</button>
+            {% endif %}
+            {% endif %}
+            {% if effective_user.role in ['designer', 'team_lead'] %}
+            <button class="btn-brief-flag" data-flag-type="deliverable" data-project-id="{{ project.id }}"
+                data-deliverable-id="{{ d.id }}" data-context="{{ d.name }}" onclick="openFlagModalFromBtn(this)">⚑
+                Flag Issue</button>
+            {% endif %}
+            <div class="std-deadline-col">
+                <span class="std-deadline-heading">Design Deadline</span>
+                <span class="mono std-deadline-label">{{ d.design_deadline.strftime('%d %b %Y') if d.design_deadline
                     else '—' }}</span>
             </div>
-            <div class="detail-field">
-                <span class="detail-label">First Output Deadline</span>
-                <span class="detail-value mono">{{ project.first_output_deadline.strftime('%d %b %Y') if
-                    project.first_output_deadline else '—' }}</span>
-            </div>
+            <select class="status-select"
+                data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=d.id) }}"
+                onchange="updateStatus(this)">
+                <option value="in_queue" {% if d.status=='in_queue' %}selected{% endif %}>In Queue</option>
+                <option value="in_progress" {% if d.status=='in_progress' %}selected{% endif %}>In Progress</option>
+                <option value="submitted" {% if d.status=='submitted' %}selected{% endif %}>Submitted</option>
+                <option value="internal_review" {% if d.status=='internal_review' %}selected{% endif %}>Internal Review
+                </option>
+                <option value="internal_revision" {% if d.status=='internal_revision' %}selected{% endif %}>Internal
+                    Revision</option>
+                <option value="submitted_to_client" {% if d.status=='submitted_to_client' %}selected{% endif %}>
+                    Submitted to Client</option>
+                <option value="revision_in_queue" {% if d.status=='revision_in_queue' %}selected{% endif %}>Revision in
+                    Queue</option>
+                <option value="revision_in_progress" {% if d.status=='revision_in_progress' %}selected{% endif %}>
+                    Revision in Progress</option>
+                <option value="approved" {% if d.status=='approved' %}selected{% endif %}>Approved</option>
+            </select>
         </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted" style="margin-top: 0.75rem;">No deliverables added yet.</p>
+    {% endif %}
 
-        {% if project.client_expectation %}
-        <div class="brief-notes" style="margin-top: 1rem;">
-            <span class="detail-label">Client Expectation</span>
-            <p class="brief-notes-text">{{ project.client_expectation }}</p>
-        </div>
-        {% endif %}
+</div>
+{% endif %}
 
-        {% if project.what_to_avoid %}
-        <div class="brief-notes">
-            <span class="detail-label">What to Avoid</span>
-            <p class="brief-notes-text">{{ project.what_to_avoid }}</p>
-        </div>
-        {% endif %}
+<!-- Reference Files — shown for all brief types and all roles -->
+<div class="detail-card detail-card--full" style="margin-top: 1.5rem;">
+    <h2 class="detail-card-title">Reference Files</h2>
 
-        {% if project.additional_information %}
-        <div class="brief-notes">
-            <span class="detail-label">Additional Information</span>
-            <p class="brief-notes-text">{{ project.additional_information }}</p>
-        </div>
-        {% endif %}
-
-        <h3 class="brief-section-heading" style="margin-top: 1.5rem;">Deliverables</h3>
-
-        {% if standard_deliverables %}
-        <div class="brief-deliverables" style="margin-top: 1rem;">
-            {% for d in standard_deliverables %}
-            {% set asgn = standard_assignments_by_deliverable.get(d.id) %}
-            {% set d_open_flags = open_flags | selectattr('deliverable_id', 'equalto', d.id) | list %}
-            <div class="brief-deliverable-row" id="std-del-row-{{ d.id }}">
-                <span class="brief-deliverable-name">
-                    {{ d.name }}
-                    {% if d.revision_count > 0 %}
-                    <span class="revision-count-badge">Revision {{ d.revision_count }}</span>
-                    {% endif %}
-                    {% if d_open_flags %}
-                    <span class="brief-flag-indicator" title="{{ d_open_flags|length }} open flag(s)">⚑ {{
-                        d_open_flags|length }}</span>
-                    {% endif %}
-                    {% if d.teams %}
-                    {% for t in d.teams.split(',') %}
-                    <span class="std-del-team-tag">{{ t.strip() }}</span>
-                    {% endfor %}
-                    {% endif %}
-                </span>
-                <div class="brief-deliverable-assignments">
-                    {% set d_designers = standard_designers_by_deliverable.get(d.id, standard_designers) %}
-                    <div class="brief-assignment-chip">
-                        {% if asgn %}
-                        <span class="team-tag team-{{ asgn.designer.team | lower }}">{{ asgn.designer.team }}</span>
-                        {% endif %}
-                        <span class="brief-assignment-name {{ 'muted' if not asgn }}">
-                            {{ asgn.designer.name if asgn else 'Pending' }}
-                        </span>
-                        {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
-                        <form method="POST"
-                            action="{{ url_for('projects.assign_standard_deliverable', project_id=project.id, d_id=d.id) }}"
-                            class="chip-assign-form">
-                            <select name="designer_id" class="chip-assign-select">
-                                <option value="">— assign —</option>
-                                {% for designer in d_designers %}
-                                <option value="{{ designer.id }}" {{ 'selected' if asgn and
-                                    asgn.designer_id==designer.id }}>{{ designer.name }}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="submit" class="chip-assign-btn">✓</button>
-                        </form>
-                        {% endif %}
-                    </div>
-                </div>
+    <!-- File list — all authenticated users can see and download -->
+    <div id="reference-files-list">
+        {% if project.reference_files %}
+        {% for f in project.reference_files %}
+        <div class="reference-file-item" data-file-id="{{ f.id }}">
+            <span class="reference-file-icon">
+                {% if f.file_type in ['jpg', 'jpeg', 'png'] %}🖼
+                {% elif f.file_type == 'pdf' %}📄
+                {% elif f.file_type == 'docx' %}📝
+                {% elif f.file_type == 'xlsx' %}📊
+                {% else %}📎
+                {% endif %}
+            </span>
+            <span class="reference-file-name">{{ f.original_filename }}</span>
+            <span class="reference-file-meta">{{ f.uploaded_by.name }}</span>
+            <div class="reference-file-actions">
+                <a href="{{ url_for('projects.download_project_file', file_id=f.id) }}"
+                    class="btn-secondary btn-sm">Download</a>
                 {% if effective_user.role in ['admin', 'cs'] %}
-                {% if d.flagged_for_revision %}
-                <span class="revision-flagged-badge">⚑ Flagged</span>
-                {% else %}
-                <button class="btn-flag-revision" onclick="flagRevision({{ d.id }}, {{ project.id }})">Flag
-                    Revision</button>
+                <button class="btn-danger btn-sm reference-file-delete-btn" data-file-id="{{ f.id }}">Remove</button>
                 {% endif %}
-                {% endif %}
-                {% if effective_user.role in ['designer', 'team_lead'] %}
-                <button class="btn-brief-flag" data-flag-type="deliverable" data-project-id="{{ project.id }}"
-                    data-deliverable-id="{{ d.id }}" data-context="{{ d.name }}" onclick="openFlagModalFromBtn(this)">⚑
-                    Flag Issue</button>
-                {% endif %}
-                <div class="std-deadline-col">
-                    <span class="std-deadline-heading">Design Deadline</span>
-                    <span class="mono std-deadline-label">{{ d.design_deadline.strftime('%d %b %Y') if d.design_deadline
-                        else '—' }}</span>
-                </div>
-                <select class="status-select"
-                    data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=d.id) }}"
-                    onchange="updateStatus(this)">
-                    <option value="in_queue" {% if d.status=='in_queue' %}selected{% endif %}>In Queue</option>
-                    <option value="in_progress" {% if d.status=='in_progress' %}selected{% endif %}>In Progress</option>
-                    <option value="submitted" {% if d.status=='submitted' %}selected{% endif %}>Submitted</option>
-                    <option value="revision_in_queue" {% if d.status=='revision_in_queue' %}selected{% endif %}>Revision
-                        in Queue</option>
-                    <option value="revision_in_progress" {% if d.status=='revision_in_progress' %}selected{% endif %}>
-                        Revision in Progress</option>
-                    <option value="approved" {% if d.status=='approved' %}selected{% endif %}>Approved</option>
-                </select>
             </div>
-            {% endfor %}
         </div>
+        {% endfor %}
         {% else %}
-        <p class="muted" style="margin-top: 0.75rem;">No deliverables added yet.</p>
+        <p class="no-files-msg">No reference files uploaded yet.</p>
         {% endif %}
-
     </div>
-    {% endif %}
 
-    {% if all_flags %}
-    <div class="detail-card detail-card--full" style="margin-top: 1.5rem;">
-        <div class="flag-history-header" onclick="toggleFlagHistory()" style="cursor: pointer;">
-            <h2 class="detail-card-title" style="margin: 0;">Flag History</h2>
-            <span class="flag-history-toggle" id="flag-history-toggle">Show ▾</span>
-        </div>
-        <div id="flag-history-body" class="hidden">
-            {% for flag in all_flags %}
-            <div class="flag-history-entry {{ 'flag-resolved' if flag.is_resolved }}">
-                <div class="flag-card-header">
-                    <span class="flag-type-badge flag-type-{{ flag.flag_type }}">
-                        {{ {'project': 'Project', 'concept': 'Concept', 'kv': 'Key Visual', 'deliverable':
-                        'Deliverable'}.get(flag.flag_type, flag.flag_type) }}
-                    </span>
-                    {% if flag.deliverable %}<span class="flag-subject">{{ flag.deliverable.name }}</span>{% endif %}
-                    <span class="flag-meta">{{ flag.created_by.name }} · {{ flag.created_at.strftime('%d %b %Y')
-                        }}</span>
-                    {% if flag.is_resolved %}
-                    <span class="flag-resolved-badge">✓ Resolved by {{ flag.resolved_by.name }} · {{
-                        flag.resolved_at.strftime('%d %b %Y') }}</span>
-                    {% else %}
-                    <span class="flag-open-badge">Open</span>
-                    {% endif %}
-                </div>
-                <div class="flag-thread flag-thread--compact">
-                    {% for msg in flag.messages %}
-                    <div class="flag-message">
-                        <div class="flag-message-header">
-                            <span class="flag-message-author">{{ msg.author.name }}</span>
-                            <span class="flag-message-time">{{ msg.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
-                        </div>
-                        <p class="flag-message-text">{{ msg.message }}</p>
-                    </div>
-                    {% endfor %}
-                </div>
+    <!-- Deliverables JSON for the submission deliverable picker — read by submission JS below -->
+    <script>window.projectDeliverables = {{ deliverables_json | safe }};</script>
+
+    {# ── Submission History — only decks approved and sent to client ── #}
+    {% if submitted_history %}
+    <div style="margin-top: 1.75rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+        <p class="detail-label" style="margin-bottom: 0.6rem;">Submission History</p>
+        {% for s in submitted_history %}
+        <div class="reference-file-item" style="opacity: {% if loop.first %}1{% else %}0.65{% endif %};">
+            <span class="reference-file-icon">{% if s.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+            <span class="reference-file-name">{{ s.original_filename }}</span>
+            <span class="reference-file-meta">
+                Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }}
+                by {{ s.submitted_by.name if s.submitted_by else '—' }}
+            </span>
+            <div class="reference-file-actions">
+                <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                    class="btn-secondary btn-sm">Download</a>
             </div>
-            {% if not loop.last %}
-            <hr class="flag-divider">{% endif %}
-            {% endfor %}
         </div>
+        {% endfor %}
     </div>
     {% endif %}
+</div>
+
+<!-- Upload form — CS and admin only -->
+{% if effective_user.role in ['admin', 'cs'] %}
+<div class="reference-file-upload" style="margin-top:1rem;">
+    <input type="file" id="refFileInput" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.docx,.xlsx">
+    <button type="button" class="btn-secondary" id="refFileBtn" data-project-id="{{ project.id }}">
+        + Upload Reference File
+    </button>
+    <span class="reference-file-upload-status" id="refFileStatus"></span>
+</div>
+{% endif %}
+</div>
+
+{% if all_flags %}
+<div class="detail-card detail-card--full" style="margin-top: 1.5rem;">
+    <div class="flag-history-header" onclick="toggleFlagHistory()" style="cursor: pointer;">
+        <h2 class="detail-card-title" style="margin: 0;">Flag History</h2>
+        <span class="flag-history-toggle" id="flag-history-toggle">Show ▾</span>
+    </div>
+    <div id="flag-history-body" class="hidden">
+        {% for flag in all_flags %}
+        <div class="flag-history-entry {{ 'flag-resolved' if flag.is_resolved }}">
+            <div class="flag-card-header">
+                <span class="flag-type-badge flag-type-{{ flag.flag_type }}">
+                    {{ {'project': 'Project', 'concept': 'Concept', 'kv': 'Key Visual', 'deliverable':
+                    'Deliverable'}.get(flag.flag_type, flag.flag_type) }}
+                </span>
+                {% if flag.deliverable %}<span class="flag-subject">{{ flag.deliverable.name }}</span>{% endif %}
+                <span class="flag-meta">{{ flag.created_by.name }} · {{ flag.created_at.strftime('%d %b %Y')
+                    }}</span>
+                {% if flag.is_resolved %}
+                <span class="flag-resolved-badge">✓ Resolved by {{ flag.resolved_by.name }} · {{
+                    flag.resolved_at.strftime('%d %b %Y') }}</span>
+                {% else %}
+                <span class="flag-open-badge">Open</span>
+                {% endif %}
+            </div>
+            <div class="flag-thread flag-thread--compact">
+                {% for msg in flag.messages %}
+                <div class="flag-message">
+                    <div class="flag-message-header">
+                        <span class="flag-message-author">{{ msg.author.name }}</span>
+                        <span class="flag-message-time">{{ msg.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
+                    </div>
+                    <p class="flag-message-text">{{ msg.message }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% if not loop.last %}
+        <hr class="flag-divider">{% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 </div>
 

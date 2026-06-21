@@ -11,7 +11,7 @@ from app.models import (Project, ProjectDesigner, Scope, User, Client,
                         DeliverableTypeDiscipline)
 from app.decorators import role_required
 from datetime import date, datetime
-from app.notifications import notify_team_leads_of_new_project, notify_cs_lead_of_assignment, notify_designers_of_revision_flag, notify_cs_of_revision_submitted, notify_cs_of_brief_flag, notify_flag_reply, notify_cs_of_flag_resolved, notify_designer_of_concept_kv_assignment
+from app.notifications import notify_team_leads_of_new_project, notify_cs_lead_of_assignment, notify_designers_of_revision_flag, notify_cs_of_revision_submitted, notify_cs_of_brief_flag, notify_flag_reply, notify_cs_of_flag_resolved, notify_designer_of_concept_kv_assignment, create_notification
 from app.utils import log_activity
 
 projects = Blueprint('projects', __name__)
@@ -101,7 +101,7 @@ def edit_project(project_id):
         })
 
     existing_deliverables = []
-    for d in project.deliverables:
+    for d in project.project_deliverables:
         if d.project_customer_id is None:
             continue  # Skip standard brief deliverables (added post-creation)
         disciplines = [dtd.team.lower() for dtd in d.deliverable_type.disciplines] if d.deliverable_type else []
@@ -413,6 +413,38 @@ def autosave():
 def detail(project_id):
     project = Project.query.get_or_404(project_id)
 
+    from app.models import ProjectSubmission
+    import json as _json
+
+    # Active submission: the deck currently under review or awaiting upload
+    active_submission = ProjectSubmission.query.filter_by(
+        project_id=project_id, is_active=True
+    ).first()
+
+    # Submission history: only decks that were fully submitted to the client.
+    # Drafts/flagged decks that were replaced are not in this list (their files were deleted).
+    submitted_history = ProjectSubmission.query.filter(
+        ProjectSubmission.project_id == project_id,
+        ProjectSubmission.submitted_to_client_at.isnot(None)
+    ).order_by(ProjectSubmission.submitted_to_client_at.desc()).all()
+
+    # All inactive submissions that were NOT submitted to client (flagged drafts) — for completeness
+    past_submissions = ProjectSubmission.query.filter_by(
+        project_id=project_id, is_active=False
+    ).order_by(ProjectSubmission.uploaded_at.desc()).all()
+
+    # Deliverables as JSON for the submission deliverable picker (JS needs this)
+    # Only include standard deliverables (no project_customer_id) — the ones
+    # shown on the page that the designer can include in the deck
+    all_deliverables_for_picker = Deliverable.query.filter_by(
+        project_id=project_id
+    ).order_by(Deliverable.created_at).all()
+
+    deliverables_json = _json.dumps([
+        {'id': d.id, 'name': d.name, 'status': d.status}
+        for d in all_deliverables_for_picker
+    ])
+
     _d3 = User.query.filter(User.role.in_(['designer', 'team_lead']), User.team == '3D').order_by(User.name).all()
     _d2 = User.query.filter(User.role.in_(['designer', 'team_lead']), User.team == '2D').order_by(User.name).all()
     _dt = User.query.filter(User.role.in_(['designer', 'team_lead']), User.team == 'Technical').order_by(User.name).all()
@@ -496,6 +528,10 @@ def detail(project_id):
         standard_designers=standard_designers,
         standard_team=standard_team,
         standard_designers_by_deliverable=standard_designers_by_deliverable,
+        active_submission=active_submission,
+        past_submissions=past_submissions,
+        submitted_history=submitted_history,
+        deliverables_json=deliverables_json
     )
 
 @projects.route('/projects/<int:project_id>/update-status', methods=['POST'])
@@ -590,8 +626,10 @@ def set_deliverable_status(project_id, d_id):
     data = request.get_json()
     new_status = data.get('status')
 
+    # Valid deliverable statuses — includes the new submission flow statuses
     VALID = ['in_queue', 'in_progress', 'submitted',
-             'revision_in_queue', 'revision_in_progress', 'approved']
+             'revision_in_queue', 'revision_in_progress', 'approved',
+             'internal_review', 'internal_revision', 'submitted_to_client']
     if new_status not in VALID:
         return jsonify({'error': 'Invalid status'}), 400
 
@@ -602,9 +640,11 @@ def set_deliverable_status(project_id, d_id):
 
     revision_completed = False
 
-    # Check if this submission completes a revision cycle
+    # Per-deliverable revision cycle: when a designer re-submits a flagged deliverable
+    # and it's the last flagged one, increment per-deliverable revision counts.
+    # NOTE: project.revision_count and project_status are no longer changed here —
+    # those are now managed exclusively by the client submission flow (submit_to_client).
     if new_status == 'submitted' and deliverable.flagged_for_revision:
-        # Count other flagged deliverables on this project that are NOT yet submitted
         others_pending = Del.query.filter(
             Del.project_id == project_id,
             Del.flagged_for_revision == True,
@@ -613,13 +653,11 @@ def set_deliverable_status(project_id, d_id):
         ).count()
 
         if others_pending == 0:
-            # This was the last one — complete the revision cycle
+            # Last flagged deliverable re-submitted — clear all revision flags
             all_flagged = Del.query.filter_by(project_id=project_id, flagged_for_revision=True).all()
             for d in all_flagged:
                 d.revision_count += 1
                 d.flagged_for_revision = False
-            project.revision_count += 1
-            project.project_status = 'submitted'
             revision_completed = True
 
     db.session.commit()
@@ -632,11 +670,6 @@ def set_deliverable_status(project_id, d_id):
 
     if revision_completed:
         notify_cs_of_revision_submitted(project, triggered_by=current_user)
-        log_activity(
-            'revision_cycle_completed',
-            f'All flagged revisions submitted on "{project.name}" — revision count now {project.revision_count}',
-            user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id
-        )
 
     return jsonify({'success': True, 'revision_completed': revision_completed})
 
@@ -935,15 +968,29 @@ def download_brief(project_id):
 @projects.route('/<int:project_id>/delete', methods=['POST'])
 @login_required
 def delete_project(project_id):
+    from app.models import ProjectFile
+
+    # Use effective_user so emulation mode respects the underlying admin session
+    effective_user = User.query.get(session['emulating_user_id']) if session.get('emulating_user_id') else current_user
+
     project = Project.query.get_or_404(project_id)
 
-    if current_user.role != 'admin' and project.cs_lead_id != current_user.id:
+    if effective_user.role != 'admin' and project.cs_lead_id != effective_user.id:
         flash('You do not have permission to delete this project.', 'error')
         return redirect(url_for('projects.detail', project_id=project.id))
 
+    # Remove any uploaded reference files from disk before deleting the project row.
+    # The SQLAlchemy cascade handles the DB records; this handles the physical files.
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    for ref_file in project.reference_files:
+        file_path = os.path.join(upload_folder, ref_file.filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    project_name = project.name
     db.session.delete(project)
     db.session.commit()
-    flash(f'Project "{project.name}" has been deleted.', 'success')
+    flash(f'Project "{project_name}" has been deleted.', 'success')
     return redirect(url_for('main.index'))
 
 
@@ -1388,4 +1435,397 @@ def assign_standard_deliverable(project_id, d_id):
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
     return redirect(url_for('projects.detail', project_id=project_id))
 
+import uuid
 
+@projects.route('/projects/<int:project_id>/upload-file', methods=['POST'])
+@login_required
+@role_required('admin', 'cs')
+def upload_project_file(project_id):
+    """Handle reference file uploads for a project. CS and admin only."""
+    from app.models import ProjectFile
+    import os
+
+    project = Project.query.get_or_404(project_id)
+
+    # Check a file was actually included in the request
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+    # Only allow safe file types
+    allowed_extensions = {'jpg', 'jpeg', 'png', 'pdf', 'docx', 'xlsx', 'pptx'}
+    original_filename = file.filename
+    ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else ''
+
+    if ext not in allowed_extensions:
+        return jsonify({'success': False, 'error': f'File type .{ext} not allowed'}), 400
+
+    # Generate a unique filename to avoid collisions on disk
+    stored_filename = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(current_app.config['UPLOAD_FOLDER'], stored_filename)
+    file.save(save_path)
+
+    # Save the record to the database
+    project_file = ProjectFile(
+        project_id=project_id,
+        filename=stored_filename,
+        original_filename=original_filename,
+        file_type=ext,
+        uploaded_by_id=current_user.id
+    )
+    db.session.add(project_file)
+    db.session.commit()
+
+    log_activity('file_uploaded', f'Reference file "{original_filename}" uploaded to "{project.name}"',
+                 user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
+
+    return jsonify({
+        'success': True,
+        'file': {
+            'id': project_file.id,
+            'original_filename': original_filename,
+            'file_type': ext,
+            'uploaded_by': current_user.name
+        }
+    })
+
+
+@projects.route('/projects/files/<int:file_id>/download')
+@login_required
+def download_project_file(file_id):
+    """Serve a reference file for download. All authenticated users can download."""
+    from app.models import ProjectFile
+    import os
+
+    project_file = ProjectFile.query.get_or_404(file_id)
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], project_file.filename)
+
+    if not os.path.exists(file_path):
+        abort(404)
+
+    # send_file serves the file to the browser with the original filename
+    from flask import send_file
+    return send_file(file_path, as_attachment=True, download_name=project_file.original_filename)
+
+
+@projects.route('/projects/files/<int:file_id>/delete', methods=['POST'])
+@login_required
+@role_required('admin', 'cs')
+def delete_project_file(file_id):
+    """Delete a reference file. CS and admin only."""
+    from app.models import ProjectFile
+    import os
+
+    project_file = ProjectFile.query.get_or_404(file_id)
+    project = Project.query.get(project_file.project_id)
+
+    # Remove the file from disk
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], project_file.filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    log_activity('file_deleted', f'Reference file "{project_file.original_filename}" deleted from "{project.name}"',
+                 user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
+
+    db.session.delete(project_file)
+    db.session.commit()
+
+    return jsonify({'success': True})
+
+# ── Project Submission Routes ─────────────────────────────────────────────────
+# Flow:
+#   1. Designer uploads deck → upload_submission (returns submission.id + previous deliverable IDs)
+#   2. Designer picks deliverables → submit_for_internal_review (project + deliverables → internal_review)
+#   3. CS reviews:
+#      a. Flags it  → flag_submission (project + deliverables → internal_revision, notify designer)
+#         Designer reuploads (repeat from step 1), new submission inherits previous picker selection
+#      b. Approves  → submit_to_client (project + ALL deliverables → submitted_to_client,
+#                                        revision_count +1, open mailto in browser)
+#   Deck files that reached "submitted_to_client" are kept permanently for audit history.
+#   Draft/flagged decks that are replaced on reupload are deleted from disk.
+
+@projects.route('/projects/<int:project_id>/submission/upload', methods=['POST'])
+@login_required
+@role_required('admin', 'cs', 'designer', 'team_lead')
+def upload_submission(project_id):
+    """Designer uploads a new client deck (PDF or PPTX).
+    - Deactivates any previous active submission.
+    - If the previous deck was never submitted to the client, its physical file is deleted (draft only).
+    - If it was submitted to the client, the file is kept for audit history.
+    - Returns the new submission ID and the deliverable IDs from the previous submission
+      so the frontend can pre-check the deliverable picker."""
+    from app.models import ProjectSubmission
+    import os
+
+    project = Project.query.get_or_404(project_id)
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+    # Only PDF and PPTX are valid client decks
+    allowed = {'pdf', 'pptx'}
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if ext not in allowed:
+        return jsonify({'success': False, 'error': 'Only PDF and PPTX files are accepted'}), 400
+
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+
+    # Find the current active submission (if any)
+    previous = ProjectSubmission.query.filter_by(
+        project_id=project_id, is_active=True
+    ).first()
+
+    # Collect the deliverable IDs that were included in the previous submission
+    # so the picker can pre-populate the checkboxes for the designer
+    previous_deliverable_ids = []
+    if previous:
+        previous_deliverable_ids = [
+            link.deliverable_id for link in previous.included_deliverables
+        ]
+        # Only delete the physical file if this deck was never approved and sent to the client.
+        # Approved decks are kept permanently for invoice / audit history.
+        if not previous.submitted_to_client_at:
+            old_path = os.path.join(upload_folder, previous.filename)
+            if os.path.exists(old_path):
+                os.remove(old_path)
+        previous.is_active = False
+
+    # Save the new file with a UUID-based name to prevent filename collisions
+    stored_filename = f"submission_{uuid.uuid4().hex}.{ext}"
+    file.save(os.path.join(upload_folder, stored_filename))
+
+    submission = ProjectSubmission(
+        project_id=project_id,
+        filename=stored_filename,
+        original_filename=file.filename,
+        file_type=ext,
+        uploaded_by_id=current_user.id,
+        is_active=True,
+        is_flagged=False
+    )
+    db.session.add(submission)
+    db.session.commit()
+
+    log_activity('submission_uploaded',
+                 f'Client deck "{file.filename}" uploaded for "{project.name}" by {current_user.name}',
+                 user=current_user, entity_type='project',
+                 entity_name=project.name, entity_id=project.id)
+
+    return jsonify({
+        'success': True,
+        'submission': {
+            'id': submission.id,
+            'original_filename': submission.original_filename,
+            'file_type': submission.file_type,
+            'uploaded_by': current_user.name
+        },
+        # Pre-populate the deliverable picker with whatever was selected last time
+        'previous_deliverable_ids': previous_deliverable_ids
+    })
+
+
+@projects.route('/projects/<int:project_id>/submission/submit-for-review', methods=['POST'])
+@login_required
+@role_required('admin', 'cs', 'designer', 'team_lead')
+def submit_for_internal_review(project_id):
+    """Designer locks in which deliverables are included and sends the deck to CS for review.
+    - Creates ProjectSubmissionDeliverable rows linking this submission to its deliverables.
+    - Sets project status → internal_review.
+    - Sets each included deliverable status → internal_review.
+    - Notifies all CS / admin users."""
+    from app.models import ProjectSubmission, ProjectSubmissionDeliverable
+
+    project = Project.query.get_or_404(project_id)
+
+    data = request.get_json() or {}
+    submission_id = data.get('submission_id')
+    deliverable_ids = data.get('deliverable_ids', [])
+
+    if not submission_id:
+        return jsonify({'success': False, 'error': 'No submission ID provided'}), 400
+    if not deliverable_ids:
+        return jsonify({'success': False, 'error': 'Select at least one deliverable'}), 400
+
+    # Make sure the submission belongs to this project and is active
+    submission = ProjectSubmission.query.filter_by(
+        id=submission_id, project_id=project_id, is_active=True
+    ).first()
+    if not submission:
+        return jsonify({'success': False, 'error': 'Submission not found or no longer active'}), 400
+
+    # Clear any previous deliverable links on this submission (safe to replace
+    # if designer submits for review more than once without CS touching it)
+    ProjectSubmissionDeliverable.query.filter_by(submission_id=submission.id).delete()
+
+    # Create a link row for each selected deliverable
+    for d_id in deliverable_ids:
+        deliverable = Deliverable.query.filter_by(id=d_id, project_id=project_id).first()
+        if deliverable:
+            link = ProjectSubmissionDeliverable(
+                submission_id=submission.id,
+                deliverable_id=d_id
+            )
+            db.session.add(link)
+            # Move the deliverable into internal review
+            deliverable.status = 'internal_review'
+
+    # Move the project into internal review
+    project.project_status = 'internal_review'
+
+    db.session.commit()
+
+    # Notify every CS and admin user so they know a deck needs reviewing
+    cs_users = User.query.filter(User.role.in_(['cs', 'admin'])).all()
+    for cs_user in cs_users:
+        if cs_user.id != current_user.id:  # Don't notify yourself
+            create_notification(
+                recipient_id=cs_user.id,
+                message=f'"{project.name}" has been submitted for internal review by {current_user.name}',
+                notification_type='internal_review_submitted',
+                project_id=project_id,
+                triggered_by_id=current_user.id
+            )
+
+    log_activity('internal_review_submitted',
+                 f'"{project.name}" submitted for internal review by {current_user.name} '
+                 f'({len(deliverable_ids)} deliverable(s) included)',
+                 user=current_user, entity_type='project',
+                 entity_name=project.name, entity_id=project.id)
+
+    return jsonify({'success': True})
+
+
+@projects.route('/projects/<int:project_id>/submission/flag', methods=['POST'])
+@login_required
+@role_required('admin', 'cs')
+def flag_submission(project_id):
+    """CS flags the active deck with a revision note.
+    - Sets project status → internal_revision.
+    - Sets every deliverable that was included in this submission → internal_revision.
+    - Notifies the designer who uploaded the deck."""
+    from app.models import ProjectSubmission
+    from datetime import datetime as dt
+
+    project = Project.query.get_or_404(project_id)
+
+    data = request.get_json() or {}
+    message = (data.get('message') or '').strip()
+    if not message:
+        return jsonify({'success': False, 'error': 'Please provide a reason for flagging'}), 400
+
+    submission = ProjectSubmission.query.filter_by(
+        project_id=project_id, is_active=True
+    ).first()
+    if not submission:
+        return jsonify({'success': False, 'error': 'No active submission to flag'}), 400
+
+    # Mark the submission as flagged
+    submission.is_flagged = True
+    submission.flag_message = message
+    submission.flagged_by_id = current_user.id
+    submission.flagged_at = dt.utcnow()
+
+    # Push project into internal_revision state
+    project.project_status = 'internal_revision'
+
+    # Push every included deliverable into internal_revision
+    for link in submission.included_deliverables:
+        if link.deliverable:
+            link.deliverable.status = 'internal_revision'
+
+    db.session.commit()
+
+    # Notify the designer who uploaded the deck
+    create_notification(
+        recipient_id=submission.uploaded_by_id,
+        message=f'Your client deck for "{project.name}" was flagged by CS: {message}',
+        notification_type='submission_flagged',
+        project_id=project_id,
+        triggered_by_id=current_user.id
+    )
+
+    log_activity('submission_flagged',
+                 f'Client deck for "{project.name}" flagged by {current_user.name}: {message}',
+                 user=current_user, entity_type='project',
+                 entity_name=project.name, entity_id=project.id)
+
+    return jsonify({'success': True})
+
+
+@projects.route('/projects/<int:project_id>/submission/submit-to-client', methods=['POST'])
+@login_required
+@role_required('admin', 'cs')
+def submit_to_client(project_id):
+    """CS approves the deck and marks it as submitted to the client.
+    - Guards: must have an active, unflagged submission in internal_review state.
+    - Stamps submitted_to_client_at on the submission (file is now kept permanently).
+    - Increments project.revision_count.
+    - Sets project status → submitted_to_client.
+    - Sets ALL project deliverables → submitted_to_client.
+    - Returns client email (if stored) and project name so the frontend can open a mailto prompt."""
+    from app.models import ProjectSubmission
+    from datetime import datetime as dt
+
+    project = Project.query.get_or_404(project_id)
+
+    # Guard: must have an active, unflagged deck
+    submission = ProjectSubmission.query.filter_by(
+        project_id=project_id, is_active=True
+    ).first()
+    if not submission:
+        return jsonify({'success': False, 'error': 'Upload a client deck before submitting'}), 400
+    if submission.is_flagged:
+        return jsonify({'success': False, 'error': 'The current deck is flagged — wait for the designer to reupload'}), 400
+    if project.project_status != 'internal_review':
+        return jsonify({'success': False, 'error': 'Deck must be in Internal Review before submitting to client'}), 400
+
+    # Stamp the submission as officially submitted — this file is now permanent
+    submission.submitted_to_client_at = dt.utcnow()
+    submission.submitted_by_id = current_user.id
+
+    # Increment the project revision counter (counts how many times we've sent to the client)
+    project.revision_count = (project.revision_count or 0) + 1
+    project.project_status = 'submitted_to_client'
+
+    # Mark ALL deliverables on this project as submitted to client
+    for deliverable in project.deliverables:
+        deliverable.status = 'submitted_to_client'
+
+    db.session.commit()
+
+    log_activity('submitted_to_client',
+                 f'"{project.name}" submitted to client by {current_user.name} '
+                 f'(revision #{project.revision_count})',
+                 user=current_user, entity_type='project',
+                 entity_name=project.name, entity_id=project.id)
+
+    # Return the client's email (dormant — will be populated once v1.1 adds client email UI)
+    client_email = project.client_brand.contact_email if project.client_brand else None
+
+    return jsonify({
+        'success': True,
+        'client_email': client_email or '',
+        'project_name': project.name
+    })
+
+
+@projects.route('/projects/submission/<int:submission_id>/download')
+@login_required
+def download_submission(submission_id):
+    """Serve a submission deck for download. Available to all authenticated users."""
+    from app.models import ProjectSubmission
+    import os
+    submission = ProjectSubmission.query.get_or_404(submission_id)
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
+    if not os.path.exists(file_path):
+        abort(404)
+    from flask import send_file
+    return send_file(file_path, as_attachment=True, download_name=submission.original_filename)

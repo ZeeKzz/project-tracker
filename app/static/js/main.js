@@ -572,9 +572,9 @@ if (document.getElementById('sectionBasics')) {
                 if (check()) score += ccmWeight;
             });
         } else if (briefType === 'standard') {
+            // Only design_type_id remains — design_direction was removed from the brief form
             var standardChecks = [
                 function () { return document.getElementById('design_type_id') && document.getElementById('design_type_id').value !== ''; },
-                function () { return document.getElementById('design_direction_id') && document.getElementById('design_direction_id').value !== ''; },
             ];
             var standardWeight = 75 / standardChecks.length;
             standardChecks.forEach(function (check) {
@@ -1209,13 +1209,26 @@ if (document.getElementById('sectionBasics')) {
             .then(function (result) {
                 if (result.success) {
                     currentDraftId = result.draft_id;
-                    var now = new Date();
-                    var hh = now.getHours().toString().padStart(2, '0');
-                    var mm = now.getMinutes().toString().padStart(2, '0');
-                    statusEl.textContent = 'Saved ' + hh + ':' + mm;
+
+                    // Show saved confirmation, then fade it out after 2s
+                    statusEl.textContent = 'Saved ✓';
+                    setTimeout(function () { statusEl.textContent = ''; }, 2000);
+
+                    // Enable the reference file upload button now that a draft exists
+                    var createRefBtn = document.getElementById('createRefFileBtn');
+                    if (createRefBtn && !createRefBtn.dataset.projectId) {
+                        createRefBtn.dataset.projectId = result.draft_id;
+                        createRefBtn.disabled = false;
+                        var createStatus = document.getElementById('createRefFileStatus');
+                        if (createStatus) createStatus.textContent = '';
+                    }
+                } else {
+                    // Server returned success: false — show the error message
+                    statusEl.textContent = 'Save failed';
                 }
             })
             .catch(function () {
+                // Network or parse error
                 statusEl.textContent = 'Save failed';
             });
     }
@@ -1720,6 +1733,97 @@ if (document.getElementById('sectionBasics')) {
 
     calculateCompletion();
 
+    // ── Reference File Upload on Create Page ─────────────────
+    var createRefFileBtn = document.getElementById('createRefFileBtn');
+    var createRefFileInput = document.getElementById('createRefFileInput');
+
+    if (createRefFileBtn && createRefFileInput) {
+        createRefFileBtn.addEventListener('click', function () {
+            if (!this.disabled) createRefFileInput.click();
+        });
+
+        createRefFileInput.addEventListener('change', function () {
+            var file = createRefFileInput.files[0];
+            if (!file) return;
+
+            var projectId = createRefFileBtn.dataset.projectId;
+            if (!projectId) return;
+
+            var status = document.getElementById('createRefFileStatus');
+            status.textContent = 'Uploading...';
+
+            var formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/projects/' + projectId + '/upload-file', {
+                method: 'POST',
+                body: formData
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) { status.textContent = 'Error: ' + data.error; return; }
+                    status.textContent = 'Uploaded.';
+                    setTimeout(function () { status.textContent = ''; }, 3000);
+                    createRefFileInput.value = '';
+
+                    var list = document.getElementById('create-reference-files-list');
+                    var noFilesMsg = list.querySelector('.no-files-msg');
+                    if (noFilesMsg) noFilesMsg.remove();
+
+                    var icons = { jpg: '🖼', jpeg: '🖼', png: '🖼', pdf: '📄', docx: '📝', xlsx: '📊' };
+                    var icon = icons[data.file.file_type] || '📎';
+
+                    var item = document.createElement('div');
+                    item.className = 'reference-file-item';
+                    item.dataset.fileId = data.file.id;
+                    item.innerHTML = `
+                    <span class="reference-file-icon">${icon}</span>
+                    <span class="reference-file-name">${data.file.original_filename}</span>
+                    <span class="reference-file-meta">${data.file.uploaded_by}</span>
+                    <div class="reference-file-actions">
+                        <a href="/projects/files/${data.file.id}/download"
+                           class="btn-secondary btn-sm">Download</a>
+                        <button class="btn-danger btn-sm reference-file-delete-btn"
+                                data-file-id="${data.file.id}">Remove</button>
+                    </div>
+                `;
+                    item.querySelector('.reference-file-delete-btn').addEventListener('click', handleCreateFileDelete);
+                    list.appendChild(item);
+                })
+                .catch(function (err) {
+                    status.textContent = 'Upload failed.';
+                    console.error(err);
+                });
+        });
+
+        function handleCreateFileDelete(e) {
+            var fileId = this.dataset.fileId;
+            var item = this.closest('.reference-file-item');
+            if (!confirm('Remove this file?')) return;
+
+            fetch('/projects/files/' + fileId + '/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) return;
+                    item.remove();
+                    var list = document.getElementById('create-reference-files-list');
+                    if (list.querySelectorAll('.reference-file-item').length === 0) {
+                        var msg = document.createElement('p');
+                        msg.className = 'no-files-msg';
+                        msg.textContent = 'No reference files uploaded yet.';
+                        list.appendChild(msg);
+                    }
+                });
+        }
+
+        document.querySelectorAll('#create-reference-files-list .reference-file-delete-btn').forEach(function (btn) {
+            btn.addEventListener('click', handleCreateFileDelete);
+        });
+    }
+
 } // end sectionBasics wrapper
 
 // ── Post-redirect Toast ──────────────────────────────────────
@@ -1769,7 +1873,7 @@ function updateStatus(select) {
 
 function applyStatusClass(select, status) {
     var classes = ['s-briefed', 's-in_queue', 's-in_progress', 's-submitted',
-        's-revision_in_queue', 's-revision_in_progress', 's-approved'];
+        's-revision_in_queue', 's-revision_in_progress', 's-approved', 's-submitted_to_client'];
     select.classList.remove.apply(select.classList, classes);
     select.classList.add('s-' + status);
 }
@@ -1804,6 +1908,148 @@ function flagRevision(deliverableId, projectId) {
             }
         })
         .catch(function () { showToast('Something went wrong', 'error'); });
+}
+
+// ── Client Submission ─────────────────────────────────────────────────────────
+
+// Pull project ID from the URL — detail page is always at /projects/<id>
+var detailProjectId = parseInt(window.location.pathname.split('/')[2]);
+
+var submissionUploadBtn = document.getElementById('submissionUploadBtn');
+var submissionFileInput = document.getElementById('submissionFileInput');
+var submissionUploadStatus = document.getElementById('submissionUploadStatus');
+
+// Upload / reupload deck (designer or team lead)
+if (submissionUploadBtn && submissionFileInput) {
+    submissionUploadBtn.addEventListener('click', function () {
+        submissionFileInput.click();
+    });
+
+    submissionFileInput.addEventListener('change', function () {
+        var file = submissionFileInput.files[0];
+        if (!file) return;
+
+        submissionUploadStatus.textContent = 'Uploading...';
+
+        var formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/projects/' + detailProjectId + '/submission/upload', {
+            method: 'POST',
+            body: formData
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    submissionUploadStatus.textContent = 'Error: ' + data.error;
+                    return;
+                }
+                // Reload the page so the new deck row and correct buttons render fresh
+                window.location.reload();
+            })
+            .catch(function () {
+                submissionUploadStatus.textContent = 'Upload failed.';
+            });
+    });
+}
+
+// Submit to Client (CS / admin)
+var submissionSubmitBtn = document.getElementById('submissionSubmitBtn');
+if (submissionSubmitBtn) {
+    submissionSubmitBtn.addEventListener('click', function () {
+        var projectName = this.dataset.projectName;
+
+        submissionSubmitBtn.disabled = true;
+        submissionSubmitBtn.textContent = 'Submitting...';
+
+        fetch('/projects/' + detailProjectId + '/submission/submit-to-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    showToast(data.error, 'error');
+                    submissionSubmitBtn.disabled = false;
+                    submissionSubmitBtn.textContent = 'Submit to Client';
+                    return;
+                }
+
+                showToast('Project submitted to client.', 'success');
+
+                // Ask if they want to auto-generate the client email
+                if (confirm('Project submitted. Generate a client email?')) {
+                    var subject = encodeURIComponent(data.project_name);
+                    var mailto = 'mailto:' + (data.client_email || '') + '?subject=' + subject;
+                    window.open(mailto);
+                }
+
+                // Reload to reflect the new status and updated submission card
+                window.location.reload();
+            })
+            .catch(function () {
+                showToast('Something went wrong.', 'error');
+                submissionSubmitBtn.disabled = false;
+                submissionSubmitBtn.textContent = 'Submit to Client';
+            });
+    });
+}
+
+// Flag Issue — show / hide the flag form
+var submissionFlagBtn = document.getElementById('submissionFlagBtn');
+var submissionFlagForm = document.getElementById('submissionFlagForm');
+var submissionFlagCancel = document.getElementById('submissionFlagCancel');
+
+if (submissionFlagBtn) {
+    submissionFlagBtn.addEventListener('click', function () {
+        submissionFlagForm.classList.remove('hidden');
+        submissionFlagBtn.classList.add('hidden');
+    });
+}
+
+if (submissionFlagCancel) {
+    submissionFlagCancel.addEventListener('click', function () {
+        submissionFlagForm.classList.add('hidden');
+        submissionFlagBtn.classList.remove('hidden');
+        document.getElementById('submissionFlagMessage').value = '';
+    });
+}
+
+// Send the flag
+var submissionFlagConfirm = document.getElementById('submissionFlagConfirm');
+if (submissionFlagConfirm) {
+    submissionFlagConfirm.addEventListener('click', function () {
+        var message = document.getElementById('submissionFlagMessage').value.trim();
+        if (!message) {
+            showToast('Please describe the issue before flagging.', 'error');
+            return;
+        }
+
+        submissionFlagConfirm.disabled = true;
+        submissionFlagConfirm.textContent = 'Sending...';
+
+        fetch('/projects/' + detailProjectId + '/submission/flag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    showToast(data.error, 'error');
+                    submissionFlagConfirm.disabled = false;
+                    submissionFlagConfirm.textContent = 'Send Flag';
+                    return;
+                }
+                // Reload so the flagged banner appears and buttons update
+                window.location.reload();
+            })
+            .catch(function () {
+                showToast('Something went wrong.', 'error');
+                submissionFlagConfirm.disabled = false;
+                submissionFlagConfirm.textContent = 'Send Flag';
+            });
+    });
 }
 
 // Admin panel open / close
@@ -2953,3 +3199,119 @@ document.getElementById('activity-wipe-btn').addEventListener('click', function 
             }
         });
 });
+
+// ── Reference File Uploads ────────────────────────────────────
+
+// Only run on pages that have the upload button
+var refFileBtn = document.getElementById('refFileBtn');
+var refFileInput = document.getElementById('refFileInput');
+
+if (refFileBtn && refFileInput) {
+
+    // Clicking the button triggers the hidden file input
+    refFileBtn.addEventListener('click', function () {
+        refFileInput.click();
+    });
+
+    // When a file is selected, upload it immediately via fetch
+    refFileInput.addEventListener('change', function () {
+        var file = refFileInput.files[0];
+        if (!file) return;
+
+        // Get the project ID from a data attribute we'll add to the button
+        var projectId = refFileBtn.dataset.projectId;
+        var status = document.getElementById('refFileStatus');
+
+        status.textContent = 'Uploading...';
+
+        // Build a FormData object — this is how we send files via fetch
+        var formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/projects/' + projectId + '/upload-file', {
+            method: 'POST',
+            body: formData
+            // Note: do NOT set Content-Type header — the browser sets it
+            // automatically with the correct multipart boundary when using FormData
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    status.textContent = 'Error: ' + data.error;
+                    return;
+                }
+
+                status.textContent = 'Uploaded.';
+                setTimeout(function () { status.textContent = ''; }, 3000);
+
+                // Reset input so the same file can be re-uploaded if needed
+                refFileInput.value = '';
+
+                // Build and inject the new file row into the list
+                var list = document.getElementById('reference-files-list');
+
+                // Remove the "no files" message if present
+                var noFilesMsg = list.querySelector('.no-files-msg');
+                if (noFilesMsg) noFilesMsg.remove();
+
+                var icons = { jpg: '🖼', jpeg: '🖼', png: '🖼', pdf: '📄', docx: '📝', xlsx: '📊' };
+                var icon = icons[data.file.file_type] || '📎';
+
+                var item = document.createElement('div');
+                item.className = 'reference-file-item';
+                item.dataset.fileId = data.file.id;
+                item.innerHTML = `
+                <span class="reference-file-icon">${icon}</span>
+                <span class="reference-file-name">${data.file.original_filename}</span>
+                <span class="reference-file-meta">${data.file.uploaded_by}</span>
+                <div class="reference-file-actions">
+                    <a href="/projects/files/${data.file.id}/download"
+                       class="btn-secondary btn-sm">Download</a>
+                    <button class="btn-danger btn-sm reference-file-delete-btn"
+                            data-file-id="${data.file.id}">Remove</button>
+                </div>
+            `;
+
+                // Attach delete handler to the new button
+                item.querySelector('.reference-file-delete-btn').addEventListener('click', handleFileDelete);
+
+                list.appendChild(item);
+            })
+            .catch(function (err) {
+                status.textContent = 'Upload failed.';
+                console.error('File upload error:', err);
+            });
+    });
+
+    // Delete handler — attached to existing buttons on page load and new ones dynamically
+    function handleFileDelete(e) {
+        var fileId = this.dataset.fileId;
+        var item = this.closest('.reference-file-item');
+
+        if (!confirm('Remove this file?')) return;
+
+        fetch('/projects/files/' + fileId + '/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) return;
+                item.remove();
+
+                // Show empty message if no files remain
+                var list = document.getElementById('reference-files-list');
+                if (list.querySelectorAll('.reference-file-item').length === 0) {
+                    var msg = document.createElement('p');
+                    msg.className = 'no-files-msg';
+                    msg.textContent = 'No reference files uploaded yet.';
+                    list.appendChild(msg);
+                }
+            });
+    }
+
+    // Attach delete handler to all existing delete buttons on page load
+    document.querySelectorAll('.reference-file-delete-btn').forEach(function (btn) {
+        btn.addEventListener('click', handleFileDelete);
+    });
+}

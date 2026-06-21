@@ -371,6 +371,51 @@
             </div>
         </div>
 
+        {# ── Reference Files ── #}
+        {% if effective_user.role in ['admin', 'cs'] %}
+        <div class="create-section" id="sectionReferenceFiles">
+            <h3 class="create-section-heading">Reference Files</h3>
+
+            <div id="create-reference-files-list">
+                {% if draft and draft.reference_files %}
+                {% for f in draft.reference_files %}
+                <div class="reference-file-item" data-file-id="{{ f.id }}">
+                    <span class="reference-file-icon">
+                        {% if f.file_type in ['jpg', 'jpeg', 'png'] %}🖼
+                        {% elif f.file_type == 'pdf' %}📄
+                        {% elif f.file_type == 'docx' %}📝
+                        {% elif f.file_type == 'xlsx' %}📊
+                        {% else %}📎
+                        {% endif %}
+                    </span>
+                    <span class="reference-file-name">{{ f.original_filename }}</span>
+                    <span class="reference-file-meta">{{ f.uploaded_by.name }}</span>
+                    <div class="reference-file-actions">
+                        <a href="{{ url_for('projects.download_project_file', file_id=f.id) }}"
+                            class="btn btn--secondary btn--sm">Download</a>
+                        <button class="btn btn--danger btn--sm reference-file-delete-btn"
+                            data-file-id="{{ f.id }}">Remove</button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="no-files-msg" id="createNoFilesMsg">No reference files uploaded yet.</p>
+                {% endif %}
+            </div>
+
+            <div class="reference-file-upload" style="margin-top:1rem;">
+                <input type="file" id="createRefFileInput" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.docx,.xlsx">
+                <button type="button" id="createRefFileBtn" class="btn btn--secondary"
+                    data-project-id="{{ draft.id if draft else '' }}" {% if not draft %}disabled{% endif %}>
+                    + Upload Reference File
+                </button>
+                <span id="createRefFileStatus" class="reference-file-upload-status">
+                    {% if not draft %}Draft will autosave shortly — upload will enable automatically{% endif %}
+                </span>
+            </div>
+        </div>
+        {% endif %}
+
         {# ── Submit ── #}
         <div class="create-section" id="sectionSubmit">
             <div class="form-actions">

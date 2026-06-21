@@ -119,6 +119,7 @@ class Project(db.Model):
     concept_designer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     kv_designer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
+
     # Auto-populated on creation
 
     status = db.Column(db.String(50), default='To Be Briefed', nullable=False)
@@ -152,11 +153,12 @@ class Project(db.Model):
     client_brand = db.relationship('Client', foreign_keys=[client_id])
     project_customers = db.relationship('ProjectCustomer', backref='project_ref', cascade='all, delete-orphan')
     project_regions = db.relationship('ProjectRegion', backref='project_region_ref', cascade='all, delete-orphan')
-    project_deliverables = db.relationship('Deliverable', backref='project_ref', cascade='all, delete-orphan')
+    project_deliverables = db.relationship('Deliverable', back_populates='project', cascade='all, delete-orphan')
     concept_designer = db.relationship('User', foreign_keys=[concept_designer_id])
     kv_designer = db.relationship('User', foreign_keys=[kv_designer_id])
     design_type = db.relationship('DesignType', backref='projects')
     design_direction = db.relationship('DesignDirection', backref='projects')
+    brief_flags = db.relationship('BriefFlag', back_populates='project', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Project {self.name}>'
@@ -199,8 +201,10 @@ class Client(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False, unique=True)
+    contact_email = db.Column(db.String(255), nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+  
 
     created_by = db.relationship('User', foreign_keys=[created_by_id])
 
@@ -309,10 +313,11 @@ class Deliverable(db.Model):
 
     # overlaps= tells SQLAlchemy these relationships intentionally share the same
     # foreign key — project_deliverables and project_ref are the other side of this mapping
-    project = db.relationship('Project', backref='deliverables', overlaps='project_deliverables,project_ref')
+    project = db.relationship('Project', back_populates='project_deliverables', overlaps='project_deliverables,project_ref')
     deliverable_type = db.relationship('DeliverableType', backref='deliverables')
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     disciplines = db.relationship('DeliverableAssignment', backref='deliverable', cascade='all, delete-orphan')
+    brief_flags = db.relationship('BriefFlag', back_populates='deliverable', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Deliverable {self.name} status={self.status}>'
@@ -347,8 +352,8 @@ class BriefFlag(db.Model):
     resolved_at = db.Column(db.DateTime, nullable=True)
     resolved_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
-    project = db.relationship('Project', backref='brief_flags')
-    deliverable = db.relationship('Deliverable', backref='brief_flags')
+    project = db.relationship('Project', back_populates='brief_flags')
+    deliverable = db.relationship('Deliverable', back_populates='brief_flags')
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     resolved_by = db.relationship('User', foreign_keys=[resolved_by_id])
     messages = db.relationship('BriefFlagMessage', backref='flag', cascade='all, delete-orphan', order_by='BriefFlagMessage.created_at')
@@ -385,3 +390,97 @@ class ActivityLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', foreign_keys=[user_id])
+
+    # ProjectFile Class — stores reference files uploaded to a project by CS or admin
+class ProjectFile(db.Model):
+    __tablename__ = 'project_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Which project this file belongs to
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+
+    # The name we saved the file as on disk (UUID-based, avoids collisions)
+    filename = db.Column(db.String(255), nullable=False)
+
+    # The original filename the user uploaded (shown in the UI)
+    original_filename = db.Column(db.String(255), nullable=False)
+
+    # File extension e.g. 'pdf', 'jpg'
+    file_type = db.Column(db.String(20), nullable=False)
+
+    # Who uploaded it and when
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships — cascade='all, delete-orphan' ensures files are deleted from
+    # SQLAlchemy's session when the parent project is deleted, preventing NOT NULL errors
+    project = db.relationship('Project', backref=db.backref('reference_files', cascade='all, delete-orphan'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_id])
+
+    def __repr__(self):
+        return f'<ProjectFile {self.original_filename} project={self.project_id}>'
+    
+
+class ProjectSubmission(db.Model):
+    __tablename__= 'project_submissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Which project this submission belongs to
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+
+    # Stored filename on disk (UUID-BaseD) and the original name shown in the UI
+    filename = db.Column(db.String(255), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_type = db.Column(db.String(10), nullable=False) # PDF or PPTX
+
+    # Who uploaded it and when
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # True for the currently active deck - older uploads become False when replaced
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    # CS Flagging - This is set when CS finds an issue with the deck
+    is_flagged = db.Column(db.Boolean, default=False, nullable=False)
+    flag_message = db.Column(db.Text, nullable=True)
+    flagged_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    flagged_at = db.Column(db.DateTime, nullable=True)
+
+    # Filled in when CS hits submit to Client
+    submitted_to_client_at = db.Column(db.DateTime, nullable=True)
+    submitted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Relationships
+    project = db.relationship('Project', backref=db.backref('submissions', cascade='all, delete-orphan'))
+    uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_id])
+    flagged_by = db.relationship('User', foreign_keys=[flagged_by_id])
+    submitted_by = db.relationship('User', foreign_keys=[submitted_by_id])
+
+    def __repr__(self):
+        return f'<ProjectSubmission {self.original_filename} project={self.project_id} active={self.is_active}>'
+
+
+class ProjectSubmissionDeliverable(db.Model):
+    """Junction table — records which deliverables were included in a given submission.
+    When a designer submits for internal review they select deliverables; those
+    selections are stored here so CS knows what's being reviewed, and so the
+    flag/revision cycle can update exactly those deliverables' statuses."""
+    __tablename__ = 'project_submission_deliverables'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # The submission this link belongs to
+    submission_id = db.Column(db.Integer, db.ForeignKey('project_submissions.id'), nullable=False)
+
+    # The deliverable that was included
+    deliverable_id = db.Column(db.Integer, db.ForeignKey('deliverables.id'), nullable=False)
+
+    # cascade ensures links are removed when the parent submission is deleted
+    submission = db.relationship('ProjectSubmission',
+                                 backref=db.backref('included_deliverables', cascade='all, delete-orphan'))
+    deliverable = db.relationship('Deliverable', backref='submission_links')
+
+    def __repr__(self):
+        return f'<ProjectSubmissionDeliverable submission={self.submission_id} deliverable={self.deliverable_id}>'
