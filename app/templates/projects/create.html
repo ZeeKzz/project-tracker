@@ -10,6 +10,7 @@
     const EDIT_PROJECT_ID = {{ edit_project_id | tojson if edit_project_id is defined else 'null' }};
     const EXISTING_CUSTOMERS = {{ existing_customers | tojson if existing_customers is defined else '[]' }};
     const EXISTING_DELIVERABLES = {{ existing_deliverables | tojson if existing_deliverables is defined else '[]' }};
+    const EXISTING_STANDARD_DELIVERABLES = {{ existing_standard_deliverables | tojson if existing_standard_deliverables is defined else '[]' }};
 </script>
 
 <div class="create-page">
@@ -251,58 +252,30 @@
             <h3 class="create-section-heading">Further Details</h3>
 
             <div class="region-btn-group">
-                <button type="button" class="region-btn" id="btnConceptToggle">Concept</button>
-                <button type="button" class="region-btn" id="btnKVToggle">Initial KV</button>
+                <button type="button" class="region-btn" id="btnConceptKVToggle">Concept &amp; KV</button>
             </div>
-            <input type="hidden" id="has_concept" value="{{ 'true' if draft and draft.has_concept else 'false' }}">
-            <input type="hidden" id="has_kv" value="{{ 'true' if draft and draft.has_kv else 'false' }}">
+            {# has_concept drives the merged Concept & KV block; has_kv is always set to the same value by JS #}
+            <input type="hidden" id="has_concept" value="{{ 'true' if draft and (draft.has_concept or draft.has_kv) else 'false' }}">
 
-            {# ── Concept (inline, below buttons) ── #}
-            <div class="hidden" id="sectionConcept">
-                <h4 class="create-subsection-heading">Concept</h4>
+            {# ── Concept & KV (merged section) ── #}
+            <div class="hidden" id="sectionConceptKV">
+                <h4 class="create-subsection-heading">Concept &amp; KV</h4>
                 <div class="form-group">
-                    <label class="form-label">Concept Requirements</label>
+                    <label class="form-label">Requirements</label>
                     <textarea id="concept_requirements" class="form-textarea" rows="4"
-                        placeholder="Describe the overall concept and any client requirements...">{{ draft.campaign_notes if draft and draft.campaign_notes else '' }}</textarea>
+                        placeholder="Describe the concept, KV direction and any client requirements...">{{ draft.concept_requirements if draft and draft.concept_requirements else (draft.campaign_notes if draft and draft.campaign_notes else '') }}</textarea>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Concept Deadline</label>
+                        <label class="form-label">Deadline</label>
                         <input type="date" id="concept_deadline" class="form-input"
                             value="{{ draft.concept_deadline.isoformat() if draft and draft.concept_deadline else '' }}">
                     </div>
-                </div>
-                <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Options Required</label>
                         <input type="number" id="concept_options_required" class="form-input" min="1" step="1"
                             placeholder="e.g. 3"
                             value="{{ draft.concept_options_required if draft and draft.concept_options_required else '' }}">
-                    </div>
-                </div>
-            </div>
-
-            {# ── Initial KV (inline, below concept) ── #}
-            <div class="hidden" id="kvBlock">
-                <h4 class="create-subsection-heading">Initial KV</h4>
-                <div class="form-group">
-                    <label class="form-label">KV Requirements</label>
-                    <textarea id="kv_requirements" class="form-textarea" rows="4"
-                        placeholder="Describe the KV and how it adapts per customer...">{{ draft.kv_requirements if draft and draft.kv_requirements else '' }}</textarea>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">KV Deadline</label>
-                        <input type="date" id="kv_deadline" class="form-input"
-                            value="{{ draft.kv_deadline.isoformat() if draft and draft.kv_deadline else '' }}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Options Required</label>
-                        <input type="number" id="kv_options_required" class="form-input" min="1" step="1"
-                            placeholder="e.g. 3"
-                            value="{{ draft.kv_options_required if draft and draft.kv_options_required else '' }}">
                     </div>
                 </div>
             </div>
@@ -551,19 +524,19 @@
                     if (e.key === 'Enter') { e.preventDefault(); addStandardDeliverableToList(); }
                 });
             }
-            // Restore existing deliverables on page load (edit mode / draft restore)
+            // Restore existing deliverables on page load (edit mode / draft restore).
+            // Read from JS constant (safe) not the value="" attribute (breaks on JSON with quotes).
             var jsonEl = document.getElementById('standard_deliverables_json');
-            if (jsonEl) {
-                try {
-                    var existing = JSON.parse(jsonEl.value || '[]');
-                    existing.forEach(function (item) {
-                        if (typeof item === 'string') {
-                            renderStandardDeliverableRow({ name: item, design_deadline: null, teams: [] });
-                        } else {
-                            renderStandardDeliverableRow(item);
-                        }
-                    });
-                } catch (e) { }
+            if (typeof EXISTING_STANDARD_DELIVERABLES !== 'undefined' && EXISTING_STANDARD_DELIVERABLES.length) {
+                EXISTING_STANDARD_DELIVERABLES.forEach(function (item) {
+                    if (typeof item === 'string') {
+                        renderStandardDeliverableRow({ name: item, design_deadline: null, teams: [] });
+                    } else {
+                        renderStandardDeliverableRow(item);
+                    }
+                });
+                // Seed the hidden input so the form submission starts with the right data
+                if (jsonEl) { jsonEl.value = JSON.stringify(EXISTING_STANDARD_DELIVERABLES); }
             }
         }
     });

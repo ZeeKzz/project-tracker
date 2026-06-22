@@ -45,7 +45,7 @@
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                 </svg>
                 {% if unread_count > 0 %}
-                <span class="bell-badge">{{ unread_count }}</span>
+                <span class="bell-badge" id="notif-unread-badge">{{ unread_count }}</span>
                 {% endif %}
             </button>
 
@@ -63,7 +63,7 @@
 
                 <div id="account-dropdown" class="account-dropdown hidden">
                     <a href="{{ url_for('auth.account') }}" class="account-dropdown-item">
-                        Change Password
+                        My Account
                     </a>
                     <a href="{{ url_for('auth.logout') }}" class="account-dropdown-item logout">
                         Logout
@@ -109,6 +109,9 @@
 
         <div id="notif-inbox-view" class="notification-panel-body">
             {% if user_notifications %}
+            <div class="archived-toolbar">
+                <button type="button" id="inbox-archive-all-btn" class="archived-select-btn">Archive All</button>
+            </div>
             {% for notification in user_notifications %}
             <div class="notification-item {% if not notification.is_read %}unread{% endif %}"
                 data-id="{{ notification.id }}">
@@ -129,6 +132,7 @@
             {% if archived_notifications %}
             <div class="archived-toolbar">
                 <button type="button" id="archived-remove-btn" class="archived-remove-btn hidden">Remove</button>
+                <button type="button" id="archived-delete-all-btn" class="archived-remove-btn">Delete All</button>
                 <button type="button" id="archived-select-btn" class="archived-select-btn">Select</button>
             </div>
             {% for notification in archived_notifications %}
@@ -360,6 +364,16 @@
                         <input type="text" id="activity-search" class="form-input" placeholder="Search log...">
                         <input type="date" id="activity-from" class="form-input">
                         <input type="date" id="activity-to" class="form-input">
+                        <!-- Category filter dropdown — backend maps each option to action keyword groups -->
+                        <select id="activity-category" class="activity-category-select">
+                            <option value="all">All Categories</option>
+                            <option value="creation">Creation</option>
+                            <option value="flags">Flags</option>
+                            <option value="deletions">Deletions</option>
+                            <option value="assignments">Assignments</option>
+                            <option value="edits">Edits</option>
+                            <option value="other">Other</option>
+                        </select>
                         <button type="button" class="btn-primary" id="activity-search-btn">Search</button>
                         <button type="button" class="activity-clear-btn" id="activity-reset-btn">Reset</button>
                     </div>

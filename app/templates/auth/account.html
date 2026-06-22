@@ -6,27 +6,180 @@
 <div class="page-container">
     <h1>My Account</h1>
 
-    <div class="form-card">
-        <h2>Change Password</h2>
+    <!-- Top row: Profile + Change Password side by side -->
+    <div style="display: flex; gap: 1.5rem; align-items: flex-start; margin-bottom: 1.5rem;">
 
-        <form method="POST" action="{{ url_for('auth.account') }}">
-            <div class="form-group">
-                <label for="current_password">Current Password</label>
-                <input type="password" id="current_password" name="current_password" required>
+        <!-- Profile Info (read-only) -->
+        <div class="form-card" style="flex: 1; max-width: none;">
+            <h2>Profile</h2>
+            <div class="detail-fields" style="margin-top: 1rem;">
+                <div class="detail-field">
+                    <span class="detail-label">Name</span>
+                    <span class="detail-value">{{ current_user.name }}</span>
+                </div>
+                <div class="detail-field">
+                    <span class="detail-label">Email</span>
+                    <span class="detail-value">{{ current_user.email }}</span>
+                </div>
+                <div class="detail-field">
+                    <span class="detail-label">Role</span>
+                    <span class="detail-value">{{ current_user.role | replace('_', ' ') | title }}</span>
+                </div>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label for="new_password">New Password</label>
-                <input type="password" id="new_password" name="new_password" required>
-            </div>
+        <!-- Change Password -->
+        <div class="form-card" style="flex: 1; max-width: none;">
+            <h2>Change Password</h2>
+            <form method="POST" action="{{ url_for('auth.account') }}" style="margin-top: 1rem;">
+                <div class="form-group">
+                    <label for="current_password">Current Password</label>
+                    <input type="password" id="current_password" name="current_password" required>
+                </div>
+                <div class="form-group">
+                    <label for="new_password">New Password</label>
+                    <input type="password" id="new_password" name="new_password" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirm_password">Confirm New Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" required>
+                </div>
+                <button type="submit" class="btn-primary">Update Password</button>
+            </form>
+        </div>
 
-            <div class="form-group">
-                <label for="confirm_password">Confirm New Password</label>
-                <input type="password" id="confirm_password" name="confirm_password" required>
-            </div>
-
-            <button type="submit" class="btn-primary">Update Password</button>
-        </form>
     </div>
+
+    <!-- Notification Preferences (full width below) -->
+    <div class="form-card" style="max-width: none;">
+        <h2>Notification Preferences</h2>
+        <p style="margin: 0.5rem 0 1.25rem; color: var(--grey-dark); font-size: 0.9rem;">
+            These settings are saved in your browser. Enabling desktop notifications will trigger a browser permission prompt.
+        </p>
+
+        <div class="detail-fields">
+            <div class="detail-field" style="align-items: center;">
+                <span class="detail-label">Desktop Notifications</span>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-browser-notif">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <img id="browser-notif-icon" src="" alt="" style="width: 32px; height: 32px; object-fit: contain;">
+                    <span id="browser-notif-status" style="font-size: 0.85rem; color: var(--grey-dark);">Loading…</span>
+                    <button type="button" class="btn-secondary" id="test-browser-notif-btn" style="font-size:0.8rem;padding:0.3rem 0.75rem;">
+                        Test Notification
+                    </button>
+                </div>
+            </div>
+            <div class="detail-field" style="align-items: center;">
+                <span class="detail-label">Notification Sound</span>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-audio-notif">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span id="audio-notif-status" style="font-size: 0.85rem; color: var(--grey-dark);">Loading…</span>
+                    <button type="button" class="btn-secondary" id="test-sound-btn" style="font-size:0.8rem;padding:0.3rem 0.75rem;">
+                        Test Sound
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+<script>
+// ── Account page: notification preference toggles ──────────────
+(function () {
+    var browserToggle = document.getElementById('toggle-browser-notif');
+    var audioToggle   = document.getElementById('toggle-audio-notif');
+    var browserStatus = document.getElementById('browser-notif-status');
+    var audioStatus   = document.getElementById('audio-notif-status');
+    var browserIcon       = document.getElementById('browser-notif-icon');
+    var testBtn           = document.getElementById('test-sound-btn');
+    var testBrowserNotif  = document.getElementById('test-browser-notif-btn');
+
+    var ICON_ON  = '/static/images/notiftoggle2.png';
+    var ICON_OFF = '/static/images/notiftoggle1.png';
+
+    // Read current preferences from localStorage (set by main.js)
+    var audioOn   = localStorage.getItem('helix_audio_notifications') !== 'off';
+    var browserOn = localStorage.getItem('helix_browser_notifications') !== 'off';
+
+    function getBrowserNotifLabel() {
+        if (!('Notification' in window)) return 'Not supported in this browser';
+        if (Notification.permission === 'denied') return 'Blocked by browser — check site settings';
+        return browserOn ? 'On' : 'Off';
+    }
+
+    function syncUI() {
+        var isOn = browserOn && Notification.permission === 'granted';
+        audioToggle.checked   = audioOn;
+        browserToggle.checked = isOn;
+        audioStatus.textContent   = audioOn ? 'On' : 'Off';
+        browserStatus.textContent = getBrowserNotifLabel();
+        browserIcon.src = isOn ? ICON_ON : ICON_OFF;
+
+        if (Notification.permission === 'denied') {
+            browserToggle.disabled = true;
+        }
+    }
+
+    syncUI();
+
+    audioToggle.addEventListener('change', function () {
+        audioOn = this.checked;
+        localStorage.setItem('helix_audio_notifications', audioOn ? 'on' : 'off');
+        audioStatus.textContent = audioOn ? 'On' : 'Off';
+    });
+
+    browserToggle.addEventListener('change', function () {
+        if (this.checked) {
+            if (!('Notification' in window)) {
+                browserStatus.textContent = 'Not supported in this browser';
+                this.checked = false;
+                return;
+            }
+            Notification.requestPermission().then(function (permission) {
+                if (permission === 'granted') {
+                    browserOn = true;
+                    localStorage.setItem('helix_browser_notifications', 'on');
+                } else {
+                    browserOn = false;
+                    browserToggle.checked = false;
+                }
+                syncUI();
+            });
+        } else {
+            browserOn = false;
+            localStorage.setItem('helix_browser_notifications', 'off');
+            syncUI();
+        }
+    });
+
+    testBtn.addEventListener('click', function () {
+        if (window.helixPlayNotificationSound) {
+            window.helixPlayNotificationSound();
+        }
+    });
+
+    testBrowserNotif.addEventListener('click', function () {
+        if (!('Notification' in window)) {
+            alert('Desktop notifications are not supported in this browser.');
+            return;
+        }
+        if (Notification.permission !== 'granted') {
+            alert('Desktop notifications are not enabled. Toggle them on first.');
+            return;
+        }
+        // Fire directly — no fetch, no backend, no email, no in-app record
+        new Notification('Vitamin-E', {
+            body: 'Test notification',
+            icon: '/static/images/notiftoggle2.png'
+        });
+    });
+})();
+</script>
 {% endblock %}

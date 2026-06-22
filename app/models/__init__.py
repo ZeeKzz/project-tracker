@@ -102,6 +102,13 @@ class Project(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=True)
     brief_type = db.Column(db.String(50), nullable=True)
     project_status = db.Column(db.String(50), default='draft', nullable=True)
+    held_from_status = db.Column(db.String(50), nullable=True)  # status saved before put on hold
+    concept_status = db.Column(db.String(50), nullable=True)    # tracks concept through the workflow
+    kv_status = db.Column(db.String(50), nullable=True)         # tracks KV through the workflow
+    posm_started = db.Column(db.Boolean, default=False, nullable=False)
+    posm_started_at = db.Column(db.DateTime, nullable=True)
+    concept_kv_revision_count = db.Column(db.Integer, nullable=True)  # snapshot of revision_count when POSM begins
+    posm_country_revision_counts = db.Column(db.JSON, nullable=True)  # {'kuwait': 2, 'qatar': 1, ...}
     campaign_notes = db.Column(db.Text, nullable=True)
     urgency = db.Column(db.String(50), nullable=True)
     required_output = db.Column(db.String(100), nullable=True)
@@ -126,7 +133,7 @@ class Project(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
-    # Set by Head of Design Ops
+    # Set by Designers
     lead_designer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     design_start_date = db.Column(db.Date, nullable=True)
 
@@ -136,6 +143,12 @@ class Project(db.Model):
 
     # Revision tracking
     revision_count = db.Column(db.Integer, default=0, nullable=False)
+
+    # Approval tracking — set when CS approves the final submitted deck.
+    # For C&CM POSM projects this is cascaded automatically once every channel
+    # is individually approved; for Standard briefs it is set directly.
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # Standard brief fields
     design_type_id = db.Column(db.Integer, db.ForeignKey('design_types.id'), nullable=True)
@@ -156,6 +169,7 @@ class Project(db.Model):
     project_deliverables = db.relationship('Deliverable', back_populates='project', cascade='all, delete-orphan')
     concept_designer = db.relationship('User', foreign_keys=[concept_designer_id])
     kv_designer = db.relationship('User', foreign_keys=[kv_designer_id])
+    approved_by = db.relationship('User', foreign_keys=[approved_by_id])
     design_type = db.relationship('DesignType', backref='projects')
     design_direction = db.relationship('DesignDirection', backref='projects')
     brief_flags = db.relationship('BriefFlag', back_populates='project', cascade='all, delete-orphan')
@@ -276,6 +290,7 @@ class ProjectCustomer(db.Model):
     design_deadline = db.Column(db.Date, nullable=True)
     installation_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(50), default='briefed', nullable=False)
+    posm_revision_count = db.Column(db.Integer, default=0, nullable=False)
 
     project = db.relationship('Project')
     customer = db.relationship('Customer', backref='customer_projects')
@@ -442,6 +457,10 @@ class ProjectSubmission(db.Model):
     # True for the currently active deck - older uploads become False when replaced
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
+    # Whether concept / KV were included in this submission
+    includes_concept = db.Column(db.Boolean, default=False, nullable=False)
+    includes_kv = db.Column(db.Boolean, default=False, nullable=False)
+
     # CS Flagging - This is set when CS finds an issue with the deck
     is_flagged = db.Column(db.Boolean, default=False, nullable=False)
     flag_message = db.Column(db.Text, nullable=True)
@@ -452,14 +471,136 @@ class ProjectSubmission(db.Model):
     submitted_to_client_at = db.Column(db.DateTime, nullable=True)
     submitted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
+    # POSM phase fields
+    posm_customer_id = db.Column(db.Integer, db.ForeignKey('project_customers.id'), nullable=True)
+    posm_country     = db.Column(db.String(50), nullable=True)  # 'uae','kuwait' etc. for Gulf projects
+    phase = db.Column(db.String(20), default='concept_kv', nullable=False)  # 'concept_kv' or 'posm'
+
     # Relationships
     project = db.relationship('Project', backref=db.backref('submissions', cascade='all, delete-orphan'))
     uploaded_by = db.relationship('User', foreign_keys=[uploaded_by_id])
     flagged_by = db.relationship('User', foreign_keys=[flagged_by_id])
     submitted_by = db.relationship('User', foreign_keys=[submitted_by_id])
+    posm_customer = db.relationship('ProjectCustomer', foreign_keys=[posm_customer_id])
 
     def __repr__(self):
         return f'<ProjectSubmission {self.original_filename} project={self.project_id} active={self.is_active}>'
+
+
+class ProjectRevision(db.Model):
+    """Stores a revision request sent by CS back to the designer after a deck
+    has been submitted to the client. Tracks the free-text notes and which
+    deliverables need to be reworked."""
+    __tablename__ = 'project_revisions'
+
+    id           = db.Column(db.Integer, primary_key=True)
+    project_id   = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    message      = db.Column(db.Text, nullable=False)
+    sent_by_id   = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    sent_at      = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Whether concept / KV were flagged for revision
+    includes_concept = db.Column(db.Boolean, default=False, nullable=False)
+    includes_kv = db.Column(db.Boolean, default=False, nullable=False)
+
+    # POSM phase: which customer/country this revision is for (null = concept/KV phase)
+    posm_customer_id = db.Column(db.Integer, db.ForeignKey('project_customers.id'), nullable=True)
+    posm_country     = db.Column(db.String(50), nullable=True)  # 'uae','kuwait' etc. for Gulf projects
+
+    project      = db.relationship('Project',
+                                   backref=db.backref('revisions', cascade='all, delete-orphan',
+                                                      order_by='ProjectRevision.sent_at.desc()'))
+    sent_by      = db.relationship('User', foreign_keys=[sent_by_id])
+    posm_customer = db.relationship('ProjectCustomer', foreign_keys=[posm_customer_id])
+
+    def __repr__(self):
+        return f'<ProjectRevision project={self.project_id} sent_at={self.sent_at}>'
+
+
+class ProjectRevisionDeliverable(db.Model):
+    """Junction table — links a revision request to the specific deliverables
+    that CS has asked to be reworked."""
+    __tablename__ = 'project_revision_deliverables'
+
+    id             = db.Column(db.Integer, primary_key=True)
+    revision_id    = db.Column(db.Integer, db.ForeignKey('project_revisions.id'), nullable=False)
+    deliverable_id = db.Column(db.Integer, db.ForeignKey('deliverables.id'), nullable=False)
+
+    revision    = db.relationship('ProjectRevision',
+                                  backref=db.backref('revision_deliverables', cascade='all, delete-orphan'))
+    deliverable = db.relationship('Deliverable', backref=db.backref('revision_assignments', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<ProjectRevisionDeliverable revision={self.revision_id} deliverable={self.deliverable_id}>'
+
+
+class ProjectSecondaryCS(db.Model):
+    """Tracks CS users added as secondary CS on a project.
+    The CS lead remains the primary owner; secondary CS have full operational access."""
+    __tablename__ = 'project_secondary_cs'
+
+    id           = db.Column(db.Integer, primary_key=True)
+    project_id   = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    user_id      = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    added_by_id  = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    added_at     = db.Column(db.DateTime, default=datetime.utcnow)
+
+    project   = db.relationship('Project', backref=db.backref('secondary_cs_assignments', cascade='all, delete-orphan'))
+    user      = db.relationship('User', foreign_keys=[user_id], backref='secondary_cs_assignments')
+    added_by  = db.relationship('User', foreign_keys=[added_by_id])
+
+    __table_args__ = (db.UniqueConstraint('project_id', 'user_id', name='uq_project_secondary_cs'),)
+
+    def __repr__(self):
+        return f'<ProjectSecondaryCS project={self.project_id} user={self.user_id}>'
+
+
+class ProjectSecondaryCsRegion(db.Model):
+    """For C&CM projects: which regions a secondary CS has subscribed to for notifications.
+    If a secondary CS has no rows here, they receive all region notifications (no filter)."""
+    __tablename__ = 'project_secondary_cs_regions'
+
+    id          = db.Column(db.Integer, primary_key=True)
+    project_id  = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    user_id     = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    region      = db.Column(db.String(20), nullable=False)  # 'uae', 'kuwait', 'qatar', 'bahrain', 'oman'
+
+    project = db.relationship('Project', backref=db.backref('secondary_cs_regions', cascade='all, delete-orphan'))
+    user    = db.relationship('User', foreign_keys=[user_id])
+
+    __table_args__ = (db.UniqueConstraint('project_id', 'user_id', 'region', name='uq_project_secondary_cs_region'),)
+
+    def __repr__(self):
+        return f'<ProjectSecondaryCsRegion project={self.project_id} user={self.user_id} region={self.region}>'
+
+
+class ProjectPosmChannel(db.Model):
+    """One record per parallel POSM submission channel.
+    Gulf C&CM projects have multiple concurrent channels:
+      - UAE: one per ProjectCustomer (posm_customer_id set)
+      - Kuwait/Qatar/Bahrain/Oman: one per country (posm_customer_id = None)
+    Each channel tracks its own submission state machine independently."""
+    __tablename__ = 'project_posm_channels'
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    posm_country = db.Column(db.String(50), nullable=False)          # 'uae', 'kuwait', etc.
+    posm_customer_id = db.Column(db.Integer, db.ForeignKey('project_customers.id'), nullable=True)  # UAE only
+    status = db.Column(db.String(50), default='in_queue', nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Approval tracking — set when CS approves this channel's submission.
+    # Once every channel on the project is approved, the route cascades
+    # project.project_status → 'approved' automatically.
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    project = db.relationship('Project', backref=db.backref('posm_channels', cascade='all, delete-orphan'))
+    posm_customer = db.relationship('ProjectCustomer', foreign_keys=[posm_customer_id])
+    approved_by = db.relationship('User', foreign_keys=[approved_by_id])
+
+    def __repr__(self):
+        return f'<ProjectPosmChannel {self.posm_country} cust={self.posm_customer_id} status={self.status}>'
 
 
 class ProjectSubmissionDeliverable(db.Model):
@@ -480,7 +621,7 @@ class ProjectSubmissionDeliverable(db.Model):
     # cascade ensures links are removed when the parent submission is deleted
     submission = db.relationship('ProjectSubmission',
                                  backref=db.backref('included_deliverables', cascade='all, delete-orphan'))
-    deliverable = db.relationship('Deliverable', backref='submission_links')
+    deliverable = db.relationship('Deliverable', backref=db.backref('submission_links', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<ProjectSubmissionDeliverable submission={self.submission_id} deliverable={self.deliverable_id}>'

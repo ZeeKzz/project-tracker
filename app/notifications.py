@@ -1,5 +1,29 @@
 from app import db
-from app.models import Notification, User
+from app.models import Notification, User, ProjectSecondaryCS, ProjectSecondaryCsRegion
+
+
+def _get_secondary_cs(project):
+    """Return all secondary CS User objects for a project."""
+    return [a.user for a in ProjectSecondaryCS.query.filter_by(project_id=project.id).all()]
+
+
+def _secondary_cs_subscribed_to_region(project, user, region):
+    """
+    Return True if this secondary CS should receive notifications for the given region.
+    Logic: if they have NO region preferences set → receive all regions.
+            if they have preferences set → only receive for subscribed regions.
+    """
+    subs = ProjectSecondaryCsRegion.query.filter_by(project_id=project.id, user_id=user.id).all()
+    if not subs:
+        return True  # No filter set — receive everything
+    return any(s.region == region for s in subs)
+
+
+def _deliverable_region(deliverable):
+    """Get the region of a C&CM deliverable via its project_customer → customer chain."""
+    if deliverable and deliverable.project_customer and deliverable.project_customer.customer:
+        return deliverable.project_customer.customer.region
+    return None
 
 def _send_notification_email(recipient, message, project=None):
     """
@@ -131,20 +155,26 @@ def notify_team_leads_of_new_project(project, teams_requested, triggered_by):
 
 
 def notify_cs_of_brief_flag(flag, project, triggered_by):
-    """Notify the CS lead that a designer has raised a brief flag."""
+    """Notify the CS lead and secondary CS that a designer has raised a brief flag."""
+    type_label = {'project': 'the project', 'concept': 'the concept', 'kv': 'the KV'}.get(
+        flag.flag_type,
+        f'a deliverable' if not flag.deliverable else f'"{flag.deliverable.name}"'
+    )
+    message = f'{triggered_by.name} flagged an issue on {type_label} in "{project.name}".'
+
     cs_lead = User.query.get(project.cs_lead_id)
     if cs_lead:
-        type_label = {'project': 'the project', 'concept': 'the concept', 'kv': 'the KV'}.get(
-            flag.flag_type,
-            f'a deliverable' if not flag.deliverable else f'"{flag.deliverable.name}"'
-        )
-        create_notification(
-            recipient=cs_lead,
-            message=f'{triggered_by.name} flagged an issue on {type_label} in "{project.name}".',
-            notification_type='brief_flag',
-            project=project,
-            triggered_by=triggered_by
-        )
+        create_notification(recipient=cs_lead, message=message, notification_type='brief_flag',
+                            project=project, triggered_by=triggered_by)
+
+    # Notify secondary CS, with region filtering for C&CM deliverable-level flags
+    region = _deliverable_region(flag.deliverable) if flag.flag_type == 'deliverable' else None
+    for secondary in _get_secondary_cs(project):
+        if region and project.brief_type == 'ccm':
+            if not _secondary_cs_subscribed_to_region(project, secondary, region):
+                continue
+        create_notification(recipient=secondary, message=message, notification_type='brief_flag',
+                            project=project, triggered_by=triggered_by)
 
 
 def notify_flag_reply(flag, project, triggered_by):
@@ -192,19 +222,15 @@ def notify_designers_of_revision_flag(deliverable, project, triggered_by):
 
 
 def notify_cs_of_revision_submitted(project, triggered_by):
-    """
-    Notify the CS lead of a project that all flagged revisions have been submitted.
-    """
+    """Notify the CS lead and secondary CS that all flagged revisions have been submitted."""
+    message = f'All flagged revisions on "{project.name}" have been submitted. (Revision #{project.revision_count})'
     cs_lead = User.query.get(project.cs_lead_id)
     if cs_lead:
-        message = f'All flagged revisions on "{project.name}" have been submitted. (Revision #{project.revision_count})'
-        create_notification(
-            recipient=cs_lead,
-            message=message,
-            notification_type='revision_submitted',
-            project=project,
-            triggered_by=triggered_by
-        )
+        create_notification(recipient=cs_lead, message=message, notification_type='revision_submitted',
+                            project=project, triggered_by=triggered_by)
+    for secondary in _get_secondary_cs(project):
+        create_notification(recipient=secondary, message=message, notification_type='revision_submitted',
+                            project=project, triggered_by=triggered_by)
 
 
 def notify_cs_lead_of_assignment(project, designer, team_name, triggered_by):
@@ -239,19 +265,83 @@ def notify_designer_of_concept_kv_assignment(project, designer, role_label, trig
 
 
 def notify_cs_of_flag_resolved(flag, project, triggered_by):
-    """
-    Notify the CS lead when the designer marks a brief flag as resolved.
-    """
+    """Notify the CS lead and secondary CS when the designer marks a brief flag as resolved."""
+    type_label = {'project': 'the project', 'concept': 'the concept', 'kv': 'the KV'}.get(
+        flag.flag_type,
+        f'"{flag.deliverable.name}"' if flag.deliverable else 'a deliverable'
+    )
+    message = f'{triggered_by.name} marked their flag on {type_label} in "{project.name}" as resolved.'
     cs_lead = User.query.get(project.cs_lead_id)
     if cs_lead:
-        type_label = {'project': 'the project', 'concept': 'the concept', 'kv': 'the KV'}.get(
-            flag.flag_type,
-            f'"{flag.deliverable.name}"' if flag.deliverable else 'a deliverable'
-        )
-        create_notification(
-            recipient=cs_lead,
-            message=f'{triggered_by.name} marked their flag on {type_label} in "{project.name}" as resolved.',
-            notification_type='brief_flag_resolved',
-            project=project,
-            triggered_by=triggered_by
-        )
+        create_notification(recipient=cs_lead, message=message, notification_type='brief_flag_resolved',
+                            project=project, triggered_by=triggered_by)
+
+    region = _deliverable_region(flag.deliverable) if flag.flag_type == 'deliverable' else None
+    for secondary in _get_secondary_cs(project):
+        if region and project.brief_type == 'ccm':
+            if not _secondary_cs_subscribed_to_region(project, secondary, region):
+                continue
+        create_notification(recipient=secondary, message=message, notification_type='brief_flag_resolved',
+                            project=project, triggered_by=triggered_by)
+
+
+def notify_cs_of_lead_change(project, new_designer, team_name, triggered_by, previous_designer=None):
+    """
+    Notify CS lead + secondary CS when a designer self-assigns or takes over as team lead.
+    If previous_designer is provided, also notify them that they've been replaced.
+    """
+    if previous_designer:
+        cs_message = (f'{new_designer.name} has taken over as {team_name} lead on '
+                      f'"{project.name}" (previously {previous_designer.name}).')
+        prev_message = (f'{new_designer.name} has taken over from you as {team_name} lead '
+                        f'on "{project.name}".')
+    else:
+        cs_message = (f'{new_designer.name} has self-assigned as {team_name} lead '
+                      f'on "{project.name}".')
+
+    cs_lead = User.query.get(project.cs_lead_id)
+    if cs_lead:
+        create_notification(recipient=cs_lead, message=cs_message,
+                            notification_type='lead_assigned',
+                            project=project, triggered_by=triggered_by)
+    for secondary in _get_secondary_cs(project):
+        create_notification(recipient=secondary, message=cs_message,
+                            notification_type='lead_assigned',
+                            project=project, triggered_by=triggered_by)
+
+    if previous_designer and previous_designer.id != triggered_by.id:
+        create_notification(recipient=previous_designer, message=prev_message,
+                            notification_type='lead_assigned',
+                            project=project, triggered_by=triggered_by)
+
+
+def notify_secondary_cs_of_deliverable_status(deliverable, project, new_status, triggered_by):
+    """
+    Notify secondary CS of a C&CM deliverable status change, filtered by their region subscriptions.
+    Called from set_deliverable_status. Does nothing for standard briefs.
+    """
+    if project.brief_type != 'ccm':
+        return
+
+    secondary_cs = _get_secondary_cs(project)
+    if not secondary_cs:
+        return
+
+    region = _deliverable_region(deliverable)
+    status_label = new_status.replace('_', ' ').title()
+    message = f'"{deliverable.name}" in "{project.name}" is now {status_label}.'
+
+    for secondary in secondary_cs:
+        if region and not _secondary_cs_subscribed_to_region(project, secondary, region):
+            continue
+        create_notification(recipient=secondary, message=message, notification_type='status_change',
+                            project=project, triggered_by=triggered_by)
+
+def notify_cs_of_project_started(project, triggered_by):
+    """Notify CS lead and secondary CS when a designer starts the project."""
+    message = f'{triggered_by.name} has started work on "{project.name}".'
+    cs_lead = User.query.get(project.cs_lead_id)
+    if cs_lead:
+        create_notification(recipient=cs_lead, message=message, notification_type='project_started', project=project, triggered_by=triggered_by)
+    for secondary in _get_secondary_cs(project):
+        create_notification(recipient=secondary, message=message, notification_type='project_started', project=project, triggered_by=triggered_by)

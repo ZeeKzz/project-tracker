@@ -22,7 +22,7 @@ def create_app():
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection, ProjectFile, ProjectSubmission, ProjectSubmissionDeliverable)
+    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection, ProjectFile, ProjectSubmission, ProjectSubmissionDeliverable, ProjectRevision, ProjectRevisionDeliverable)
     from app.routes import main
     from app.routes.auth import auth
     from app.routes.projects import projects

@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, url_for
 from flask_login import login_required, current_user
 from app import db
 from app.models import Notification
+from datetime import datetime
 
 notifications_bp = Blueprint('notifications', __name__)
 
@@ -13,10 +14,14 @@ def mark_read(notification_id):
     Mark a single notification as read.
     Returns JSON with the URL to navigate to (the related project).
     """
+    from flask import session
     notification = Notification.query.get_or_404(notification_id)
 
-    # Security check - users can only mark their own notifications as read
-    if notification.recipient_id != current_user.id:
+    # Emulation-aware auth check — same pattern as archive/restore routes
+    emulating_id = session.get('emulating_user_id')
+    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+
+    if notification.recipient_id != notif_user_id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 
     notification.is_read = True
@@ -26,7 +31,7 @@ def mark_read(notification_id):
     if notification.project_id:
         redirect_url = url_for('projects.detail', project_id=notification.project_id)
     else:
-        redirect_url = url_for('projects.index')
+        redirect_url = url_for('main.index')
 
     return jsonify({
         'success': True,
@@ -73,19 +78,76 @@ def archive_notification(notification_id):
     return jsonify({'success': True})
 
 
+@notifications_bp.route('/notifications/archive-all', methods=['POST'])
+@login_required
+def archive_all():
+    from flask import session
+    emulating_id = session.get('emulating_user_id')
+    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    Notification.query.filter_by(
+        recipient_id=notif_user_id,
+        is_archived=False
+    ).update({'is_archived': True, 'is_read': True})
+    db.session.commit()
+    return jsonify({'success': True})
+
+
 @notifications_bp.route('/notifications/delete-bulk', methods=['POST'])
 @login_required
 def delete_bulk():
+    from flask import session
     data = request.get_json()
     ids = data.get('ids', [])
     if not ids:
         return jsonify({'success': False, 'error': 'No IDs Provided'}), 400
+    emulating_id = session.get('emulating_user_id')
+    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
     Notification.query.filter(
         Notification.id.in_(ids),
-        Notification.recipient_id == current_user.id
+        Notification.recipient_id == notif_user_id
     ).delete(synchronize_session=False)
     db.session.commit()
     return jsonify({'success': True})
+
+@notifications_bp.route('/notifications/poll')
+@login_required
+def poll():
+    """
+    Lightweight polling endpoint.
+    Accepts a 'since' query param (ISO timestamp).
+    Returns any unread, non-archived notifications created after that time.
+    JS calls this every 30s and uses the results to fire desktop notifications + sound.
+    """
+    from flask import session
+    emulating_id = session.get('emulating_user_id')
+    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+
+    since_str = request.args.get('since')
+    query = Notification.query.filter_by(
+        recipient_id=notif_user_id,
+        is_archived=False,
+        is_read=False
+    )
+    if since_str:
+        try:
+            since_dt = datetime.fromisoformat(since_str)
+            query = query.filter(Notification.created_at > since_dt)
+        except ValueError:
+            pass  # bad timestamp — return all unread, not a fatal error
+
+    new_notifications = query.order_by(Notification.created_at.asc()).all()
+
+    return jsonify({
+        'notifications': [
+            {
+                'id': n.id,
+                'message': n.message,
+                'created_at': n.created_at.isoformat()
+            }
+            for n in new_notifications
+        ]
+    })
+
 
 #Restore Notifications Route
 @notifications_bp.route('/notifications/<int:notification_id>/restore', methods=['POST'])

@@ -9,6 +9,8 @@
 **Roles:** Admin, CS, Designer, Team Lead, Management  
 **Teams:** 3D, 2D, Technical
 
+---
+
 ## Key Patterns
 
 ### Emulation-aware actor
@@ -43,11 +45,39 @@ Capture `name = obj.name` BEFORE `db.session.delete(obj)` — SQLAlchemy clears 
 ### Notifications
 `create_notification()` always AFTER `db.session.commit()`. Kwarg is `notification_type=`, not `notif_type=`.
 
-### JS in templates
-Always use `{{ variable | tojson }}` when embedding Python data in `<script>` tags.
+### JS in templates — JSON data
+Always use a `<script>` block constant for Python data embedded in JS. NEVER put JSON in HTML `value=""` attributes — Flask's `tojson` does not escape `"` for HTML attributes, causing silent `JSON.parse` failures.
+
+```html
+<!-- CORRECT -->
+<script>
+  const MY_DATA = {{ my_data | tojson }};
+</script>
+
+<!-- WRONG — breaks silently when values contain quotes -->
+<input type="hidden" value="{{ my_data | tojson }}">
+```
 
 ### Expandable rows
 Use `this.nextElementSibling` not `getElementById` — avoids duplicate ID collisions between table sections.
+
+### Modal confirm callbacks
+Save the callback before calling close — closing the modal nullifies the stored reference:
+```javascript
+var fn = _approveCallback;  // save first
+closeApprovalModal();        // this sets _approveCallback = null
+if (fn) fn();               // now safe to call
+```
+
+### Approval lock guard
+`project.project_status == 'approved'` is the global sentinel. Add this at the top of any mutating route:
+```python
+if project.project_status == 'approved':
+    return jsonify({'success': False, 'error': 'Project is approved and locked'}), 403
+```
+CS users see read-only status badges (not dropdowns) on approved projects. Admin retains full access.
+
+---
 
 ## DB Facts
 - `creator=current_user` (object), NOT `created_by_id=current_user.id` (integer)
@@ -55,6 +85,14 @@ Use `this.nextElementSibling` not `getElementById` — avoids duplicate ID colli
 - `cascade='all, delete-orphan'` on Project → ProjectCustomer, ProjectRegion, Deliverable
 - Bulk delete: `.delete(synchronize_session=False)`
 - Dubai timezone: `timezone(timedelta(hours=4))` fixed offset — `ZoneInfo` requires `tzdata` on Windows
+
+---
+
+## CSS Facts
+- `--surface` is NOT defined in `:root` — it resolves to transparent. Use `--white` (#FFFFFF) for solid white backgrounds.
+- Global `h1–h6 { text-transform: uppercase }` — override with `text-transform: none; letter-spacing: normal; font-family: var(--font-body)` on any heading that should render normally.
+
+---
 
 ## Branding Tokens
 ```
@@ -65,13 +103,19 @@ Use `this.nextElementSibling` not `getElementById` — avoids duplicate ID colli
 --canary:    #E5D259
 --ashen:     #94B4BB
 --oak:       #A07C5A
+--white:     #FFFFFF
+--black:     #1A1A1A
 ```
 Fonts (local woff2): Barlow Condensed Bold · DM Mono Medium · Public Sans Bold
+
+---
 
 ## Pill Button CSS Patterns
 - **Checkbox-based** (submits with form): `.team-tag-toggle` + `:has(input:checked)` for active state
 - **JS-toggled** (no form submit): `.team-tag-btn` + `.active` class toggled in JS
 - Unselected state: `background: var(--surface-hover)` so they look interactive
+
+---
 
 ## Standard Brief Deliverables
 Stored in `deliverables` table with `project_customer_id = NULL`. Key columns:
@@ -80,16 +124,85 @@ Stored in `deliverables` table with `project_customer_id = NULL`. Key columns:
 - `flagged_for_revision` (Boolean)
 - `revision_count` (Integer)
 
-`detail()` route computes `standard_designers_by_deliverable` — dict of `{deliverable_id: [User, ...]}` filtered by `d.teams`, falling back to project-level designer pool.
+`detail()` route computes `standard_designers_by_deliverable` — dict of `{deliverable_id: [User, ...]}` filtered by `d.teams`.
+
+**Upsert pattern on edit** — do NOT delete-and-recreate deliverables on brief edit. Match by name, preserve status, update only deadline/teams. Delete only those whose names are absent from the submitted list.
+
+---
+
+## Concept & KV
+Always treated as a single unit. `has_kv` always mirrors `has_concept`. Fields used:
+- `concept_deadline`, `concept_options_required`, `concept_requirements` (or legacy `campaign_notes`)
+- `kv_requirements` (legacy only — show separately if different from concept_requirements)
+- Separate designer assignment: `concept_designer_id`, `kv_designer_id`
+
+Revision picker shows ONE "Concept & KV" row when both flags are true. JS collect handler auto-sets `includesKV = true` when `includesConcept && projectHasKV`.
+
+---
+
+## Submission System
+8 states: in_queue → in_progress → submitted → awaiting_review → revision_requested → re_submitted → cs_approved → approved
+
+- Standard brief: project-level approval via `approve_submission` route
+- POSM: per-channel per-customer approval; cascades to project `approved` when all channels done
+- `ProjectSubmissionDeliverable` junction table links submissions to specific deliverables
+- Activity log entry on every state transition
+
+---
+
+## POSM Channel System
+- `ProjectPosmChannel` table: one row per channel per project (UAE, KSA, Kuwait, Bahrain, Oman, Qatar)
+- UAE tracks per-customer (`ProjectPosmCustomer`); Gulf tracks per-country (channel-level)
+- `posm_started` flag on Project; `posm_started_at` timestamp
+- Begin POSM button condition: `(project.has_concept or project.has_kv) and not project.posm_started`
+
+---
+
+## Notification System
+Routes in `app/routes/notifications.py`:
+- `POST /notifications/<id>/read`
+- `POST /notifications/<id>/archive`
+- `POST /notifications/archive-all` — bulk archives all inbox notifications
+- `POST /notifications/delete-bulk` — permanently deletes by ID list
+- `POST /notifications/<id>/restore`
+- `POST /notifications/mark-all-read`
+- `GET /notifications/poll` — lightweight polling (30s interval)
+
+Real-time DOM updates use `buildArchivedItem()` / `buildInboxItem()` helpers in `main.js`. Archive-all also injects toolbar into archived view if it didn't exist (when archived was previously empty).
+
+---
 
 ## Infrastructure
 See `Vitamin_Helix_Infrastructure.pdf` in this folder for full deployment reference.
 
-**Short version:**
+**Quick reference:**
 - Dev: Windows laptop → `git push`
-- Production: Mini-PC (Linux, server room) — `git pull && sudo systemctl restart helix`
+- Production: Mini-PC (`vitamine`, `10.101.20.159`, Ubuntu 24.04) — `git pull && sudo systemctl restart helix`
+- External access: `https://app.vitamin-e.work` (Cloudflare Tunnel), `ssh ssh.vitamin-e.work` (Cloudflare Zero Trust)
 - Backups: daily `pg_dump` → Synology NAS `Admin/Database/daily/`
-- Remote access: AnyDesk on Mini-PC, Synology DSM for NAS, VPN for off-site
+
+---
+
+## Versioning Scheme
+| Format | Meaning | Examples |
+|--------|---------|---------|
+| `X.Y` | Major scope / feature update | `1.1`, `1.2`, `1.3` |
+| `X.YY` | Bug fix / QoL patch | `1.01`, `1.02`, `1.03` |
+| `X.0` | New major era | `2.0`, `3.0` |
+
+**Current:** v1.0 (shipped 22 June 2026)  
+**1.x era:** project management (briefs, submissions, deliverables, POSM, approval)
+
+| Version | Scope |
+|---------|-------|
+| 1.01 | Real-time assignment DOM updates · C&CM reference images · GMT+4 timestamps · Approved projects filters |
+| 1.02 | Bug fixes (populated from pilot feedback) |
+| 1.1 | Bug report system · Feature request system · Project time tracking dashboard |
+| 1.2+ | NAS integration · Live SSE updates · Client portal (candidates) |
+
+See `ROADMAP.md` for full specs.
+
+---
 
 ## Migration Scripts at Root
 | Script | Purpose |
@@ -98,5 +211,12 @@ See `Vitamin_Helix_Infrastructure.pdf` in this folder for full deployment refere
 | `add_notification_archive.py` | `is_archived` on Notification |
 | `add_brief_flag_tables.py` | BriefFlag + BriefFlagMessage |
 | `add_design_type_team.py` | `team` column on DesignType |
-| `add_deliverable_teams.py` | `teams` column on Deliverable |
-| `create_tables.py` | db.create_all for new tables |
+| `add_deliverable_teams.py` | `teams` + `design_deadline` on Deliverable |
+| `add_hold_status.py` | hold status on projects |
+| `add_concept_kv_status.py` | `concept_status`, `kv_status` on Project |
+| `add_posm.py` | POSM fields on Project |
+| `add_gulf_posm.py` | Gulf POSM country tracking |
+| `add_posm_country_counts.py` | Per-country POSM revision counts |
+| `add_posm_channels.py` | ProjectPosmChannel table |
+| `migrate_approval.py` | `approved_at`, `approved_by_id` on Project + ProjectSubmission |
+| `create_tables.py` | db.create_all for new tables (ActivityLog, BriefFlag, etc.) |

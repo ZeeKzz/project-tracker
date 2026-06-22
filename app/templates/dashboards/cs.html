@@ -12,6 +12,7 @@
             <div class="dashboard-toggle">
                 <button type="button" id="btn-my-projects" class="toggle-btn active">My Projects</button>
                 <button type="button" id="btn-all-projects" class="toggle-btn">All Projects</button>
+                <button type="button" id="btn-approved-projects" class="toggle-btn">Approved Projects</button>
             </div>
             <a href="{{ url_for('projects.drafts') }}" class="btn-primary">Add New Project</a>
         </div>
@@ -35,22 +36,21 @@
                             <th>Final Deadline</th>
                             <th>Teams</th>
                             <th>Assigned Designers</th>
+                            <th>CS Lead</th>
                             <th>Status</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for project in projects %}
-                        {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} {% if
-                            project.brief_type=='ccm' and project.project_customers %} <tr
-                            class="expandable-row {% if is_overdue %}overdue{% endif %}" data-expand="{{ project.id }}">
+                        {% set is_overdue = project.design_needed_by and project.design_needed_by < today %}
+                        {% if project.brief_type == 'ccm' and project.project_customers %}
+                        <tr class="expandable-row {% if is_overdue %}overdue{% endif %}" data-expand="{{ project.id }}">
                             <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                             <td>{{ project.name }}</td>
                             <td class="mono">{{ project.job_number }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                project.design_needed_by else '—' }}</td>
-                            <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date
-                                else '—' }}</td>
+                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by else '—' }}</td>
+                            <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
                             <td>
                                 {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
                                 <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
@@ -58,130 +58,93 @@
                             </td>
                             <td>
                                 {% for assignment in project.assigned_designers %}
-                                <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name
-                                    }}</span>
+                                <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name }}</span>
                                 {% endfor %}
                             </td>
                             <td>
-                                <select class="status-select"
-                                    data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
-                                    onchange="updateStatus(this)">
-                                    <option value="briefed" {% if project.project_status=='briefed' %}selected{% endif
-                                        %}>Briefed</option>
-                                    <option value="in_queue" {% if project.project_status=='in_queue' %}selected{% endif
-                                        %}>In Queue</option>
-                                    <option value="in_progress" {% if project.project_status=='in_progress' %}selected{%
-                                        endif %}>In Progress</option>
-                                    <option value="submitted" {% if project.project_status=='submitted' %}selected{%
-                                        endif %}>Submitted</option>
-                                    <option value="revision_in_queue" {% if project.project_status=='revision_in_queue'
-                                        %}selected{% endif %}>Revision in Queue</option>
-                                    <option value="revision_in_progress" {% if
-                                        project.project_status=='revision_in_progress' %}selected{% endif %}>Revision in
-                                        Progress</option>
-                                    <option value="approved" {% if project.project_status=='approved' %}selected{% endif
-                                        %}>Approved</option>
-                                </select>
+                                {{ project.cs_lead.name if project.cs_lead else '—' }}
+                                {% if project.secondary_cs_assignments %}
+                                <div style="font-size: 0.78rem; color: var(--grey-dark); margin-top: 0.15rem;">
+                                    {% for a in project.secondary_cs_assignments %}+{{ a.user.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+                                </div>
+                                {% endif %}
                             </td>
-                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                    class="btn btn--secondary">View Details</a></td>
-                            </tr>
-                            <tr class="expansion-row hidden" id="expand_{{ project.id }}">
-                                <td colspan="9">
-                                    <table class="customer-sub-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Customer</th>
-                                                <th>Design Deadline</th>
-                                                <th>Installation</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for pc in project.project_customers %}
-                                            <tr>
-                                                <td>{{ pc.customer.name }}</td>
-                                                <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if
-                                                    pc.design_deadline else '—' }}</td>
-                                                <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if
-                                                    pc.installation_date else '—' }}
-                                                </td>
-                                                <td>
-                                                    <select class="status-select"
-                                                        data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
-                                                        onchange="updateStatus(this)">
-                                                        <option value="briefed" {% if pc.status=='briefed' %}selected{%
-                                                            endif %}>Briefed</option>
-                                                        <option value="in_queue" {% if pc.status=='in_queue'
-                                                            %}selected{% endif %}>In Queue</option>
-                                                        <option value="in_progress" {% if pc.status=='in_progress'
-                                                            %}selected{% endif %}>In Progress</option>
-                                                        <option value="submitted" {% if pc.status=='submitted'
-                                                            %}selected{% endif %}>Submitted</option>
-                                                        <option value="revision_in_queue" {% if
-                                                            pc.status=='revision_in_queue' %}selected{% endif %}>
-                                                            Revision in Queue</option>
-                                                        <option value="revision_in_progress" {% if
-                                                            pc.status=='revision_in_progress' %}selected{% endif %}>
-                                                            Revision in Progress</option>
-                                                        <option value="approved" {% if pc.status=='approved'
-                                                            %}selected{% endif %}>Approved</option>
-                                                    </select>
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr class="clickable {% if is_overdue %}overdue{% endif %}"
-                                data-href="{{ url_for('projects.detail', project_id=project.id) }}">
-                                <td class="chevron-cell"></td>
-                                <td>{{ project.name }}</td>
-                                <td class="mono">{{ project.job_number }}</td>
-                                <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                    project.design_needed_by else '—' }}</td>
-                                <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if
-                                    project.execution_date else '—' }}</td>
-                                <td>
-                                    {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
-                                    <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
-                                    {% endfor %}
-                                </td>
-                                <td>
-                                    {% for assignment in project.assigned_designers %}
-                                    <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name
-                                        }}</span>
-                                    {% endfor %}
-                                </td>
-                                <td>
-                                    <select class="status-select"
-                                        data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
-                                        onchange="updateStatus(this)">
-                                        <option value="briefed" {% if project.project_status=='briefed' %}selected{%
-                                            endif %}>Briefed</option>
-                                        <option value="in_queue" {% if project.project_status=='in_queue' %}selected{%
-                                            endif %}>In Queue</option>
-                                        <option value="in_progress" {% if project.project_status=='in_progress'
-                                            %}selected{% endif %}>In Progress</option>
-                                        <option value="submitted" {% if project.project_status=='submitted' %}selected{%
-                                            endif %}>Submitted</option>
-                                        <option value="revision_in_queue" {% if
-                                            project.project_status=='revision_in_queue' %}selected{% endif %}>Revision
-                                            in Queue</option>
-                                        <option value="revision_in_progress" {% if
-                                            project.project_status=='revision_in_progress' %}selected{% endif %}>
-                                            Revision in Progress</option>
-                                        <option value="approved" {% if project.project_status=='approved' %}selected{%
-                                            endif %}>Approved</option>
-                                    </select>
-                                </td>
-                                <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                        class="btn btn--secondary">View Details</a></td>
-                            </tr>
-                            {% endif %}
-                            {% endfor %}
+                            <td>
+                                {# Status is read-only for CS — shown as a static label, not an editable dropdown #}
+                                <span class="status-badge s-{{ project.project_status }}">{{ project.project_status | replace('_', ' ') | title }}</span>
+                            </td>
+                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}" class="btn btn--secondary">View Details</a></td>
+                        </tr>
+                        <tr class="expansion-row hidden" id="expand_{{ project.id }}">
+                            <td colspan="10">
+                                <table class="customer-sub-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Customer</th>
+                                            <th>Design Deadline</th>
+                                            <th>Installation</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for pc in project.project_customers %}
+                                        <tr>
+                                            <td>{{ pc.customer.name }}</td>
+                                            <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if pc.design_deadline else '—' }}</td>
+                                            <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if pc.installation_date else '—' }}</td>
+                                            <td>
+                                                <select class="status-select"
+                                                    data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
+                                                    onchange="updateStatus(this)">
+                                                    <option value="briefed" {% if pc.status == 'briefed' %}selected{% endif %}>Briefed</option>
+                                                    <option value="in_queue" {% if pc.status == 'in_queue' %}selected{% endif %}>In Queue</option>
+                                                    <option value="in_progress" {% if pc.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                                                    <option value="submitted" {% if pc.status == 'submitted' %}selected{% endif %}>Submitted</option>
+                                                    <option value="revision_in_queue" {% if pc.status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
+                                                    <option value="revision_in_progress" {% if pc.status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
+                                                    <option value="approved" {% if pc.status == 'approved' %}selected{% endif %}>Approved</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr class="clickable {% if is_overdue %}overdue{% endif %}"
+                            data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                            <td class="chevron-cell"></td>
+                            <td>{{ project.name }}</td>
+                            <td class="mono">{{ project.job_number }}</td>
+                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by else '—' }}</td>
+                            <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
+                            <td>
+                                {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
+                                <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% for assignment in project.assigned_designers %}
+                                <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name }}</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {{ project.cs_lead.name if project.cs_lead else '—' }}
+                                {% if project.secondary_cs_assignments %}
+                                <div style="font-size: 0.78rem; color: var(--grey-dark); margin-top: 0.15rem;">
+                                    {% for a in project.secondary_cs_assignments %}+{{ a.user.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {# Status is read-only for CS — shown as a static label, not an editable dropdown #}
+                                <span class="status-badge s-{{ project.project_status }}">{{ project.project_status | replace('_', ' ') | title }}</span>
+                            </td>
+                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}" class="btn btn--secondary">View Details</a></td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -223,6 +186,7 @@
                         <th>Final Deadline</th>
                         <th>Teams</th>
                         <th>Assigned Designers</th>
+                        <th>CS Lead</th>
                         <th>Status</th>
                         <th></th>
                     </tr>
@@ -230,16 +194,14 @@
                 <tbody>
                     {% endif %}
 
-                    {% set is_overdue = project.design_needed_by and project.design_needed_by < today %} {% if
-                        project.brief_type=='ccm' and project.project_customers %} <tr
-                        class="expandable-row {% if is_overdue %}overdue{% endif %}" data-expand="{{ project.id }}">
+                    {% set is_overdue = project.design_needed_by and project.design_needed_by < today %}
+                    {% if project.brief_type == 'ccm' and project.project_customers %}
+                    <tr class="expandable-row {% if is_overdue %}overdue{% endif %}" data-expand="{{ project.id }}">
                         <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                         <td>{{ project.name }}</td>
                         <td class="mono">{{ project.job_number }}</td>
-                        <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by
-                            else '—' }}</td>
-                        <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else
-                            '—' }}</td>
+                        <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by else '—' }}</td>
+                        <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
                         <td>
                             {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
                             <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
@@ -247,132 +209,94 @@
                         </td>
                         <td>
                             {% for assignment in project.assigned_designers %}
-                            <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name
-                                }}</span>
+                            <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name }}</span>
                             {% endfor %}
                         </td>
                         <td>
-                            <select class="status-select"
-                                data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
-                                onchange="updateStatus(this)">
-                                <option value="briefed" {% if project.project_status=='briefed' %}selected{% endif %}>
-                                    Briefed</option>
-                                <option value="in_queue" {% if project.project_status=='in_queue' %}selected{% endif %}>
-                                    In Queue</option>
-                                <option value="in_progress" {% if project.project_status=='in_progress' %}selected{%
-                                    endif %}>In Progress</option>
-                                <option value="submitted" {% if project.project_status=='submitted' %}selected{% endif
-                                    %}>Submitted</option>
-                                <option value="revision_in_queue" {% if project.project_status=='revision_in_queue'
-                                    %}selected{% endif %}>Revision in Queue</option>
-                                <option value="revision_in_progress" {% if
-                                    project.project_status=='revision_in_progress' %}selected{% endif %}>Revision in
-                                    Progress</option>
-                                <option value="approved" {% if project.project_status=='approved' %}selected{% endif %}>
-                                    Approved</option>
-                            </select>
+                            {{ project.cs_lead.name if project.cs_lead else '—' }}
+                            {% if project.secondary_cs_assignments %}
+                            <div style="font-size: 0.78rem; color: var(--grey-dark); margin-top: 0.15rem;">
+                                {% for a in project.secondary_cs_assignments %}+{{ a.user.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+                            </div>
+                            {% endif %}
                         </td>
-                        <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                class="btn btn--secondary">View Details</a></td>
-                        </tr>
-                        {% else %}
-                        <tr class="clickable {% if is_overdue %}overdue{% endif %}"
-                            data-href="{{ url_for('projects.detail', project_id=project.id) }}">
-                            <td class="chevron-cell"></td>
-                            <td>{{ project.name }}</td>
-                            <td class="mono">{{ project.job_number }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                project.design_needed_by else '—' }}</td>
-                            <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date
-                                else '—' }}</td>
-                            <td>
-                                {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
-                                <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
-                                {% endfor %}
-                            </td>
-                            <td>
-                                {% for assignment in project.assigned_designers %}
-                                <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name
-                                    }}</span>
-                                {% endfor %}
-                            </td>
-                            <td>
-                                <select class="status-select"
-                                    data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
-                                    onchange="updateStatus(this)">
-                                    <option value="briefed" {% if project.project_status=='briefed' %}selected{% endif
-                                        %}>Briefed</option>
-                                    <option value="in_queue" {% if project.project_status=='in_queue' %}selected{% endif
-                                        %}>In Queue</option>
-                                    <option value="in_progress" {% if project.project_status=='in_progress' %}selected{%
-                                        endif %}>In Progress</option>
-                                    <option value="submitted" {% if project.project_status=='submitted' %}selected{%
-                                        endif %}>Submitted</option>
-                                    <option value="revision_in_queue" {% if project.project_status=='revision_in_queue'
-                                        %}selected{% endif %}>Revision in Queue</option>
-                                    <option value="revision_in_progress" {% if
-                                        project.project_status=='revision_in_progress' %}selected{% endif %}>Revision in
-                                        Progress</option>
-                                    <option value="approved" {% if project.project_status=='approved' %}selected{% endif
-                                        %}>Approved</option>
-                                </select>
-                            </td>
-                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                    class="btn btn--secondary">View Details</a></td>
-                        </tr>
-                        {% endif %}
+                        <td>
+                            {# Status is read-only for CS — shown as a static label, not an editable dropdown #}
+                            <span class="status-badge s-{{ project.project_status }}">{{ project.project_status | replace('_', ' ') | title }}</span>
+                        </td>
+                        <td><a href="{{ url_for('projects.detail', project_id=project.id) }}" class="btn btn--secondary">View Details</a></td>
+                    </tr>
+                    <tr class="expansion-row hidden" id="expand_{{ project.id }}">
+                        <td colspan="10">
+                            <table class="customer-sub-table">
+                                <thead>
+                                    <tr>
+                                        <th>Customer</th>
+                                        <th>Design Deadline</th>
+                                        <th>Installation</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for pc in project.project_customers %}
+                                    <tr>
+                                        <td>{{ pc.customer.name }}</td>
+                                        <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if pc.design_deadline else '—' }}</td>
+                                        <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if pc.installation_date else '—' }}</td>
+                                        <td>
+                                            <select class="status-select"
+                                                data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
+                                                onchange="updateStatus(this)">
+                                                <option value="briefed" {% if pc.status == 'briefed' %}selected{% endif %}>Briefed</option>
+                                                <option value="in_queue" {% if pc.status == 'in_queue' %}selected{% endif %}>In Queue</option>
+                                                <option value="in_progress" {% if pc.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                                                <option value="submitted" {% if pc.status == 'submitted' %}selected{% endif %}>Submitted</option>
+                                                <option value="revision_in_queue" {% if pc.status == 'revision_in_queue' %}selected{% endif %}>Revision in Queue</option>
+                                                <option value="revision_in_progress" {% if pc.status == 'revision_in_progress' %}selected{% endif %}>Revision in Progress</option>
+                                                <option value="approved" {% if pc.status == 'approved' %}selected{% endif %}>Approved</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr class="clickable {% if is_overdue %}overdue{% endif %}"
+                        data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                        <td class="chevron-cell"></td>
+                        <td>{{ project.name }}</td>
+                        <td class="mono">{{ project.job_number }}</td>
+                        <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by else '—' }}</td>
+                        <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
+                        <td>
+                            {% for team in (project.design_teams_requested or '').split(',') if team.strip() %}
+                            <span class="team-tag team-{{ team.strip()|lower }}">{{ team.strip() }}</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% for assignment in project.assigned_designers %}
+                            <span class="team-tag team-{{ assignment.team|lower }}">{{ assignment.designer.name }}</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {{ project.cs_lead.name if project.cs_lead else '—' }}
+                            {% if project.secondary_cs_assignments %}
+                            <div style="font-size: 0.78rem; color: var(--grey-dark); margin-top: 0.15rem;">
+                                {% for a in project.secondary_cs_assignments %}+{{ a.user.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {# Status is read-only for CS — shown as a static label, not an editable dropdown #}
+                            <span class="status-badge s-{{ project.project_status }}">{{ project.project_status | replace('_', ' ') | title }}</span>
+                        </td>
+                        <td><a href="{{ url_for('projects.detail', project_id=project.id) }}" class="btn btn--secondary">View Details</a></td>
+                    </tr>
+                    {% endif %}
 
-                        {% if project.brief_type == 'ccm' and project.project_customers %}
-                        <tr class="expansion-row hidden" id="expand_{{ project.id }}">
-                            <td colspan="9">
-                                <table class="customer-sub-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Customer</th>
-                                            <th>Design Deadline</th>
-                                            <th>Installation</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for pc in project.project_customers %}
-                                        <tr>
-                                            <td>{{ pc.customer.name }}</td>
-                                            <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if
-                                                pc.design_deadline else '—' }}</td>
-                                            <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if
-                                                pc.installation_date else '—' }}</td>
-                                            <td>
-                                                <select class="status-select"
-                                                    data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
-                                                    onchange="updateStatus(this)">
-                                                    <option value="briefed" {% if pc.status=='briefed' %}selected{%
-                                                        endif %}>Briefed</option>
-                                                    <option value="in_queue" {% if pc.status=='in_queue' %}selected{%
-                                                        endif %}>In Queue</option>
-                                                    <option value="in_progress" {% if pc.status=='in_progress'
-                                                        %}selected{% endif %}>In Progress</option>
-                                                    <option value="submitted" {% if pc.status=='submitted' %}selected{%
-                                                        endif %}>Submitted</option>
-                                                    <option value="revision_in_queue" {% if
-                                                        pc.status=='revision_in_queue' %}selected{% endif %}>Revision in
-                                                        Queue</option>
-                                                    <option value="revision_in_progress" {% if
-                                                        pc.status=='revision_in_progress' %}selected{% endif %}>Revision
-                                                        in Progress</option>
-                                                    <option value="approved" {% if pc.status=='approved' %}selected{%
-                                                        endif %}>Approved</option>
-                                                </select>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </td>
-                        </tr>
-                        {% endif %}
-
-                        {% if loop.last %}
+                    {% if loop.last %}
             </table>
         </div>
         {% endif %}
@@ -385,6 +309,33 @@
 
 </div>
 
+    <!-- Approved Projects View — hidden by default, rendered by JS on first open -->
+    <div id="approved-projects-view" class="dashboard-view hidden">
+        <h2 class="dashboard-section-title">Approved Projects</h2>
+        <div id="approved-projects-container">
+            {# Content is built by buildApprovedView() in main.js when this tab is first opened #}
+        </div>
+    </div>
+
 </div>
+
+{# Serialize approved projects for JS rendering — needed by buildApprovedView() #}
+<script>
+window.approvedProjects = [
+    {% for p in approved_projects %}
+    {
+        "id": {{ p.id }},
+        "name": {{ p.name | tojson }},
+        "client": {{ (p.client or '') | tojson }},
+        "brief_type": {{ (p.brief_type or '') | tojson }},
+        "cs_lead": {{ (p.cs_lead.name if p.cs_lead else '') | tojson }},
+        "approved_by": {{ (p.approved_by.name if p.approved_by else '') | tojson }},
+        "approved_at": {{ p.approved_at.strftime('%Y-%m-%dT%H:%M:%S') | tojson }},
+        "url": {{ url_for('projects.detail', project_id=p.id) | tojson }}
+    }{% if not loop.last %},{% endif %}
+
+    {% endfor %}
+];
+</script>
 
 {% endblock %}
