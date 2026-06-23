@@ -32,7 +32,7 @@ def _send_notification_email(recipient, message, project=None):
     """
     from flask import current_app
     # If email is turned off in .env, skip silently
-    if not current_app.config.get('MAIL_ENABLED'):
+    if str(current_app.config.get('MAIL_ENABLED', 'false')).lower() != 'true':
         return
     # If the user has no email address, skip
     if not recipient.email:
