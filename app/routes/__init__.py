@@ -7,9 +7,9 @@ from app.models import Project, ProjectDesigner, User, ProjectSecondaryCS
 main = Blueprint('main', __name__)
 
 
-@main.route('/')
+@main.route('/projects')
 @login_required
-def index():
+def projects():
     """
     Role-aware dashboard router.
     Looks at the current user's role and renders the appropriate dashboard.
@@ -30,7 +30,7 @@ def index():
     elif effective_role == 'team_lead':
         return team_lead_dashboard()
     else:
-        return redirect(url_for('index'))
+        return redirect(url_for('main.projects'))
 
 
 def cs_dashboard():
@@ -254,4 +254,7 @@ def team_lead_dashboard():
         today=today
     )
 
+@main.route('/')
+def index():
+    return redirect(url_for('main.projects'))
 

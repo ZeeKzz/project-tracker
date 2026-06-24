@@ -5,8 +5,19 @@
 {% block content %}
 
 <div class="auth-container">
-    <div class="auth-card">
 
+    <a href="https://vitaminnas26.cz5.quickconnect.to/" target="_blank" class="file-storage-card">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12H2" />
+            <path d="M5 12V6a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v6" />
+            <rect x="2" y="12" width="20" height="8" rx="2" />
+            <path d="M6 16h.01M10 16h.01" />
+        </svg>
+        <span>Go to File Storage</span>
+    </a>
+
+    <div class="auth-card">
         <div class="auth-logo">
             <img src="{{ url_for('static', filename='images/Horizontal.svg') }}" alt="Vitamin Helix">
         </div>
@@ -27,7 +38,6 @@
 
             <button type="submit" class="btn-primary" style="width: 100%;">Sign In</button>
         </form>
-
     </div>
 </div>
 
