@@ -3661,7 +3661,14 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
-                        if (data.success) row.remove();
+                        if (data.success) {
+                            row.remove();
+                        } else {
+                            alert('Could not delete user: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(function () {
+                        alert('Server error while deleting user.');
                     });
             });
         }

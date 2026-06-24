@@ -128,12 +128,17 @@ def admin_reset_password(user_id):
 @admin_required
 def delete_user(user_id):
     from app import db
+    from sqlalchemy.exc import IntegrityError
     if user_id == current_user.id:
         return jsonify({'success': False, 'error': 'Cannot delete your own account'}), 400
     user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({'success': True})
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'success': True})
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'This user has linked records (projects, notifications, etc.) and cannot be deleted. Remove their data first or reassign it.'}), 400
 
 # ── Project Tools ────────────────────────────────────────────────────────────
 
