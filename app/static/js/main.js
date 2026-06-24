@@ -3512,6 +3512,7 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
 
                 var groups = [
                     { label: 'CS & Admin', filter: function (u) { return u.role === 'cs' || u.role === 'admin'; } },
+                    { label: 'Management', filter: function (u) { return u.role === 'management'; } },
                     { label: '2D Team', filter: function (u) { return u.team === '2D'; } },
                     { label: '3D Team', filter: function (u) { return u.team === '3D'; } },
                     { label: 'Technical', filter: function (u) { return u.team === 'Technical'; } }
@@ -3557,7 +3558,7 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
     }
 
     function renderAccountEdit(user) {
-        var roleOptions = ['cs', 'designer', 'team_lead', 'admin'].map(function (r) {
+        var roleOptions = ['cs', 'designer', 'team_lead', 'management', 'admin'].map(function (r) {
             return '<option value="' + r + '"' + (user.role === r ? ' selected' : '') + '>' + r + '</option>';
         }).join('');
         var teamOptions = ['2D', '3D', 'Technical'].map(function (t) {

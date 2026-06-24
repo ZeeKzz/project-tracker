@@ -14,7 +14,9 @@
                 <button type="button" id="btn-all-projects" class="toggle-btn">All Projects</button>
                 <button type="button" id="btn-approved-projects" class="toggle-btn">Approved Projects</button>
             </div>
+            {% if effective_role != 'management' %}
             <a href="{{ url_for('projects.drafts') }}" class="btn-primary">Add New Project</a>
+            {% endif %}
         </div>
     </div>
 
