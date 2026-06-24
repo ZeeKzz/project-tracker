@@ -143,7 +143,11 @@ def designer_dashboard():
 
         team_workload = []
         for designer in designers_in_team:
-            count = ProjectDesigner.query.filter_by(user_id=designer.id).count()
+            count = ProjectDesigner.query.join(Project).filter(
+                ProjectDesigner.user_id == designer.id,
+                Project.project_status != 'draft',
+                Project.project_status != 'approved'
+            ).count()
             team_workload.append({'name': designer.name, 'count': count})
     else:
         team_projects = []
@@ -200,6 +204,7 @@ def team_lead_dashboard():
 
     team_projects = Project.query.filter(
         Project.design_teams_requested.contains(team),
+        Project.project_status != 'draft',
         Project.project_status != 'approved'
     ).order_by(Project.design_needed_by.asc()).all()
 
@@ -214,7 +219,11 @@ def team_lead_dashboard():
 
     team_workload = []
     for designer in designers_in_team:
-        count = ProjectDesigner.query.filter_by(user_id=designer.id).count()
+        count = ProjectDesigner.query.join(Project).filter(
+            ProjectDesigner.user_id == designer.id,
+            Project.project_status != 'draft',
+            Project.project_status != 'approved'
+        ).count()
         team_workload.append({'name': designer.name, 'count': count})
 
     personal_project_ids = [
@@ -225,6 +234,7 @@ def team_lead_dashboard():
     if personal_project_ids:
         personal_projects = Project.query.filter(
             Project.id.in_(personal_project_ids),
+            Project.project_status != 'draft',
             Project.project_status != 'approved'
         ).order_by(Project.design_needed_by.asc()).all()
     else:
