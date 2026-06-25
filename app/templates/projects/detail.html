@@ -290,7 +290,8 @@
                 {% endif %}
                 <span class="flag-meta">Raised by {{ flag.created_by.name }} · {{ flag.created_at | dubai_time }}
                     GST</span></span>
-                {% if effective_user.id == flag.created_by_id or effective_user.role == 'admin' %}
+                {# Flag creator, admin, or management can resolve — management has oversight across all projects #}
+                {% if effective_user.id == flag.created_by_id or effective_user.role in ('admin', 'management') %}
                 <button type="button" class="btn-flag-resolve" onclick="resolveFlag({{ flag.id }}, {{ project.id }})">✓
                     Mark Resolved</button>
                 {% endif %}

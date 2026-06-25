@@ -1056,7 +1056,7 @@ def assign_deliverable(project_id, d_id):
 
 @projects.route('/projects/<int:project_id>/flags/create', methods=['POST'])
 @login_required
-@role_required('admin', 'cs', 'designer', 'team_lead')
+@role_required('admin', 'cs', 'designer', 'team_lead', 'management')  # management can raise flags to escalate issues
 def create_flag(project_id):
     from app.models import BriefFlag, BriefFlagMessage, User as UserModel
     project = Project.query.get_or_404(project_id)
@@ -1101,7 +1101,7 @@ def create_flag(project_id):
 
 @projects.route('/projects/<int:project_id>/flags/<int:flag_id>/reply', methods=['POST'])
 @login_required
-@role_required('admin', 'cs', 'designer', 'team_lead')
+@role_required('admin', 'cs', 'designer', 'team_lead', 'management')  # management can participate in flag threads
 def reply_flag(project_id, flag_id):
     from app.models import BriefFlag, BriefFlagMessage, User as UserModel
     project = Project.query.get_or_404(project_id)
@@ -1134,7 +1134,7 @@ def reply_flag(project_id, flag_id):
 
 @projects.route('/projects/<int:project_id>/flags/<int:flag_id>/resolve', methods=['POST'])
 @login_required
-@role_required('admin', 'designer', 'team_lead')
+@role_required('admin', 'designer', 'team_lead', 'management')  # management can resolve any flag (oversight role)
 def resolve_flag(project_id, flag_id):
     from app.models import BriefFlag, User as UserModel
     project = Project.query.get_or_404(project_id)
@@ -1143,7 +1143,8 @@ def resolve_flag(project_id, flag_id):
     emulating_id = session.get('emulating_user_id')
     actor = UserModel.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
 
-    if flag.created_by_id != actor.id and current_user.role != 'admin':
+    # Only the flag creator, admin, or management can resolve — others (e.g. designers on unrelated flags) cannot
+    if flag.created_by_id != actor.id and current_user.role not in ('admin', 'management'):
         return jsonify({'error': 'Only the person who raised this flag can resolve it'}), 403
 
     flag.is_resolved = True
