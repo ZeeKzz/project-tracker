@@ -89,9 +89,13 @@
 
                 <div class="form-group">
                     <label class="form-label">Job Number</label>
-                    <input type="text" id="job_number" name="job_number" class="form-input"
-                        value="{{ draft.job_number if draft and draft.job_number else '' }}"
-                        placeholder="e.g. VIT-2026-001">
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" id="job_number" name="job_number" class="form-input"
+                            value="{{ draft.job_number if draft and draft.job_number else '' }}" placeholder="e.g. VIT-2026-001">
+                        <!-- Generates the next available FOC-NNN number and fills the field -->
+                        <button type="button" id="generate-foc-btn" class="btn-secondary" onclick="generateFocJobNumber()">Generate FOC
+                            Job Number</button>
+                    </div>
                     <span class="form-hint">Must be unique</span>
                 </div>
             </div>
@@ -625,6 +629,28 @@
         var list = document.getElementById('standardDeliverablesList');
         list.innerHTML = '';
         arr.forEach(function (item) { renderStandardDeliverableRow(item); });
+    }
+
+    // Calls the server to get the next available FOC-NNN job number and fills the field.
+    // Server computes it from the DB so there are no gaps or collisions.
+    function generateFocJobNumber() {
+        var btn = dcoument.getElementById('generate-foc-btn');
+        btn.disabled = true; // preven double-clicks while request is in flight
+        btn.textContent = 'Generating...';
+
+        fetch('/projects/generate-job-number')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            document.getElementById('job_number').value = data.job_number;
+            btn.disabled = false;
+            btn.textContent = 'Generate FOC Job Number';
+        })
+        .catch(function() {
+            alert('Could not generate job number. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Generate FOC Job Number';
+        });
+
     }
 </script>
 

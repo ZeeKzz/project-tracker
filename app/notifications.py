@@ -137,17 +137,29 @@ def create_notification(recipient, message, notification_type, project=None, tri
 
 def notify_team_leads_of_new_project(project, teams_requested, triggered_by):
     """
-    Notify the team leads of every team requested on a new project.
+    Notify ALL members of every team requested on a new project — both team leads and designers.
     teams_requested is a list like ['3D', '2D'].
+    Team leads get a message prompting them to assign designers.
+    Designers get a heads-up that a new project is coming in for their team.
     """
     for team_name in teams_requested:
+        # Notify team leads — they need to action this by assigning designers
         team_leads = User.query.filter_by(role='team_lead', team=team_name).all()
-
         for team_lead in team_leads:
-            message = f"New project requires the {team_name} team: {project.name}"
             create_notification(
                 recipient=team_lead,
-                message=message,
+                message=f'A new project has come in for the {team_name} team: "{project.name}".',
+                notification_type='project_created',
+                project=project,
+                triggered_by=triggered_by
+            )
+
+        # Notify all designers on this team — so they're aware before assignment
+        designers = User.query.filter_by(role='designer', team=team_name).all()
+        for designer in designers:
+            create_notification(
+                recipient=designer,
+                message=f'A new project has come in for the {team_name} team: "{project.name}".',
                 notification_type='project_created',
                 project=project,
                 triggered_by=triggered_by

@@ -1284,6 +1284,33 @@ def assign_lead(project_id):
 
     return jsonify({'success': True})
 
+# _____________ Auto-generate FOC Job Number __________
+# Returns the next available FOC-NNN job number.
+# FOC_PAD controls zero-padding width - change to 4 to get FOC-1000 etc.
+@projects.route('/projects/generate-job-number', methods=['GET'])
+@login_required
+@role_required('admin', 'cs', 'management')
+def generate_job_number():
+    FOC_PAD = 3 # Digits: 3 -> FOC-001 ... FOC-999. Change to 4 for FOC-1000+
+
+    #Pull all existing FOC job numbers from the DB
+    existing = Project.query.with_entities(Project.job_number).filter(
+        Project.job_number.like('FOC-%')
+    ).all()
+
+    # Parse the numeric suffix from each, collect into a list
+    used_numbers = []
+    for (jn,) in existing:
+        suffix = jn[4:] # strip 'FOC- prefix
+        if suffix.isdigit():
+            used_numbers.append(int(suffix))
+    
+    # Next number is max +1, or 1 if none exist yet
+    next_num = (max(used_numbers) + 1) if used_numbers else 1
+    job_number = 'FOC-' + str(next_num).zfill(FOC_PAD)
+
+    return jsonify({'job_number': job_number})
+
 # _____________ Start Project ________________________
 # Transitions project_status from Briefed to In Progress.
 # Accessible to designers who team is requested on the project, and admins.
@@ -1786,7 +1813,9 @@ def submit_project():
         # Notifications (non-blocking)
         try:
             selected_cs_id = int(data['cs_lead_id'])
-            if selected_cs_id != current_user.id:
+            # Skip CS lead notification if they are the one submitting, OR if they created
+            # the project — in both cases they already know they own it.
+            if selected_cs_id != current_user.id and selected_cs_id != project.created_by_id:
                 cs_lead = User.query.get(selected_cs_id)
                 if cs_lead:
                     create_notification(
@@ -1797,24 +1826,17 @@ def submit_project():
                         triggered_by=current_user
                     )
 
-            disciplines_used = set()
-            for item in data.get('deliverables', []):
-                if item.get('type_id') and item['type_id'] != 'custom':
-                    dt = DeliverableType.query.get(int(item['type_id']))
-                    if dt:
-                        for d in dt.disciplines:
-                            disciplines_used.add(d.team)
-
-            team_leads = User.query.filter_by(role='team_lead').all()
-            for lead in team_leads:
-                if lead.team in disciplines_used:
-                    create_notification(
-                        recipient=lead,
-                        message=f'New project "{project.name}" requires your team. Please assign designers.',
-                        notification_type='project_assigned',
-                        project=project,
-                        triggered_by=current_user
-                    )
+            # Notify all team members (leads + designers) on every requested team.
+            # Uses design_teams_requested from the submitted form, which is reliable for both
+            # standard and C&CM briefs. Replaces the old disciplines_used approach, which could
+            # miss teams when deliverables had no type_id (e.g. custom deliverables).
+            teams_requested = data.get('design_teams', [])
+            if teams_requested:
+                notify_team_leads_of_new_project(
+                    project=project,
+                    teams_requested=teams_requested,
+                    triggered_by=current_user
+                )
         except Exception as notif_err:
             import traceback
             traceback.print_exc()

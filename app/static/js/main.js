@@ -1,6 +1,56 @@
 // main.js - Vitamin Helix
 console.log("Vitamin Helix loaded.");
 
+// ── Dev Tools: Wipe Projects ─────────────────────────────────────────────────
+// These functions only do anything if the wipe modal exists in the DOM, which
+// only happens when DEV_TOOLS_ENABLED=true is set in .env (never on production).
+
+function openWipeModal() {
+    var modal = document.getElementById('wipe-modal');
+    if (!modal) return;
+    // Reset state every time modal opens — clear the input and re-disable the button
+    document.getElementById('wipe-confirm-input').value = '';
+    document.getElementById('wipe-confirm-btn').disabled = true;
+    modal.classList.remove('hidden');
+    setTimeout(function () { document.getElementById('wipe-confirm-input').focus(); }, 100);
+}
+
+function closeWipeModal() {
+    var modal = document.getElementById('wipe-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Enable the confirm button only when the user has typed exactly 'WIPE'
+function checkWipeConfirm() {
+    var val = document.getElementById('wipe-confirm-input').value;
+    document.getElementById('wipe-confirm-btn').disabled = (val !== 'WIPE');
+}
+
+// POST to the wipe route — server double-checks DEV_TOOLS_ENABLED before touching any data
+function confirmWipe() {
+    var btn = document.getElementById('wipe-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Wiping…';
+
+    fetch('/admin/api/dev/wipe-projects', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            closeWipeModal();
+            if (data.success) {
+                showToast('All projects wiped. FOC counter reset to FOC-001.', 'success');
+            } else {
+                showToast(data.error || 'Wipe failed.', 'error');
+            }
+            // Reset button text for next time
+            btn.textContent = 'Wipe Everything';
+        })
+        .catch(function () {
+            showToast('Request failed. Check the server logs.', 'error');
+            closeWipeModal();
+            btn.textContent = 'Wipe Everything';
+        });
+}
+
 // ── Scroll Position: save before any form submit, restore on load ────────────
 (function () {
     var SCROLL_KEY = 'helix_scroll_' + window.location.pathname;

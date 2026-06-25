@@ -1844,6 +1844,7 @@ textarea {
     background: #e0d9d0;
     border-radius: 99px;
     overflow: hidden;
+    align-items: center;
 }
 
 .completion-bar-fill {

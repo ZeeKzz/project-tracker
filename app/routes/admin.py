@@ -627,3 +627,57 @@ def quick_add_design_direction():
     db.session.add(d)
     db.session.commit()
     return jsonify({'id': d.id, 'name': d.name})
+
+
+# ── Dev Tools ────────────────────────────────────────────────────────────────
+# These routes are gated by DEV_TOOLS_ENABLED in config.py.
+# That flag must NEVER be set on the production server.
+# Double-gated: even if someone hits the URL directly on prod, the config check
+# returns 403 before any data is touched.
+
+@admin_bp.route('/admin/api/dev/wipe-projects', methods=['POST'])
+@login_required
+@admin_required
+def dev_wipe_projects():
+    """
+    DEV ONLY — wipes every project and all related data, then resets the
+    FOC job number counter (which is computed from existing rows, so wiping
+    projects automatically brings it back to FOC-001).
+
+    WHY TRUNCATE CASCADE instead of Project.query.delete():
+      .query.delete(synchronize_session=False) issues a raw SQL
+      DELETE FROM projects, which bypasses SQLAlchemy's ORM cascade logic.
+      PostgreSQL then enforces FK constraints on every child table
+      (project_designers, deliverables, project_customers, notifications, etc.)
+      and raises a ForeignKeyViolation error.
+
+      TRUNCATE projects CASCADE tells Postgres to truncate the projects table
+      AND every table that has a FK pointing at it — all in one atomic
+      operation, with no explicit ordering needed.
+    """
+    from flask import current_app
+    from sqlalchemy import text
+    from app import db
+
+    # Guard: refuse entirely if the dev tools flag is off — this is the
+    # server-side safety net independent of whether the UI is shown.
+    if not current_app.config.get('DEV_TOOLS_ENABLED'):
+        return jsonify({'error': 'Dev tools are not enabled on this server'}), 403
+
+    # TRUNCATE projects CASCADE:
+    #   - Wipes the projects table.
+    #   - Automatically cascades to all tables with a FK referencing projects:
+    #     project_designers, project_customers, project_regions, deliverables,
+    #     deliverable_assignments, brief_flags, brief_flag_messages,
+    #     project_files, project_submissions, project_revisions,
+    #     project_posm_channels, project_posm_customers, and notifications
+    #     (where project_id is not null).
+    #   - RESTART IDENTITY resets any auto-increment sequences on those tables
+    #     back to 1 — keeps IDs tidy for a fresh dev environment.
+    db.session.execute(text('TRUNCATE TABLE projects RESTART IDENTITY CASCADE'))
+    db.session.commit()
+
+    # The FOC counter is computed from existing job_number values
+    # (see generate_job_number in projects.py), so it resets to FOC-001
+    # automatically now that the projects table is empty.
+    return jsonify({'success': True, 'message': 'All projects wiped. FOC counter reset.'})
