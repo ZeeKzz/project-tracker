@@ -634,7 +634,7 @@
     // Calls the server to get the next available FOC-NNN job number and fills the field.
     // Server computes it from the DB so there are no gaps or collisions.
     function generateFocJobNumber() {
-        var btn = dcoument.getElementById('generate-foc-btn');
+        var btn = document.getElementById('generate-foc-btn');
         btn.disabled = true; // preven double-clicks while request is in flight
         btn.textContent = 'Generating...';
 
