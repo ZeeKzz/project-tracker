@@ -19,7 +19,7 @@ projects = Blueprint('projects', __name__)
 
 @projects.route('/projects/create', methods=['GET'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def create():
     cs_users = User.query.filter(
         User.role.in_(['cs', 'admin'])
@@ -70,7 +70,7 @@ def create():
 
 @projects.route('/projects/<int:project_id>/edit', methods=['GET'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def edit_project(project_id):
     project = Project.query.get_or_404(project_id)
 
@@ -148,7 +148,7 @@ def edit_project(project_id):
 
 @projects.route('/projects/<int:project_id>/update', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def update_project(project_id):
     project = Project.query.get_or_404(project_id)
 
@@ -306,7 +306,7 @@ def update_project(project_id):
 
 @projects.route('/projects/autosave', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def autosave():
     try:
         data = request.get_json()
@@ -818,7 +818,7 @@ def toggle_hold(project_id):
 
 @projects.route('/projects/<int:project_id>/begin-posm', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def begin_posm(project_id):
     """CS clicks 'Begin POSM' after concept/KV work is done.
     - Snapshots the current revision_count as concept_kv_revision_count.
@@ -982,7 +982,7 @@ def set_deliverable_status(project_id, d_id):
 
 @projects.route('/projects/<int:project_id>/deliverable/<int:d_id>/flag-revision', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def flag_deliverable_revision(project_id, d_id):
     from app.models import Deliverable
     project = Project.query.get_or_404(project_id)
@@ -1325,7 +1325,7 @@ def start_project(project_id):
 
 @projects.route('/projects/<int:project_id>/secondary-cs', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def add_secondary_cs(project_id):
     """Add a CS user as secondary CS on a project. Only the CS lead or admin can do this."""
     from app.models import ProjectSecondaryCS
@@ -1363,7 +1363,7 @@ def add_secondary_cs(project_id):
 
 @projects.route('/projects/<int:project_id>/secondary-cs/<int:user_id>/remove', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def remove_secondary_cs(project_id, user_id):
     """Remove a secondary CS from a project."""
     from app.models import ProjectSecondaryCS, ProjectSecondaryCsRegion
@@ -1492,7 +1492,7 @@ def delete_project(project_id):
 
 @projects.route('/projects/drafts')
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def drafts():
     user_drafts = Project.query.filter_by(
         created_by_id=current_user.id,
@@ -1507,7 +1507,7 @@ def drafts():
 
 @projects.route('/projects/drafts/<int:draft_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def delete_draft(draft_id):
     draft = Project.query.get_or_404(draft_id)
 
@@ -1543,7 +1543,7 @@ def get_deliverable_types(customer_id):
 
 @projects.route('/clients/add', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def add_client():
     data = request.get_json()
     if not data or not data.get('name'):
@@ -1572,7 +1572,7 @@ def add_client():
     
 @projects.route('/projects/deliverable-types/add', methods=['POST'])
 @login_required
-@role_required('cs', 'admin')
+@role_required('cs', 'admin', 'management')
 def add_deliverable_type():
     try:
         data = request.get_json()
@@ -1634,7 +1634,7 @@ def add_deliverable_type():
 
 @projects.route('/projects/submit', methods=['POST'])
 @login_required
-@role_required('cs', 'admin')
+@role_required('cs', 'admin', 'management')
 def submit_project():
     try:
         data = request.get_json()
@@ -1882,7 +1882,7 @@ def add_standard_deliverable(project_id):
 
 @projects.route('/projects/<int:project_id>/standard-deliverables/<int:d_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def delete_standard_deliverable(project_id, d_id):
     deliverable = Deliverable.query.filter_by(id=d_id, project_id=project_id).first_or_404()
     name = deliverable.name
@@ -1935,7 +1935,7 @@ import uuid
 
 @projects.route('/projects/<int:project_id>/upload-file', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def upload_project_file(project_id):
     """Handle reference file uploads for a project. CS and admin only."""
     from app.models import ProjectFile
@@ -2010,7 +2010,7 @@ def download_project_file(file_id):
 
 @projects.route('/projects/files/<int:file_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def delete_project_file(file_id):
     """Delete a reference file. CS and admin only."""
     from app.models import ProjectFile
@@ -2286,7 +2286,7 @@ def submit_for_internal_review(project_id):
 
 @projects.route('/projects/<int:project_id>/submission/flag', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def flag_submission(project_id):
     """CS flags the active deck with a revision note.
     - Sets project status → internal_revision.
@@ -2376,7 +2376,7 @@ def flag_submission(project_id):
 
 @projects.route('/projects/<int:project_id>/submission/submit-to-client', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def submit_to_client(project_id):
     """CS approves the deck and marks it as submitted to the client.
     - Guards: must have an active, unflagged submission in internal_review state.
@@ -2551,7 +2551,7 @@ def download_submission(submission_id):
 
 @projects.route('/projects/<int:project_id>/submission/send-revision', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def send_revision(project_id):
     """CS sends a revision request back to the designer after the deck has been
     submitted to the client.
@@ -2817,7 +2817,7 @@ def start_revision(project_id):
 
 @projects.route('/projects/<int:project_id>/submission/approve', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def approve_submission(project_id):
     """CS approves the final client submission, locking the project.
 
