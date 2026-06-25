@@ -288,8 +288,8 @@
                 {% if flag.deliverable %}
                 <span class="flag-subject">{{ flag.deliverable.name }}</span>
                 {% endif %}
-                <span class="flag-meta">Raised by {{ flag.created_by.name }} · {{ flag.created_at.strftime('%d %b %Y,
-                    %H:%M') }} UTC</span>
+                <span class="flag-meta">Raised by {{ flag.created_by.name }} · {{ flag.created_at | dubai_time }}
+                    GST</span></span>
                 {% if effective_user.id == flag.created_by_id or effective_user.role == 'admin' %}
                 <button type="button" class="btn-flag-resolve" onclick="resolveFlag({{ flag.id }}, {{ project.id }})">✓
                     Mark Resolved</button>
@@ -300,7 +300,7 @@
                 <div class="flag-message {% if msg.author_id == effective_user.id %}flag-message--mine{% endif %}">
                     <div class="flag-message-header">
                         <span class="flag-message-author">{{ msg.author.name }}</span>
-                        <span class="flag-message-time">{{ msg.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
+                        <span class="flag-message-time">{{ msg.created_at | dubai_time }} GST</span>
                     </div>
                     <p class="flag-message-text">{{ msg.message }}</p>
                 </div>
@@ -379,21 +379,25 @@
         <div class="brief-concept-block">
             <h3 class="brief-section-heading">Concept &amp; KV
                 {% if project.concept_status %}
-                <span class="status-badge s-{{ project.concept_status }}">{{ project.concept_status | replace('_', ' ') | title }}</span>
+                <span class="status-badge s-{{ project.concept_status }}">{{ project.concept_status | replace('_', ' ')
+                    | title }}</span>
                 {% endif %}
                 {# Show KV status separately only if it differs from concept (legacy projects) #}
                 {% if project.kv_status and project.kv_status != project.concept_status %}
-                <span class="status-badge s-{{ project.kv_status }}">KV: {{ project.kv_status | replace('_', ' ') | title }}</span>
+                <span class="status-badge s-{{ project.kv_status }}">KV: {{ project.kv_status | replace('_', ' ') |
+                    title }}</span>
                 {% endif %}
             </h3>
             <div class="detail-fields">
                 <div class="detail-field">
                     <span class="detail-label">Deadline</span>
-                    <span class="detail-value mono">{{ project.concept_deadline.strftime('%d %b %Y') if project.concept_deadline else '—' }}</span>
+                    <span class="detail-value mono">{{ project.concept_deadline.strftime('%d %b %Y') if
+                        project.concept_deadline else '—' }}</span>
                 </div>
                 <div class="detail-field">
                     <span class="detail-label">Options Required</span>
-                    <span class="detail-value">{{ project.concept_options_required if project.concept_options_required else '—' }}</span>
+                    <span class="detail-value">{{ project.concept_options_required if project.concept_options_required
+                        else '—' }}</span>
                 </div>
                 <div class="detail-field">
                     <span class="detail-label">Concept Designer</span>
@@ -410,7 +414,8 @@
                     </span>
                 </div>
             </div>
-            {% if effective_user.role == 'admin' or (effective_user.role == 'team_lead' and effective_user.team == '2D') %}
+            {% if effective_user.role == 'admin' or (effective_user.role == 'team_lead' and effective_user.team == '2D')
+            %}
             <form method="POST" action="{{ url_for('projects.assign_concept_kv', project_id=project.id) }}"
                 class="inline-form" style="margin-top: 1rem;">
                 <div class="detail-fields">
@@ -420,7 +425,8 @@
                             <select name="concept_designer_id" class="form-select">
                                 <option value="">— Select —</option>
                                 {% for designer in designers_by_team['2D'] %}
-                                <option value="{{ designer.id }}" {{ 'selected' if project.concept_designer_id==designer.id }}>{{ designer.name }}</option>
+                                <option value="{{ designer.id }}" {{ 'selected' if
+                                    project.concept_designer_id==designer.id }}>{{ designer.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -431,7 +437,8 @@
                             <select name="kv_designer_id" class="form-select">
                                 <option value="">— Select —</option>
                                 {% for designer in designers_by_team['2D'] %}
-                                <option value="{{ designer.id }}" {{ 'selected' if project.kv_designer_id==designer.id }}>{{ designer.name }}</option>
+                                <option value="{{ designer.id }}" {{ 'selected' if project.kv_designer_id==designer.id
+                                    }}>{{ designer.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -464,7 +471,8 @@
             {% if effective_user.role in ['designer', 'team_lead'] %}
             <div class="flag-section-btn-row">
                 <button class="btn-brief-flag" data-flag-type="concept" data-project-id="{{ project.id }}"
-                    data-context="Concept &amp; KV" onclick="openFlagModalFromBtn(this)">⚑ Flag Concept &amp; KV Issue</button>
+                    data-context="Concept &amp; KV" onclick="openFlagModalFromBtn(this)">⚑ Flag Concept &amp; KV
+                    Issue</button>
             </div>
             {% endif %}
         </div>
@@ -584,7 +592,8 @@
                             onclick="openFlagModalFromBtn(this)">⚑ Flag Issue</button>
                         {% endif %}
                         {% if project.project_status == 'approved' and effective_user.role != 'admin' %}
-                        <span class="status-badge s-{{ deliverable.status }}">{{ deliverable.status | replace('_', ' ') | title }}</span>
+                        <span class="status-badge s-{{ deliverable.status }}">{{ deliverable.status | replace('_', ' ')
+                            | title }}</span>
                         {% else %}
                         <select class="status-select"
                             data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=deliverable.id) }}"
@@ -778,7 +787,8 @@
                 <div class="reference-file-actions">
                     <a href="{{ url_for('projects.download_project_file', file_id=f.id) }}"
                         class="btn-secondary btn-sm">Download</a>
-                    {% if effective_user.role == 'admin' or (effective_user.role == 'cs' and project.project_status != 'approved') %}
+                    {% if effective_user.role == 'admin' or (effective_user.role == 'cs' and project.project_status !=
+                    'approved') %}
                     <button class="btn-danger btn-sm reference-file-delete-btn"
                         data-file-id="{{ f.id }}">Remove</button>
                     {% endif %}
@@ -930,15 +940,15 @@
                 </div>
             </div>
             <div class="submission-status submission-status--sent" style="margin-top:0.5rem;">
-                ✓ Submitted to client on {{ ch_sub.submitted_to_client_at.strftime('%d %b %Y, %H:%M') }} UTC
+                ✓ Submitted to client on {{ ch_sub.submitted_to_client_at | dubai_time }} GST
                 by {{ ch_sub.submitted_by.name if ch_sub.submitted_by else '—' }}
             </div>
             {% if effective_user.role in ['admin', 'cs'] %}
             <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
                 <button type="button" class="btn-danger btn-sm ch-send-revision-btn" data-channel-id="{{ ch.id }}">↩
                     Send for Revision</button>
-                <button type="button" class="btn-primary btn-sm ch-approve-btn"
-                    data-channel-id="{{ ch.id }}" data-project-id="{{ project.id }}">✓ Approve</button>
+                <button type="button" class="btn-primary btn-sm ch-approve-btn" data-channel-id="{{ ch.id }}"
+                    data-project-id="{{ project.id }}">✓ Approve</button>
             </div>
             <div class="ch-send-revision-form hidden" id="ch-rev-form-{{ ch.id }}" style="margin-top:1rem;">
                 <textarea class="form-input ch-revision-message" id="ch-rev-msg-{{ ch.id }}"
@@ -959,8 +969,7 @@
             <div class="revision-card">
                 <p class="detail-label" style="margin-bottom:0.4rem;">Revision Request from CS</p>
                 <div class="revision-message">{{ ch_rev.message }}</div>
-                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at.strftime('%d %b %Y,
-                    %H:%M') }} UTC</p>
+                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at | dubai_time }} GST</p>
             </div>
             {% endif %}
             {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
@@ -979,8 +988,7 @@
             <div class="revision-card">
                 <p class="detail-label" style="margin-bottom:0.4rem;">Active Revision</p>
                 <div class="revision-message">{{ ch_rev.message }}</div>
-                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at.strftime('%d %b %Y,
-                    %H:%M') }} UTC</p>
+                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at | dubai_time }} GST</p>
             </div>
             {% endif %}
             {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
@@ -1166,7 +1174,8 @@
                     class="btn-secondary btn-sm">Download</a>
             </div>
         </div>
-        <div class="submission-status" style="margin-top: 0.5rem;">🔍 In Internal Review. Awaiting Client Servicing approval</div>
+        <div class="submission-status" style="margin-top: 0.5rem;">🔍 In Internal Review. Awaiting Client Servicing
+            approval</div>
         {% if active_submission.included_deliverables or active_submission.includes_concept or
         active_submission.includes_kv %}
         <div style="margin-top: 0.75rem;">
@@ -1239,7 +1248,7 @@
             </div>
         </div>
         <div class="submission-status submission-status--sent" style="margin-top: 0.5rem;">
-            ✓ Submitted to client on {{ active_submission.submitted_to_client_at.strftime('%d %b %Y, %H:%M') }} UTC
+            ✓ Submitted to client on {{ active_submission.submitted_to_client_at | dubai_time }} GST
             by {{ active_submission.submitted_by.name if active_submission.submitted_by else '—' }}
             {% if project.revision_count > 0 %} — Revision #{{ project.revision_count }}{% endif %}
         </div>
@@ -1247,8 +1256,8 @@
         {% if effective_user.role in ['admin', 'cs'] %}
         <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
             <button type="button" class="btn-danger btn-sm" id="sendRevisionBtn">↩ Send for Revision</button>
-            <button type="button" class="btn-primary btn-sm" id="approveBtn"
-                data-project-id="{{ project.id }}">✓ Approve Project</button>
+            <button type="button" class="btn-primary btn-sm" id="approveBtn" data-project-id="{{ project.id }}">✓
+                Approve Project</button>
         </div>
         {# Revision form — hidden until CS clicks the button above #}
         <div id="sendRevisionForm" class="hidden" style="margin-top: 1rem;">
@@ -1317,8 +1326,8 @@
                 {% endfor %}
                 {% endif %}
             </div>
-            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{
-                latest_revision.sent_at.strftime('%d %b %Y, %H:%M') }} UTC</p>
+            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{ latest_revision.sent_at |
+                dubai_time }} GST</p>
         </div>
         {% endif %}
         {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
@@ -1374,8 +1383,8 @@
                 {% endfor %}
                 {% endif %}
             </div>
-            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{
-                latest_revision.sent_at.strftime('%d %b %Y, %H:%M') }} UTC</p>
+            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{ latest_revision.sent_at |
+                dubai_time }} GST</p>
         </div>
         {% endif %}
         {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
@@ -1394,15 +1403,18 @@
         {# ── State 8: Approved — read-only card with download; no further action possible ── #}
         {% elif project.project_status == 'approved' %}
         <div class="submission-status submission-status--approved" style="margin-top:0.5rem;">
-            ✓ Approved on {{ project.approved_at.strftime('%d %b %Y, %H:%M') }} UTC
+            ✓ Approved on {{ project.approved_at | dubai_time }} GST
             by {{ project.approved_by.name if project.approved_by else '—' }}
         </div>
         {% if active_submission %}
         <div class="reference-file-item" style="margin-top:0.75rem;">
-            <span class="reference-file-icon">{% if active_submission.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+            <span class="reference-file-icon">{% if active_submission.file_type == 'pdf' %}📄{% else %}📊{% endif
+                %}</span>
             <span class="reference-file-name">{{ active_submission.original_filename }}</span>
-            <span class="reference-file-meta">Submitted by {{ active_submission.submitted_by.name if active_submission.submitted_by else '—' }}
-                on {{ active_submission.submitted_to_client_at.strftime('%d %b %Y') if active_submission.submitted_to_client_at else '' }}</span>
+            <span class="reference-file-meta">Submitted by {{ active_submission.submitted_by.name if
+                active_submission.submitted_by else '—' }}
+                on {{ active_submission.submitted_to_client_at.strftime('%d %b %Y') if
+                active_submission.submitted_to_client_at else '' }}</span>
             <div class="reference-file-actions">
                 <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
                     class="btn-secondary btn-sm">Download</a>
@@ -1593,8 +1605,7 @@
                         'Deliverable'}.get(flag.flag_type, flag.flag_type) }}
                     </span>
                     {% if flag.deliverable %}<span class="flag-subject">{{ flag.deliverable.name }}</span>{% endif %}
-                    <span class="flag-meta">{{ flag.created_by.name }} · {{ flag.created_at.strftime('%d %b %Y')
-                        }}</span>
+                    <span class="flag-message-time">{{ msg.created_at | dubai_time }} GST</span>
                     {% if flag.is_resolved %}
                     <span class="flag-resolved-badge">✓ Resolved by {{ flag.resolved_by.name }} · {{
                         flag.resolved_at.strftime('%d %b %Y') }}</span>
@@ -1997,8 +2008,8 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         // ── Approval modal wiring ──
-        var modalEl    = document.getElementById('approvalModal');
-        var cancelBtn  = document.getElementById('approvalModalCancel');
+        var modalEl = document.getElementById('approvalModal');
+        var cancelBtn = document.getElementById('approvalModalCancel');
         var confirmBtn = document.getElementById('approvalModalConfirm');
 
         function closeApprovalModal() {
@@ -2006,7 +2017,7 @@
             _approveCallback = null;
         }
 
-        if (cancelBtn)  { cancelBtn.addEventListener('click',  closeApprovalModal); }
+        if (cancelBtn) { cancelBtn.addEventListener('click', closeApprovalModal); }
         if (confirmBtn) {
             confirmBtn.addEventListener('click', function () {
                 var fn = _approveCallback;   // save before closeApprovalModal nullifies it
@@ -2033,16 +2044,16 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' }
                         })
-                        .then(function (r) { return r.json(); })
-                        .then(function (data) {
-                            if (data.success) {
-                                showToast('Project approved', 'success');
-                                setTimeout(function () { location.reload(); }, 800);
-                            } else {
-                                showToast(data.error || 'Something went wrong', 'error');
-                            }
-                        })
-                        .catch(function () { showToast('Something went wrong', 'error'); });
+                            .then(function (r) { return r.json(); })
+                            .then(function (data) {
+                                if (data.success) {
+                                    showToast('Project approved', 'success');
+                                    setTimeout(function () { location.reload(); }, 800);
+                                } else {
+                                    showToast(data.error || 'Something went wrong', 'error');
+                                }
+                            })
+                            .catch(function () { showToast('Something went wrong', 'error'); });
                     }
                 );
             });
@@ -2065,16 +2076,16 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ posm_channel_id: parseInt(channelId) })
                     })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            showToast('Channel approved', 'success');
-                            setTimeout(function () { location.reload(); }, 800);
-                        } else {
-                            showToast(data.error || 'Something went wrong', 'error');
-                        }
-                    })
-                    .catch(function () { showToast('Something went wrong', 'error'); });
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                showToast('Channel approved', 'success');
+                                setTimeout(function () { location.reload(); }, 800);
+                            } else {
+                                showToast(data.error || 'Something went wrong', 'error');
+                            }
+                        })
+                        .catch(function () { showToast('Something went wrong', 'error'); });
                 }
             );
         });

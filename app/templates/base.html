@@ -127,7 +127,7 @@
                 data-id="{{ notification.id }}">
                 <div class="notification-content">
                     <p class="notification-message">{{ notification.message }}</p>
-                    <span class="notification-time">{{ notification.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                    <span class="notification-time">{{ notification.created_at | dubai_time }}</span>
                 </div>
                 <button type="button" class="notification-archive-btn" data-id="{{ notification.id }}"
                     title="Archive">×</button>
@@ -150,7 +150,7 @@
                 <input type="checkbox" class="notif-checkbox hidden" value="{{ notification.id }}">
                 <div class="notification-content">
                     <p class="notification-message">{{ notification.message }}</p>
-                    <span class="notification-time">{{ notification.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                    <span class="notification-time">{{ notification.created_at | dubai_time }}</span>
                 </div>
                 <!-- Restore button — moves notification back to inbox -->
                 <button type="button" class="notification-restore-btn" data-id="{{ notification.id }}"

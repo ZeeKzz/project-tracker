@@ -598,7 +598,7 @@ function buildApprovedView(containerId, projects) {
     // Group into { year: { monthName: { order: N, rows: [...] } } }
     var grouped = {};
     projects.forEach(function (p) {
-        var d = new Date(p.approved_at);
+        var dateStr = p.approved_at_display;
         var yr = d.getFullYear();
         var mo = d.toLocaleString('en-GB', { month: 'long' });
         var moOrd = d.getMonth(); // 0-based, used for sorting
@@ -664,10 +664,7 @@ function buildApprovedView(containerId, projects) {
             // Table body — one row per project
             var tbody = document.createElement('tbody');
             grouped[yr][mo].rows.forEach(function (p) {
-                var d = new Date(p.approved_at);
-                var dateStr = d.getDate() + ' ' +
-                    d.toLocaleString('en-GB', { month: 'short' }) + ' ' +
-                    d.getFullYear();
+                var dateStr = p.approved_at_display;
                 var briefLabel = (p.brief_type === 'ccm') ? 'C&amp;CM' : 'Standard';
 
                 var tr = document.createElement('tr');
@@ -698,7 +695,7 @@ function buildApprovedView(containerId, projects) {
 }
 
 // Shared approved-projects toggle elements — present on all three dashboards
-var btnApprovedProjects  = document.getElementById('btn-approved-projects');
+var btnApprovedProjects = document.getElementById('btn-approved-projects');
 var approvedProjectsView = document.getElementById('approved-projects-view');
 
 // Team lead + designer toggle — team view / personal view / approved projects
@@ -709,13 +706,13 @@ const personalView = document.getElementById('personal-view');
 
 if (btnTeamView && btnPersonalView && teamView && personalView) {
     var dtAllViews = [teamView, personalView];
-    var dtAllBtns  = [btnTeamView, btnPersonalView];
+    var dtAllBtns = [btnTeamView, btnPersonalView];
     if (approvedProjectsView) dtAllViews.push(approvedProjectsView);
-    if (btnApprovedProjects)  dtAllBtns.push(btnApprovedProjects);
+    if (btnApprovedProjects) dtAllBtns.push(btnApprovedProjects);
 
     function switchDTView(activeBtn, activeView) {
         dtAllViews.forEach(function (v) { v.classList.add('hidden'); });
-        dtAllBtns.forEach(function (b)  { b.classList.remove('active'); });
+        dtAllBtns.forEach(function (b) { b.classList.remove('active'); });
         activeView.classList.remove('hidden');
         activeBtn.classList.add('active');
     }
@@ -763,13 +760,13 @@ const allProjectsView = document.getElementById('all-projects-view');
 
 if (btnMyProjects && btnAllProjects && myProjectsView && allProjectsView) {
     var csAllViews = [myProjectsView, allProjectsView];
-    var csAllBtns  = [btnMyProjects, btnAllProjects];
+    var csAllBtns = [btnMyProjects, btnAllProjects];
     if (approvedProjectsView) csAllViews.push(approvedProjectsView);
-    if (btnApprovedProjects)  csAllBtns.push(btnApprovedProjects);
+    if (btnApprovedProjects) csAllBtns.push(btnApprovedProjects);
 
     function switchCSView(activeBtn, activeView) {
         csAllViews.forEach(function (v) { v.classList.add('hidden'); });
-        csAllBtns.forEach(function (b)  { b.classList.remove('active'); });
+        csAllBtns.forEach(function (b) { b.classList.remove('active'); });
         activeView.classList.remove('hidden');
         activeBtn.classList.add('active');
     }
@@ -2490,11 +2487,11 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
             pickerList.appendChild(makeCampaignRow('__concept__', 'Concept & KV'));
         } else {
             if (window.projectHasConcept) pickerList.appendChild(makeCampaignRow('__concept__', 'Concept'));
-            if (window.projectHasKV)      pickerList.appendChild(makeCampaignRow('__kv__', 'Initial KV'));
+            if (window.projectHasKV) pickerList.appendChild(makeCampaignRow('__kv__', 'Initial KV'));
         }
 
         // Wire global Select / Deselect All to the campaign rows
-        if (selAll)   selAll.addEventListener('click',   function () { pickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
+        if (selAll) selAll.addEventListener('click', function () { pickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
         if (deselAll) deselAll.addEventListener('click', function () { pickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = false; }); });
     } else {
         // Standard brief: flat deliverable list (no customer grouping)
@@ -2502,917 +2499,891 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
     }
 })();
 
-    // ── Step 2 → 3: Submit for Internal Review ───────────────────────────────────
-    // Designer confirms the deliverable selection and sends the deck to CS.
-    // We collect the checked deliverable IDs and POST them along with the
-    // submission ID to /submission/submit-for-review.
-    var submissionSubmitForReviewBtn = document.getElementById('submissionSubmitForReviewBtn');
-    if (submissionSubmitForReviewBtn) {
-        submissionSubmitForReviewBtn.addEventListener('click', function () {
-            var submissionId = parseInt(this.dataset.submissionId);
-            var pickerList = document.getElementById('pickerList');
+// ── Step 2 → 3: Submit for Internal Review ───────────────────────────────────
+// Designer confirms the deliverable selection and sends the deck to CS.
+// We collect the checked deliverable IDs and POST them along with the
+// submission ID to /submission/submit-for-review.
+var submissionSubmitForReviewBtn = document.getElementById('submissionSubmitForReviewBtn');
+if (submissionSubmitForReviewBtn) {
+    submissionSubmitForReviewBtn.addEventListener('click', function () {
+        var submissionId = parseInt(this.dataset.submissionId);
+        var pickerList = document.getElementById('pickerList');
 
-            // Collect checked deliverable IDs and concept/KV flags
+        // Collect checked deliverable IDs and concept/KV flags
+        var checked = [];
+        var includesConcept = false;
+        var includesKV = false;
+        if (pickerList) {
+            pickerList.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
+                if (cb.value === '__concept__') includesConcept = true;
+                else if (cb.value === '__kv__') includesKV = true;
+                else checked.push(parseInt(cb.value));
+            });
+        }
+        // When merged Concept & KV row is checked (value=__concept__) and project has KV, include KV too
+        if (includesConcept && window.projectHasKV) includesKV = true;
+
+        if (checked.length === 0 && !includesConcept && !includesKV) {
+            showToast('Select at least one item to include.', 'error');
+            return;
+        }
+
+        submissionSubmitForReviewBtn.disabled = true;
+        submissionSubmitForReviewBtn.textContent = 'Submitting...';
+
+        // Collect Gulf POSM region + customer (or flat customer for non-Gulf)
+        var posmCountry = null;
+        var posmCustomerId = null;
+        if (window.posmActive) {
+            var posmRegionSel = document.getElementById('posmRegionSelect');
+            var posmCustomerSel = document.getElementById('posmCustomerSelect');
+            posmCountry = posmRegionSel ? (posmRegionSel.value || null) : null;
+            posmCustomerId = posmCustomerSel ? (parseInt(posmCustomerSel.value) || null) : null;
+            if (!posmCountry && !posmCustomerId) {
+                showToast('Select a region before submitting POSM.', 'error');
+                return;
+            }
+        }
+
+        fetch('/projects/' + detailProjectId + '/submission/submit-for-review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                submission_id: submissionId,
+                deliverable_ids: checked,
+                includes_concept: includesConcept,
+                includes_kv: includesKV,
+                posm_country: posmCountry,
+                posm_customer_id: posmCustomerId
+            })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    showToast(data.error || 'Could not submit for review.', 'error');
+                    submissionSubmitForReviewBtn.disabled = false;
+                    submissionSubmitForReviewBtn.textContent = 'Submit for Internal Review';
+                    return;
+                }
+                showToast('Submitted for internal review. CS has been notified.', 'success');
+                // Reload so the template renders State 3 (internal review) with CS buttons
+                window.location.reload();
+            })
+            .catch(function () {
+                showToast('Something went wrong.', 'error');
+                submissionSubmitForReviewBtn.disabled = false;
+                submissionSubmitForReviewBtn.textContent = 'Submit for Internal Review';
+            });
+    });
+}
+
+// ── Step 3a: CS flags the deck ───────────────────────────────────────────────
+// CS clicks "Flag Issue" → flag form slides in → they write a reason →
+// "Send Flag" POSTs to /submission/flag → page reloads into State 4.
+var submissionFlagBtn = document.getElementById('submissionFlagBtn');
+var submissionFlagForm = document.getElementById('submissionFlagForm');
+var submissionFlagCancel = document.getElementById('submissionFlagCancel');
+
+if (submissionFlagBtn) {
+    submissionFlagBtn.addEventListener('click', function () {
+        submissionFlagForm.classList.remove('hidden');
+        submissionFlagBtn.classList.add('hidden');
+    });
+}
+
+if (submissionFlagCancel) {
+    submissionFlagCancel.addEventListener('click', function () {
+        submissionFlagForm.classList.add('hidden');
+        submissionFlagBtn.classList.remove('hidden');
+        document.getElementById('submissionFlagMessage').value = '';
+    });
+}
+
+var submissionFlagConfirm = document.getElementById('submissionFlagConfirm');
+if (submissionFlagConfirm) {
+    submissionFlagConfirm.addEventListener('click', function () {
+        var message = document.getElementById('submissionFlagMessage').value.trim();
+        if (!message) {
+            showToast('Please describe the issue before flagging.', 'error');
+            return;
+        }
+
+        submissionFlagConfirm.disabled = true;
+        submissionFlagConfirm.textContent = 'Sending...';
+
+        fetch('/projects/' + detailProjectId + '/submission/flag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    showToast(data.error, 'error');
+                    submissionFlagConfirm.disabled = false;
+                    submissionFlagConfirm.textContent = 'Send Flag';
+                    return;
+                }
+                // Reload so the flagged banner shows and designer sees "Reupload Deck"
+                window.location.reload();
+            })
+            .catch(function () {
+                showToast('Something went wrong.', 'error');
+                submissionFlagConfirm.disabled = false;
+                submissionFlagConfirm.textContent = 'Send Flag';
+            });
+    });
+}
+
+// ── Step 3b: CS submits to client ────────────────────────────────────────────
+// CS clicks "Submit to Client" → all deliverables → submitted_to_client,
+// then optionally opens a mailto to draft the email.
+var submissionSubmitBtn = document.getElementById('submissionSubmitBtn');
+if (submissionSubmitBtn) {
+    submissionSubmitBtn.addEventListener('click', function () {
+        var projectName = this.dataset.projectName;
+
+        submissionSubmitBtn.disabled = true;
+        submissionSubmitBtn.textContent = 'Submitting...';
+
+        fetch('/projects/' + detailProjectId + '/submission/submit-to-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    showToast(data.error, 'error');
+                    submissionSubmitBtn.disabled = false;
+                    submissionSubmitBtn.textContent = 'Submit to Client';
+                    return;
+                }
+
+                showToast('Project submitted to client.', 'success');
+
+                // Offer to open Outlook with a pre-filled subject line via custom modal.
+                var emailModal = document.getElementById('email-draft-modal');
+                var emailYes = document.getElementById('emailDraftYes');
+                var emailNo = document.getElementById('emailDraftNo');
+                if (emailModal && emailYes && emailNo) {
+                    emailModal.classList.remove('hidden');
+                    var subject = encodeURIComponent(data.project_name);
+                    var body = encodeURIComponent('Please find attached the latest client deck for ' + data.project_name + '.\n\nBest regards,');
+                    var mailto = 'mailto:' + (data.client_email || '') + '?subject=' + subject + '&body=' + body;
+                    emailYes.onclick = function () {
+                        emailModal.classList.add('hidden');
+                        window.open(mailto);
+                        window.location.reload();
+                    };
+                    emailNo.onclick = function () {
+                        emailModal.classList.add('hidden');
+                        window.location.reload();
+                    };
+                } else {
+                    window.location.reload();
+                }
+            })
+            .catch(function () {
+                showToast('Something went wrong.', 'error');
+                submissionSubmitBtn.disabled = false;
+                submissionSubmitBtn.textContent = 'Submit to Client';
+            });
+    });
+}
+
+// ── Step 5: CS sends revision request ────────────────────────────────────────
+// Shown in State 5 (submitted_to_client). CS clicks "Send for Revision" →
+// revision form slides in with a free-text field and a deliverable picker.
+// On confirm: POSTs to /send-revision → project → revision_in_queue.
+(function () {
+    var sendRevisionBtn = document.getElementById('sendRevisionBtn');
+    var sendRevisionForm = document.getElementById('sendRevisionForm');
+    var sendRevisionCancel = document.getElementById('sendRevisionCancel');
+    var sendRevisionConfirm = document.getElementById('sendRevisionConfirm');
+    var revisionPickerList = document.getElementById('revisionPickerList');
+
+    if (!sendRevisionBtn) return; // not in submitted_to_client state
+
+    var pickerBuilt = false; // lazy-build the picker only once
+
+    sendRevisionBtn.addEventListener('click', function () {
+        sendRevisionForm.classList.remove('hidden');
+        sendRevisionBtn.classList.add('hidden');
+
+        // Build the revision picker the first time the form is opened.
+        // C&CM concept/KV phase: only Concept and/or KV can be revised (deliverables
+        // are not yet in play — POSM hasn't started). Standard briefs and POSM phase
+        // show the full deliverable picker via buildPickerInto.
+        if (!pickerBuilt && revisionPickerList) {
+            if (!window.posmActive && (window.projectHasConcept || window.projectHasKV)) {
+                function makeRevCampaignRow(value, label) {
+                    var lbl = document.createElement('label');
+                    lbl.className = 'picker-row picker-row--campaign';
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.value = value;
+                    cb.checked = true;
+                    var span = document.createElement('span');
+                    span.textContent = label;
+                    lbl.appendChild(cb);
+                    lbl.appendChild(span);
+                    return lbl;
+                }
+                if (window.projectHasConcept && window.projectHasKV) {
+                    revisionPickerList.appendChild(makeRevCampaignRow('__concept__', 'Concept & KV'));
+                } else {
+                    if (window.projectHasConcept) revisionPickerList.appendChild(makeRevCampaignRow('__concept__', 'Concept'));
+                    if (window.projectHasKV) revisionPickerList.appendChild(makeRevCampaignRow('__kv__', 'Initial KV'));
+                }
+                var revSelAll = document.getElementById('revisionPickerSelectAll');
+                var revDeselAll = document.getElementById('revisionPickerDeselectAll');
+                if (revSelAll) revSelAll.addEventListener('click', function () { revisionPickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
+                if (revDeselAll) revDeselAll.addEventListener('click', function () { revisionPickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = false; }); });
+            } else if (window.projectDeliverables) {
+                buildPickerInto(revisionPickerList,
+                    document.getElementById('revisionPickerSelectAll'),
+                    document.getElementById('revisionPickerDeselectAll'));
+            }
+            pickerBuilt = true;
+        }
+    });
+
+    if (sendRevisionCancel) {
+        sendRevisionCancel.addEventListener('click', function () {
+            sendRevisionForm.classList.add('hidden');
+            sendRevisionBtn.classList.remove('hidden');
+            document.getElementById('revisionMessage').value = '';
+        });
+    }
+
+    if (sendRevisionConfirm) {
+        sendRevisionConfirm.addEventListener('click', function () {
+            var message = document.getElementById('revisionMessage').value.trim();
+            if (!message) {
+                showToast('Please describe what needs to be revised.', 'error');
+                return;
+            }
+
+            // Collect checked deliverable IDs and concept/KV flags from the revision picker
             var checked = [];
             var includesConcept = false;
             var includesKV = false;
-            if (pickerList) {
-                pickerList.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
+            if (revisionPickerList) {
+                revisionPickerList.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
                     if (cb.value === '__concept__') includesConcept = true;
                     else if (cb.value === '__kv__') includesKV = true;
                     else checked.push(parseInt(cb.value));
                 });
             }
-            // When merged Concept & KV row is checked (value=__concept__) and project has KV, include KV too
+            // When merged Concept & KV row is checked and project has KV, include KV too
             if (includesConcept && window.projectHasKV) includesKV = true;
-
             if (checked.length === 0 && !includesConcept && !includesKV) {
-                showToast('Select at least one item to include.', 'error');
+                showToast('Select at least one item to revise.', 'error');
                 return;
             }
 
-            submissionSubmitForReviewBtn.disabled = true;
-            submissionSubmitForReviewBtn.textContent = 'Submitting...';
+            sendRevisionConfirm.disabled = true;
+            sendRevisionConfirm.textContent = 'Sending...';
 
-            // Collect Gulf POSM region + customer (or flat customer for non-Gulf)
-            var posmCountry = null;
-            var posmCustomerId = null;
+            // Collect Gulf POSM region + customer for revision
+            var revPosmCountry = null;
+            var revPosmCustomerId = null;
             if (window.posmActive) {
-                var posmRegionSel = document.getElementById('posmRegionSelect');
-                var posmCustomerSel = document.getElementById('posmCustomerSelect');
-                posmCountry = posmRegionSel ? (posmRegionSel.value || null) : null;
-                posmCustomerId = posmCustomerSel ? (parseInt(posmCustomerSel.value) || null) : null;
-                if (!posmCountry && !posmCustomerId) {
-                    showToast('Select a region before submitting POSM.', 'error');
-                    return;
-                }
+                var revRegionSel = document.getElementById('revPosmRegionSelect');
+                var revCustomerSel = document.getElementById('revPosmCustomerSelect');
+                revPosmCountry = revRegionSel ? (revRegionSel.value || null) : null;
+                revPosmCustomerId = revCustomerSel ? (parseInt(revCustomerSel.value) || null) : null;
             }
 
-            fetch('/projects/' + detailProjectId + '/submission/submit-for-review', {
+            fetch('/projects/' + detailProjectId + '/submission/send-revision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    submission_id: submissionId,
+                    message: message,
                     deliverable_ids: checked,
                     includes_concept: includesConcept,
                     includes_kv: includesKV,
-                    posm_country: posmCountry,
-                    posm_customer_id: posmCustomerId
+                    posm_country: revPosmCountry,
+                    posm_customer_id: revPosmCustomerId
                 })
             })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (!data.success) {
-                        showToast(data.error || 'Could not submit for review.', 'error');
-                        submissionSubmitForReviewBtn.disabled = false;
-                        submissionSubmitForReviewBtn.textContent = 'Submit for Internal Review';
-                        return;
-                    }
-                    showToast('Submitted for internal review. CS has been notified.', 'success');
-                    // Reload so the template renders State 3 (internal review) with CS buttons
-                    window.location.reload();
-                })
-                .catch(function () {
-                    showToast('Something went wrong.', 'error');
-                    submissionSubmitForReviewBtn.disabled = false;
-                    submissionSubmitForReviewBtn.textContent = 'Submit for Internal Review';
-                });
-        });
-    }
-
-    // ── Step 3a: CS flags the deck ───────────────────────────────────────────────
-    // CS clicks "Flag Issue" → flag form slides in → they write a reason →
-    // "Send Flag" POSTs to /submission/flag → page reloads into State 4.
-    var submissionFlagBtn = document.getElementById('submissionFlagBtn');
-    var submissionFlagForm = document.getElementById('submissionFlagForm');
-    var submissionFlagCancel = document.getElementById('submissionFlagCancel');
-
-    if (submissionFlagBtn) {
-        submissionFlagBtn.addEventListener('click', function () {
-            submissionFlagForm.classList.remove('hidden');
-            submissionFlagBtn.classList.add('hidden');
-        });
-    }
-
-    if (submissionFlagCancel) {
-        submissionFlagCancel.addEventListener('click', function () {
-            submissionFlagForm.classList.add('hidden');
-            submissionFlagBtn.classList.remove('hidden');
-            document.getElementById('submissionFlagMessage').value = '';
-        });
-    }
-
-    var submissionFlagConfirm = document.getElementById('submissionFlagConfirm');
-    if (submissionFlagConfirm) {
-        submissionFlagConfirm.addEventListener('click', function () {
-            var message = document.getElementById('submissionFlagMessage').value.trim();
-            if (!message) {
-                showToast('Please describe the issue before flagging.', 'error');
-                return;
-            }
-
-            submissionFlagConfirm.disabled = true;
-            submissionFlagConfirm.textContent = 'Sending...';
-
-            fetch('/projects/' + detailProjectId + '/submission/flag', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: message })
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) {
-                        showToast(data.error, 'error');
-                        submissionFlagConfirm.disabled = false;
-                        submissionFlagConfirm.textContent = 'Send Flag';
-                        return;
-                    }
-                    // Reload so the flagged banner shows and designer sees "Reupload Deck"
-                    window.location.reload();
-                })
-                .catch(function () {
-                    showToast('Something went wrong.', 'error');
-                    submissionFlagConfirm.disabled = false;
-                    submissionFlagConfirm.textContent = 'Send Flag';
-                });
-        });
-    }
-
-    // ── Step 3b: CS submits to client ────────────────────────────────────────────
-    // CS clicks "Submit to Client" → all deliverables → submitted_to_client,
-    // then optionally opens a mailto to draft the email.
-    var submissionSubmitBtn = document.getElementById('submissionSubmitBtn');
-    if (submissionSubmitBtn) {
-        submissionSubmitBtn.addEventListener('click', function () {
-            var projectName = this.dataset.projectName;
-
-            submissionSubmitBtn.disabled = true;
-            submissionSubmitBtn.textContent = 'Submitting...';
-
-            fetch('/projects/' + detailProjectId + '/submission/submit-to-client', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) {
-                        showToast(data.error, 'error');
-                        submissionSubmitBtn.disabled = false;
-                        submissionSubmitBtn.textContent = 'Submit to Client';
-                        return;
-                    }
-
-                    showToast('Project submitted to client.', 'success');
-
-                    // Offer to open Outlook with a pre-filled subject line via custom modal.
-                    var emailModal = document.getElementById('email-draft-modal');
-                    var emailYes = document.getElementById('emailDraftYes');
-                    var emailNo = document.getElementById('emailDraftNo');
-                    if (emailModal && emailYes && emailNo) {
-                        emailModal.classList.remove('hidden');
-                        var subject = encodeURIComponent(data.project_name);
-                        var body = encodeURIComponent('Please find attached the latest client deck for ' + data.project_name + '.\n\nBest regards,');
-                        var mailto = 'mailto:' + (data.client_email || '') + '?subject=' + subject + '&body=' + body;
-                        emailYes.onclick = function () {
-                            emailModal.classList.add('hidden');
-                            window.open(mailto);
-                            window.location.reload();
-                        };
-                        emailNo.onclick = function () {
-                            emailModal.classList.add('hidden');
-                            window.location.reload();
-                        };
-                    } else {
-                        window.location.reload();
-                    }
-                })
-                .catch(function () {
-                    showToast('Something went wrong.', 'error');
-                    submissionSubmitBtn.disabled = false;
-                    submissionSubmitBtn.textContent = 'Submit to Client';
-                });
-        });
-    }
-
-    // ── Step 5: CS sends revision request ────────────────────────────────────────
-    // Shown in State 5 (submitted_to_client). CS clicks "Send for Revision" →
-    // revision form slides in with a free-text field and a deliverable picker.
-    // On confirm: POSTs to /send-revision → project → revision_in_queue.
-    (function () {
-        var sendRevisionBtn = document.getElementById('sendRevisionBtn');
-        var sendRevisionForm = document.getElementById('sendRevisionForm');
-        var sendRevisionCancel = document.getElementById('sendRevisionCancel');
-        var sendRevisionConfirm = document.getElementById('sendRevisionConfirm');
-        var revisionPickerList = document.getElementById('revisionPickerList');
-
-        if (!sendRevisionBtn) return; // not in submitted_to_client state
-
-        var pickerBuilt = false; // lazy-build the picker only once
-
-        sendRevisionBtn.addEventListener('click', function () {
-            sendRevisionForm.classList.remove('hidden');
-            sendRevisionBtn.classList.add('hidden');
-
-            // Build the revision picker the first time the form is opened.
-            // C&CM concept/KV phase: only Concept and/or KV can be revised (deliverables
-            // are not yet in play — POSM hasn't started). Standard briefs and POSM phase
-            // show the full deliverable picker via buildPickerInto.
-            if (!pickerBuilt && revisionPickerList) {
-                if (!window.posmActive && (window.projectHasConcept || window.projectHasKV)) {
-                    function makeRevCampaignRow(value, label) {
-                        var lbl = document.createElement('label');
-                        lbl.className = 'picker-row picker-row--campaign';
-                        var cb = document.createElement('input');
-                        cb.type = 'checkbox';
-                        cb.value = value;
-                        cb.checked = true;
-                        var span = document.createElement('span');
-                        span.textContent = label;
-                        lbl.appendChild(cb);
-                        lbl.appendChild(span);
-                        return lbl;
-                    }
-                    if (window.projectHasConcept && window.projectHasKV) {
-                        revisionPickerList.appendChild(makeRevCampaignRow('__concept__', 'Concept & KV'));
-                    } else {
-                        if (window.projectHasConcept) revisionPickerList.appendChild(makeRevCampaignRow('__concept__', 'Concept'));
-                        if (window.projectHasKV)      revisionPickerList.appendChild(makeRevCampaignRow('__kv__', 'Initial KV'));
-                    }
-                    var revSelAll   = document.getElementById('revisionPickerSelectAll');
-                    var revDeselAll = document.getElementById('revisionPickerDeselectAll');
-                    if (revSelAll)   revSelAll.addEventListener('click',   function () { revisionPickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
-                    if (revDeselAll) revDeselAll.addEventListener('click', function () { revisionPickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = false; }); });
-                } else if (window.projectDeliverables) {
-                    buildPickerInto(revisionPickerList,
-                        document.getElementById('revisionPickerSelectAll'),
-                        document.getElementById('revisionPickerDeselectAll'));
-                }
-                pickerBuilt = true;
-            }
-        });
-
-        if (sendRevisionCancel) {
-            sendRevisionCancel.addEventListener('click', function () {
-                sendRevisionForm.classList.add('hidden');
-                sendRevisionBtn.classList.remove('hidden');
-                document.getElementById('revisionMessage').value = '';
-            });
-        }
-
-        if (sendRevisionConfirm) {
-            sendRevisionConfirm.addEventListener('click', function () {
-                var message = document.getElementById('revisionMessage').value.trim();
-                if (!message) {
-                    showToast('Please describe what needs to be revised.', 'error');
-                    return;
-                }
-
-                // Collect checked deliverable IDs and concept/KV flags from the revision picker
-                var checked = [];
-                var includesConcept = false;
-                var includesKV = false;
-                if (revisionPickerList) {
-                    revisionPickerList.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
-                        if (cb.value === '__concept__') includesConcept = true;
-                        else if (cb.value === '__kv__') includesKV = true;
-                        else checked.push(parseInt(cb.value));
-                    });
-                }
-                // When merged Concept & KV row is checked and project has KV, include KV too
-                if (includesConcept && window.projectHasKV) includesKV = true;
-                if (checked.length === 0 && !includesConcept && !includesKV) {
-                    showToast('Select at least one item to revise.', 'error');
-                    return;
-                }
-
-                sendRevisionConfirm.disabled = true;
-                sendRevisionConfirm.textContent = 'Sending...';
-
-                // Collect Gulf POSM region + customer for revision
-                var revPosmCountry = null;
-                var revPosmCustomerId = null;
-                if (window.posmActive) {
-                    var revRegionSel = document.getElementById('revPosmRegionSelect');
-                    var revCustomerSel = document.getElementById('revPosmCustomerSelect');
-                    revPosmCountry = revRegionSel ? (revRegionSel.value || null) : null;
-                    revPosmCustomerId = revCustomerSel ? (parseInt(revCustomerSel.value) || null) : null;
-                }
-
-                fetch('/projects/' + detailProjectId + '/submission/send-revision', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: message,
-                        deliverable_ids: checked,
-                        includes_concept: includesConcept,
-                        includes_kv: includesKV,
-                        posm_country: revPosmCountry,
-                        posm_customer_id: revPosmCustomerId
-                    })
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (!data.success) {
-                            showToast(data.error || 'Could not send revision.', 'error');
-                            sendRevisionConfirm.disabled = false;
-                            sendRevisionConfirm.textContent = 'Send Revision';
-                            return;
-                        }
-                        showToast('Revision sent. Designer has been notified.', 'success');
-                        window.location.reload();
-                    })
-                    .catch(function () {
-                        showToast('Something went wrong.', 'error');
+                        showToast(data.error || 'Could not send revision.', 'error');
                         sendRevisionConfirm.disabled = false;
                         sendRevisionConfirm.textContent = 'Send Revision';
-                    });
-            });
-        }
-    })();
-
-    // ── Step 6: Designer starts the revision ─────────────────────────────────────
-    // Shown in State 6 (revision_in_queue). Designer clicks "Start Revision" →
-    // POSTs to /start-revision → project + deliverables → revision_in_progress,
-    // CS gets notified.
-    var startRevisionBtn = document.getElementById('startRevisionBtn');
-    if (startRevisionBtn) {
-        startRevisionBtn.addEventListener('click', function () {
-            startRevisionBtn.disabled = true;
-            startRevisionBtn.textContent = 'Starting...';
-
-            fetch('/projects/' + detailProjectId + '/submission/start-revision', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) {
-                        showToast(data.error || 'Could not start revision.', 'error');
-                        startRevisionBtn.disabled = false;
-                        startRevisionBtn.textContent = 'Start Revision';
                         return;
                     }
-                    showToast('Revision started. CS has been notified.', 'success');
+                    showToast('Revision sent. Designer has been notified.', 'success');
                     window.location.reload();
                 })
                 .catch(function () {
                     showToast('Something went wrong.', 'error');
-                    startRevisionBtn.disabled = false;
-                    startRevisionBtn.textContent = 'Start Revision';
+                    sendRevisionConfirm.disabled = false;
+                    sendRevisionConfirm.textContent = 'Send Revision';
                 });
         });
     }
+})();
 
-    // ── Start Project ─────────────────────────────────────────────────
-    // Handles the one-time transition from 'briefed' to 'in_progress'.
-    // Stores the project ID when the modal opens, clears it on close.
+// ── Step 6: Designer starts the revision ─────────────────────────────────────
+// Shown in State 6 (revision_in_queue). Designer clicks "Start Revision" →
+// POSTs to /start-revision → project + deliverables → revision_in_progress,
+// CS gets notified.
+var startRevisionBtn = document.getElementById('startRevisionBtn');
+if (startRevisionBtn) {
+    startRevisionBtn.addEventListener('click', function () {
+        startRevisionBtn.disabled = true;
+        startRevisionBtn.textContent = 'Starting...';
 
-    var _startProjectId = null;
-
-    function openStartProjectModal(projectId) {
-        _startProjectId = projectId;
-        document.getElementById('start-project-modal').classList.remove('hidden');
-    }
-
-    function closeStartProjectModal() {
-        document.getElementById('start-project-modal').classList.add('hidden');
-        _startProjectId = null;
-    }
-
-    var startProjectConfirmBtn = document.getElementById('start-project-confirm');
-    if (startProjectConfirmBtn) {
-        startProjectConfirmBtn.addEventListener('click', function () {
-            if (!_startProjectId) return;
-            fetch('/projects/' + _startProjectId + '/start-project', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        window.location.reload();
-                    } else {
-                        alert(data.error || 'Could not start project.');
-                        closeStartProjectModal();
-                    }
-                });
-        });
-    }
-
-    // ── Lead Designer Self-Assignment ────────────────────────────────────────────
-
-    function assignLeadSelf(team, projectId) {
-        fetch('/projects/' + projectId + '/assign-lead', {
+        fetch('/projects/' + detailProjectId + '/submission/start-revision', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ team: team })
+            headers: { 'Content-Type': 'application/json' }
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {
-                if (data.success) {
-                    window.location.reload();
-                } else {
-                    alert(data.error || 'Could not assign lead.');
-                }
-            });
-    }
-
-    function showTransferForm(teamLower) {
-        document.getElementById('transfer-trigger-' + teamLower).classList.add('hidden');
-        document.getElementById('transfer-form-' + teamLower).classList.remove('hidden');
-    }
-
-    function cancelTransfer(teamLower) {
-        document.getElementById('transfer-form-' + teamLower).classList.add('hidden');
-        document.getElementById('transfer-trigger-' + teamLower).classList.remove('hidden');
-    }
-
-    function confirmTransfer(teamLower, projectId) {
-        var select = document.getElementById('transfer-select-' + teamLower);
-        var newDesignerId = select ? select.value : '';
-        if (!newDesignerId) {
-            alert('Please select a designer to transfer to.');
-            return;
-        }
-        fetch('/projects/' + projectId + '/assign-lead', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ team: teamLower, new_designer_id: parseInt(newDesignerId) })
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    window.location.reload();
-                } else {
-                    alert(data.error || 'Could not transfer ownership.');
-                }
-            });
-    }
-
-    var _takeoverTeam = null;
-    var _takeoverProjectId = null;
-
-    function openTakeoverModal(team, previousLeadName, projectId) {
-        _takeoverTeam = team;
-        _takeoverProjectId = projectId;
-        document.getElementById('lead-takeover-body').textContent =
-            'You\'ll replace ' + previousLeadName + ' as the ' + team +
-            ' lead on this project. They\'ll be notified.';
-        document.getElementById('lead-takeover-modal').classList.remove('hidden');
-    }
-
-    function closeTakeoverModal() {
-        document.getElementById('lead-takeover-modal').classList.add('hidden');
-        _takeoverTeam = null;
-        _takeoverProjectId = null;
-    }
-
-    var takeoverConfirmBtn = document.getElementById('lead-takeover-confirm');
-    if (takeoverConfirmBtn) {
-        takeoverConfirmBtn.addEventListener('click', function () {
-            if (!_takeoverTeam || !_takeoverProjectId) return;
-            fetch('/projects/' + _takeoverProjectId + '/assign-lead', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ team: _takeoverTeam })
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        window.location.reload();
-                    } else {
-                        alert(data.error || 'Could not take over as lead.');
-                        closeTakeoverModal();
-                    }
-                });
-        });
-    }
-
-
-    // ── POSM Parallel Channel Submission ─────────────────────────────────────────
-    // Handles the pill-tab UI for Gulf C&CM POSM projects.
-    // Each channel (UAE-Customer or Country) is its own independent submission pipeline.
-    // All interactions use class-based selectors + data-channel-id; no global IDs.
-
-    // Reload the page and restore focus to the given channel pill after load
-    function reloadToChannel(channelId) {
-        sessionStorage.setItem('posmActiveChannel', channelId);
-        window.location.reload();
-    }
-
-    // Switch the visible channel section and update pill active state
-    function selectPosmChannel(channelId) {
-        // Deactivate all pills
-        document.querySelectorAll('.posm-channel-pill').forEach(function (btn) {
-            btn.classList.remove('posm-channel-pill--active');
-        });
-        // Activate the clicked pill
-        var activePill = document.querySelector('.posm-channel-pill[data-channel-id="' + channelId + '"]');
-        if (activePill) activePill.classList.add('posm-channel-pill--active');
-
-        // Hide all channel sections, show the selected one
-        document.querySelectorAll('.posm-channel-section').forEach(function (sec) {
-            sec.classList.add('hidden');
-        });
-        var activeSection = document.getElementById('posm-ch-' + channelId);
-        if (activeSection) {
-            activeSection.classList.remove('hidden');
-            // Lazy-build the deliverable picker if state 2 is visible
-            var pickerList = document.getElementById('ch-picker-list-' + channelId);
-            if (pickerList && pickerList.children.length === 0) {
-                var _cIds = (pickerList.dataset.customerIds || '').split(',').filter(Boolean).map(Number);
-                buildPickerInto(pickerList, null, null, _cIds);
-            }
-        }
-    }
-
-    // Restore the last-active channel on page load (saved by reloadToChannel before reload)
-    (function () {
-        var savedId = sessionStorage.getItem('posmActiveChannel');
-        if (savedId && document.getElementById('posm-ch-' + savedId)) {
-            sessionStorage.removeItem('posmActiveChannel');
-            selectPosmChannel(savedId);
-        } else {
-            // Default: build picker for the first (already-visible) channel
-            var firstSection = document.querySelector('.posm-channel-section:not(.hidden)');
-            if (!firstSection) return;
-            var channelId = firstSection.dataset.channelId;
-            var pickerList = document.getElementById('ch-picker-list-' + channelId);
-            if (pickerList) {
-                var _cIds = (pickerList.dataset.customerIds || '').split(',').filter(Boolean).map(Number);
-                buildPickerInto(pickerList, null, null, _cIds);
-            }
-        }
-    })();
-
-    // ── Channel event delegation ──────────────────────────────────────────────────
-    // All channel buttons use class names (.ch-upload-btn, .ch-flag-btn, etc.)
-    // We delegate from the pills container downward.
-    document.addEventListener('click', function (e) {
-        // ── Upload button ──────────────────────────────────────────────────────────
-        var uploadBtn = e.target.closest('.ch-upload-btn');
-        if (uploadBtn) {
-            var chId = uploadBtn.dataset.channelId;
-            var fileInput = document.getElementById('ch-file-' + chId);
-            if (fileInput) fileInput.click();
-            return;
-        }
-
-        // ── Flag button: show form ─────────────────────────────────────────────────
-        var flagBtn = e.target.closest('.ch-flag-btn');
-        if (flagBtn) {
-            var chId = flagBtn.dataset.channelId;
-            var form = document.getElementById('ch-flag-form-' + chId);
-            if (form) {
-                form.classList.remove('hidden');
-                flagBtn.classList.add('hidden');
-            }
-            return;
-        }
-
-        // ── Flag cancel ────────────────────────────────────────────────────────────
-        var flagCancel = e.target.closest('.ch-flag-cancel');
-        if (flagCancel) {
-            var chId = flagCancel.dataset.channelId;
-            var form = document.getElementById('ch-flag-form-' + chId);
-            if (form) form.classList.add('hidden');
-            var msg = document.getElementById('ch-flag-msg-' + chId);
-            if (msg) msg.value = '';
-            // Re-show the flag button
-            var btn = document.querySelector('.ch-flag-btn[data-channel-id="' + chId + '"]');
-            if (btn) btn.classList.remove('hidden');
-            return;
-        }
-
-        // ── Flag confirm ───────────────────────────────────────────────────────────
-        var flagConfirm = e.target.closest('.ch-flag-confirm');
-        if (flagConfirm) {
-            var chId = flagConfirm.dataset.channelId;
-            var projectId = flagConfirm.dataset.projectId;
-            var msg = (document.getElementById('ch-flag-msg-' + chId) || {}).value || '';
-            if (!msg.trim()) { showToast('Please describe the issue before flagging.', 'error'); return; }
-            flagConfirm.disabled = true;
-            flagConfirm.textContent = 'Sending...';
-            fetch('/projects/' + projectId + '/submission/flag', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg.trim(), posm_channel_id: parseInt(chId) })
-            }).then(function (r) { return r.json(); }).then(function (data) {
-                if (!data.success) {
-                    showToast(data.error || 'Could not flag submission.', 'error');
-                    flagConfirm.disabled = false;
-                    flagConfirm.textContent = 'Send Flag';
-                    return;
-                }
-                reloadToChannel(chId);
-            }).catch(function () {
-                showToast('Something went wrong.', 'error');
-                flagConfirm.disabled = false;
-                flagConfirm.textContent = 'Send Flag';
-            });
-            return;
-        }
-
-        // ── Submit to Client ───────────────────────────────────────────────────────
-        var submitClientBtn = e.target.closest('.ch-submit-client-btn');
-        if (submitClientBtn) {
-            var chId = submitClientBtn.dataset.channelId;
-            var projectId = submitClientBtn.dataset.projectId;
-            submitClientBtn.disabled = true;
-            submitClientBtn.textContent = 'Submitting...';
-            fetch('/projects/' + projectId + '/submission/submit-to-client', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ posm_channel_id: parseInt(chId) })
-            }).then(function (r) { return r.json(); }).then(function (data) {
-                if (!data.success) {
-                    showToast(data.error || 'Could not submit to client.', 'error');
-                    submitClientBtn.disabled = false;
-                    submitClientBtn.textContent = 'Submit to Client';
-                    return;
-                }
-                showToast('Submitted to client.', 'success');
-                reloadToChannel(chId);
-            }).catch(function () {
-                showToast('Something went wrong.', 'error');
-                submitClientBtn.disabled = false;
-                submitClientBtn.textContent = 'Submit to Client';
-            });
-            return;
-        }
-
-        // ── Submit for Internal Review ─────────────────────────────────────────────
-        var submitReviewBtn = e.target.closest('.ch-submit-review-btn');
-        if (submitReviewBtn) {
-            var chId = submitReviewBtn.dataset.channelId;
-            var projectId = submitReviewBtn.dataset.projectId;
-            var submissionId = parseInt(submitReviewBtn.dataset.submissionId);
-            // Collect checked deliverables from this channel's picker
-            var pickerList = document.getElementById('ch-picker-list-' + chId);
-            var deliverableIds = [];
-            if (pickerList) {
-                pickerList.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
-                    var val = cb.value;
-                    if (val !== '__concept__' && val !== '__kv__') deliverableIds.push(parseInt(val));
-                });
-            }
-            if (!deliverableIds.length) {
-                showToast('Select at least one deliverable to include.', 'error');
-                return;
-            }
-            submitReviewBtn.disabled = true;
-            submitReviewBtn.textContent = 'Submitting...';
-            fetch('/projects/' + projectId + '/submission/submit-for-review', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    submission_id: submissionId,
-                    deliverable_ids: deliverableIds,
-                    posm_channel_id: parseInt(chId)
-                })
-            }).then(function (r) { return r.json(); }).then(function (data) {
-                if (!data.success) {
-                    showToast(data.error || 'Could not submit for review.', 'error');
-                    submitReviewBtn.disabled = false;
-                    submitReviewBtn.textContent = 'Submit for Internal Review';
-                    return;
-                }
-                reloadToChannel(chId);
-            }).catch(function () {
-                showToast('Something went wrong.', 'error');
-                submitReviewBtn.disabled = false;
-                submitReviewBtn.textContent = 'Submit for Internal Review';
-            });
-            return;
-        }
-
-        // ── Send Revision button: show form ───────────────────────────────────────
-        var sendRevBtn = e.target.closest('.ch-send-revision-btn');
-        if (sendRevBtn) {
-            var chId = sendRevBtn.dataset.channelId;
-            var form = document.getElementById('ch-rev-form-' + chId);
-            if (form) {
-                form.classList.remove('hidden');
-                sendRevBtn.classList.add('hidden');
-            }
-            return;
-        }
-
-        // ── Send Revision cancel ───────────────────────────────────────────────────
-        var sendRevCancel = e.target.closest('.ch-send-revision-cancel');
-        if (sendRevCancel) {
-            var chId = sendRevCancel.dataset.channelId;
-            var form = document.getElementById('ch-rev-form-' + chId);
-            if (form) form.classList.add('hidden');
-            var msg = document.getElementById('ch-rev-msg-' + chId);
-            if (msg) msg.value = '';
-            var btn = document.querySelector('.ch-send-revision-btn[data-channel-id="' + chId + '"]');
-            if (btn) btn.classList.remove('hidden');
-            return;
-        }
-
-        // ── Send Revision confirm ──────────────────────────────────────────────────
-        var sendRevConfirm = e.target.closest('.ch-send-revision-confirm');
-        if (sendRevConfirm) {
-            var chId = sendRevConfirm.dataset.channelId;
-            var projectId = sendRevConfirm.dataset.projectId;
-            var msgEl = document.getElementById('ch-rev-msg-' + chId);
-            var message = msgEl ? msgEl.value.trim() : '';
-            if (!message) { showToast('Please describe what needs to be revised.', 'error'); return; }
-            sendRevConfirm.disabled = true;
-            sendRevConfirm.textContent = 'Sending...';
-            fetch('/projects/' + projectId + '/submission/send-revision', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: message, posm_channel_id: parseInt(chId) })
-            }).then(function (r) { return r.json(); }).then(function (data) {
-                if (!data.success) {
-                    showToast(data.error || 'Could not send revision.', 'error');
-                    sendRevConfirm.disabled = false;
-                    sendRevConfirm.textContent = 'Send Revision';
-                    return;
-                }
-                showToast('Revision sent. Designer has been notified.', 'success');
-                reloadToChannel(chId);
-            }).catch(function () {
-                showToast('Something went wrong.', 'error');
-                sendRevConfirm.disabled = false;
-                sendRevConfirm.textContent = 'Send Revision';
-            });
-            return;
-        }
-
-        // ── Start Revision ─────────────────────────────────────────────────────────
-        var startRevBtn = e.target.closest('.ch-start-revision-btn');
-        if (startRevBtn) {
-            var chId = startRevBtn.dataset.channelId;
-            var projectId = startRevBtn.dataset.projectId;
-            startRevBtn.disabled = true;
-            startRevBtn.textContent = 'Starting...';
-            fetch('/projects/' + projectId + '/submission/start-revision', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ posm_channel_id: parseInt(chId) })
-            }).then(function (r) { return r.json(); }).then(function (data) {
                 if (!data.success) {
                     showToast(data.error || 'Could not start revision.', 'error');
-                    startRevBtn.disabled = false;
-                    startRevBtn.textContent = 'Start Revision';
+                    startRevisionBtn.disabled = false;
+                    startRevisionBtn.textContent = 'Start Revision';
                     return;
                 }
                 showToast('Revision started. CS has been notified.', 'success');
-                reloadToChannel(chId);
-            }).catch(function () {
+                window.location.reload();
+            })
+            .catch(function () {
                 showToast('Something went wrong.', 'error');
-                startRevBtn.disabled = false;
-                startRevBtn.textContent = 'Start Revision';
+                startRevisionBtn.disabled = false;
+                startRevisionBtn.textContent = 'Start Revision';
             });
-            return;
-        }
     });
+}
 
-    // ── Channel file upload ────────────────────────────────────────────────────────
-    // Wire up each ch-file-input so that when a file is selected it uploads immediately
-    // to /submission/upload with posm_channel_id in the form data.
-    document.querySelectorAll('.ch-file-input').forEach(function (fileInput) {
-        fileInput.addEventListener('change', function () {
-            if (!fileInput.files || !fileInput.files.length) return;
-            var chId = fileInput.dataset.channelId;
-            var projectId = document.querySelector('.ch-upload-btn[data-channel-id="' + chId + '"]').dataset.projectId;
-            var statusEl = document.getElementById('ch-upload-status-' + chId);
+// ── Start Project ─────────────────────────────────────────────────
+// Handles the one-time transition from 'briefed' to 'in_progress'.
+// Stores the project ID when the modal opens, clears it on close.
 
-            if (statusEl) { statusEl.textContent = 'Uploading...'; }
+var _startProjectId = null;
 
-            var formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            formData.append('posm_channel_id', chId);
+function openStartProjectModal(projectId) {
+    _startProjectId = projectId;
+    document.getElementById('start-project-modal').classList.remove('hidden');
+}
 
-            fetch('/projects/' + projectId + '/submission/upload', {
-                method: 'POST',
-                body: formData
-            }).then(function (r) { return r.json(); }).then(function (data) {
-                if (!data.success) {
-                    if (statusEl) { statusEl.textContent = data.error || 'Upload failed.'; }
-                    showToast(data.error || 'Upload failed.', 'error');
-                    return;
+function closeStartProjectModal() {
+    document.getElementById('start-project-modal').classList.add('hidden');
+    _startProjectId = null;
+}
+
+var startProjectConfirmBtn = document.getElementById('start-project-confirm');
+if (startProjectConfirmBtn) {
+    startProjectConfirmBtn.addEventListener('click', function () {
+        if (!_startProjectId) return;
+        fetch('/projects/' + _startProjectId + '/start-project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert(data.error || 'Could not start project.');
+                    closeStartProjectModal();
                 }
-                // Reload back to this channel — server will show State 2 (picker)
-                reloadToChannel(chId);
-            }).catch(function () {
-                if (statusEl) { statusEl.textContent = 'Upload failed.'; }
-                showToast('Something went wrong during upload.', 'error');
             });
-
-            // Clear the input so the same file can be re-selected if needed
-            fileInput.value = '';
-        });
     });
+}
 
-    // Admin panel open / close
-    var adminTrigger = document.getElementById('admin-panel-trigger');
-    var adminPanel = document.getElementById('admin-panel');
-    var closeAdminBtn = document.getElementById('close-admin-panel');
+// ── Lead Designer Self-Assignment ────────────────────────────────────────────
 
-    if (adminTrigger) {
-        adminTrigger.addEventListener('click', function () {
-            adminPanel.classList.toggle('hidden');
-        });
-    }
-
-    if (closeAdminBtn) {
-        closeAdminBtn.addEventListener('click', function () {
-            adminPanel.classList.add('hidden');
-        });
-    }
-
-    // Admin section switching
-    // Admin section switching
-    document.querySelectorAll('.admin-nav-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            document.querySelectorAll('.admin-nav-btn').forEach(function (b) {
-                b.classList.remove('active');
-            });
-            document.querySelectorAll('.admin-section').forEach(function (s) {
-                s.classList.add('hidden');
-            });
-            this.classList.add('active');
-            var sectionName = this.dataset.section;
-            var section = document.getElementById('admin-section-' + sectionName);
-            if (section) section.classList.remove('hidden');
-            if (sectionName === 'accounts') loadAccountsSection();
-            if (sectionName === 'projects') loadProjectToolsSection();
-            if (sectionName === 'activity') loadActivitySection();
-        });
-    });
-
-    // ── Emulation ────────────────────────────────────────
-
-    var emulateSearch = document.getElementById('emulate-search');
-    var emulateUserList = document.getElementById('emulate-user-list');
-    var exitEmulationBtn = document.getElementById('exit-emulation-btn');
-    var allUsers = [];
-
-    // Fetch user list when admin panel opens
-    if (adminTrigger) {
-        adminTrigger.addEventListener('click', function () {
-            if (allUsers.length === 0 && emulateUserList) {
-                fetch('/admin/api/users')
-                    .then(function (r) { return r.json(); })
-                    .then(function (users) {
-                        allUsers = users;
-                        renderUserList(users);
-                    });
+function assignLeadSelf(team, projectId) {
+    fetch('/projects/' + projectId + '/assign-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: team })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Could not assign lead.');
             }
         });
+}
+
+function showTransferForm(teamLower) {
+    document.getElementById('transfer-trigger-' + teamLower).classList.add('hidden');
+    document.getElementById('transfer-form-' + teamLower).classList.remove('hidden');
+}
+
+function cancelTransfer(teamLower) {
+    document.getElementById('transfer-form-' + teamLower).classList.add('hidden');
+    document.getElementById('transfer-trigger-' + teamLower).classList.remove('hidden');
+}
+
+function confirmTransfer(teamLower, projectId) {
+    var select = document.getElementById('transfer-select-' + teamLower);
+    var newDesignerId = select ? select.value : '';
+    if (!newDesignerId) {
+        alert('Please select a designer to transfer to.');
+        return;
+    }
+    fetch('/projects/' + projectId + '/assign-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: teamLower, new_designer_id: parseInt(newDesignerId) })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert(data.error || 'Could not transfer ownership.');
+            }
+        });
+}
+
+var _takeoverTeam = null;
+var _takeoverProjectId = null;
+
+function openTakeoverModal(team, previousLeadName, projectId) {
+    _takeoverTeam = team;
+    _takeoverProjectId = projectId;
+    document.getElementById('lead-takeover-body').textContent =
+        'You\'ll replace ' + previousLeadName + ' as the ' + team +
+        ' lead on this project. They\'ll be notified.';
+    document.getElementById('lead-takeover-modal').classList.remove('hidden');
+}
+
+function closeTakeoverModal() {
+    document.getElementById('lead-takeover-modal').classList.add('hidden');
+    _takeoverTeam = null;
+    _takeoverProjectId = null;
+}
+
+var takeoverConfirmBtn = document.getElementById('lead-takeover-confirm');
+if (takeoverConfirmBtn) {
+    takeoverConfirmBtn.addEventListener('click', function () {
+        if (!_takeoverTeam || !_takeoverProjectId) return;
+        fetch('/projects/' + _takeoverProjectId + '/assign-lead', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ team: _takeoverTeam })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert(data.error || 'Could not take over as lead.');
+                    closeTakeoverModal();
+                }
+            });
+    });
+}
+
+
+// ── POSM Parallel Channel Submission ─────────────────────────────────────────
+// Handles the pill-tab UI for Gulf C&CM POSM projects.
+// Each channel (UAE-Customer or Country) is its own independent submission pipeline.
+// All interactions use class-based selectors + data-channel-id; no global IDs.
+
+// Reload the page and restore focus to the given channel pill after load
+function reloadToChannel(channelId) {
+    sessionStorage.setItem('posmActiveChannel', channelId);
+    window.location.reload();
+}
+
+// Switch the visible channel section and update pill active state
+function selectPosmChannel(channelId) {
+    // Deactivate all pills
+    document.querySelectorAll('.posm-channel-pill').forEach(function (btn) {
+        btn.classList.remove('posm-channel-pill--active');
+    });
+    // Activate the clicked pill
+    var activePill = document.querySelector('.posm-channel-pill[data-channel-id="' + channelId + '"]');
+    if (activePill) activePill.classList.add('posm-channel-pill--active');
+
+    // Hide all channel sections, show the selected one
+    document.querySelectorAll('.posm-channel-section').forEach(function (sec) {
+        sec.classList.add('hidden');
+    });
+    var activeSection = document.getElementById('posm-ch-' + channelId);
+    if (activeSection) {
+        activeSection.classList.remove('hidden');
+        // Lazy-build the deliverable picker if state 2 is visible
+        var pickerList = document.getElementById('ch-picker-list-' + channelId);
+        if (pickerList && pickerList.children.length === 0) {
+            var _cIds = (pickerList.dataset.customerIds || '').split(',').filter(Boolean).map(Number);
+            buildPickerInto(pickerList, null, null, _cIds);
+        }
+    }
+}
+
+// Restore the last-active channel on page load (saved by reloadToChannel before reload)
+(function () {
+    var savedId = sessionStorage.getItem('posmActiveChannel');
+    if (savedId && document.getElementById('posm-ch-' + savedId)) {
+        sessionStorage.removeItem('posmActiveChannel');
+        selectPosmChannel(savedId);
+    } else {
+        // Default: build picker for the first (already-visible) channel
+        var firstSection = document.querySelector('.posm-channel-section:not(.hidden)');
+        if (!firstSection) return;
+        var channelId = firstSection.dataset.channelId;
+        var pickerList = document.getElementById('ch-picker-list-' + channelId);
+        if (pickerList) {
+            var _cIds = (pickerList.dataset.customerIds || '').split(',').filter(Boolean).map(Number);
+            buildPickerInto(pickerList, null, null, _cIds);
+        }
+    }
+})();
+
+// ── Channel event delegation ──────────────────────────────────────────────────
+// All channel buttons use class names (.ch-upload-btn, .ch-flag-btn, etc.)
+// We delegate from the pills container downward.
+document.addEventListener('click', function (e) {
+    // ── Upload button ──────────────────────────────────────────────────────────
+    var uploadBtn = e.target.closest('.ch-upload-btn');
+    if (uploadBtn) {
+        var chId = uploadBtn.dataset.channelId;
+        var fileInput = document.getElementById('ch-file-' + chId);
+        if (fileInput) fileInput.click();
+        return;
     }
 
-    function renderUserList(users) {
-        emulateUserList.innerHTML = '';
-        if (users.length === 0) {
-            emulateUserList.innerHTML = '<p class="no-notifications">No users found</p>';
+    // ── Flag button: show form ─────────────────────────────────────────────────
+    var flagBtn = e.target.closest('.ch-flag-btn');
+    if (flagBtn) {
+        var chId = flagBtn.dataset.channelId;
+        var form = document.getElementById('ch-flag-form-' + chId);
+        if (form) {
+            form.classList.remove('hidden');
+            flagBtn.classList.add('hidden');
+        }
+        return;
+    }
+
+    // ── Flag cancel ────────────────────────────────────────────────────────────
+    var flagCancel = e.target.closest('.ch-flag-cancel');
+    if (flagCancel) {
+        var chId = flagCancel.dataset.channelId;
+        var form = document.getElementById('ch-flag-form-' + chId);
+        if (form) form.classList.add('hidden');
+        var msg = document.getElementById('ch-flag-msg-' + chId);
+        if (msg) msg.value = '';
+        // Re-show the flag button
+        var btn = document.querySelector('.ch-flag-btn[data-channel-id="' + chId + '"]');
+        if (btn) btn.classList.remove('hidden');
+        return;
+    }
+
+    // ── Flag confirm ───────────────────────────────────────────────────────────
+    var flagConfirm = e.target.closest('.ch-flag-confirm');
+    if (flagConfirm) {
+        var chId = flagConfirm.dataset.channelId;
+        var projectId = flagConfirm.dataset.projectId;
+        var msg = (document.getElementById('ch-flag-msg-' + chId) || {}).value || '';
+        if (!msg.trim()) { showToast('Please describe the issue before flagging.', 'error'); return; }
+        flagConfirm.disabled = true;
+        flagConfirm.textContent = 'Sending...';
+        fetch('/projects/' + projectId + '/submission/flag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg.trim(), posm_channel_id: parseInt(chId) })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (!data.success) {
+                showToast(data.error || 'Could not flag submission.', 'error');
+                flagConfirm.disabled = false;
+                flagConfirm.textContent = 'Send Flag';
+                return;
+            }
+            reloadToChannel(chId);
+        }).catch(function () {
+            showToast('Something went wrong.', 'error');
+            flagConfirm.disabled = false;
+            flagConfirm.textContent = 'Send Flag';
+        });
+        return;
+    }
+
+    // ── Submit to Client ───────────────────────────────────────────────────────
+    var submitClientBtn = e.target.closest('.ch-submit-client-btn');
+    if (submitClientBtn) {
+        var chId = submitClientBtn.dataset.channelId;
+        var projectId = submitClientBtn.dataset.projectId;
+        submitClientBtn.disabled = true;
+        submitClientBtn.textContent = 'Submitting...';
+        fetch('/projects/' + projectId + '/submission/submit-to-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ posm_channel_id: parseInt(chId) })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (!data.success) {
+                showToast(data.error || 'Could not submit to client.', 'error');
+                submitClientBtn.disabled = false;
+                submitClientBtn.textContent = 'Submit to Client';
+                return;
+            }
+            showToast('Submitted to client.', 'success');
+            reloadToChannel(chId);
+        }).catch(function () {
+            showToast('Something went wrong.', 'error');
+            submitClientBtn.disabled = false;
+            submitClientBtn.textContent = 'Submit to Client';
+        });
+        return;
+    }
+
+    // ── Submit for Internal Review ─────────────────────────────────────────────
+    var submitReviewBtn = e.target.closest('.ch-submit-review-btn');
+    if (submitReviewBtn) {
+        var chId = submitReviewBtn.dataset.channelId;
+        var projectId = submitReviewBtn.dataset.projectId;
+        var submissionId = parseInt(submitReviewBtn.dataset.submissionId);
+        // Collect checked deliverables from this channel's picker
+        var pickerList = document.getElementById('ch-picker-list-' + chId);
+        var deliverableIds = [];
+        if (pickerList) {
+            pickerList.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
+                var val = cb.value;
+                if (val !== '__concept__' && val !== '__kv__') deliverableIds.push(parseInt(val));
+            });
+        }
+        if (!deliverableIds.length) {
+            showToast('Select at least one deliverable to include.', 'error');
             return;
         }
-        users.forEach(function (user) {
-            var row = document.createElement('div');
-            row.className = 'emulate-user-row';
-            row.innerHTML =
-                '<div class="emulate-user-info">' +
-                '<span class="emulate-user-name">' + user.name + '</span>' +
-                '<span class="emulate-user-role">' + user.role + '</span>' +
-                '</div>' +
-                '<button type="button" class="emulate-user-btn" data-id="' + user.id + '">Emulate</button>';
-            emulateUserList.appendChild(row);
+        submitReviewBtn.disabled = true;
+        submitReviewBtn.textContent = 'Submitting...';
+        fetch('/projects/' + projectId + '/submission/submit-for-review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                submission_id: submissionId,
+                deliverable_ids: deliverableIds,
+                posm_channel_id: parseInt(chId)
+            })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (!data.success) {
+                showToast(data.error || 'Could not submit for review.', 'error');
+                submitReviewBtn.disabled = false;
+                submitReviewBtn.textContent = 'Submit for Internal Review';
+                return;
+            }
+            reloadToChannel(chId);
+        }).catch(function () {
+            showToast('Something went wrong.', 'error');
+            submitReviewBtn.disabled = false;
+            submitReviewBtn.textContent = 'Submit for Internal Review';
         });
-
-        emulateUserList.querySelectorAll('.emulate-user-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                fetch('/admin/emulate/' + this.dataset.id, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) window.location.reload();
-                    });
-            });
-        });
+        return;
     }
 
-    // Live search filter
-    if (emulateSearch) {
-        emulateSearch.addEventListener('input', function () {
-            var query = this.value.toLowerCase();
-            var filtered = allUsers.filter(function (u) {
-                return u.name.toLowerCase().includes(query) || u.role.toLowerCase().includes(query);
-            });
-            renderUserList(filtered);
-        });
+    // ── Send Revision button: show form ───────────────────────────────────────
+    var sendRevBtn = e.target.closest('.ch-send-revision-btn');
+    if (sendRevBtn) {
+        var chId = sendRevBtn.dataset.channelId;
+        var form = document.getElementById('ch-rev-form-' + chId);
+        if (form) {
+            form.classList.remove('hidden');
+            sendRevBtn.classList.add('hidden');
+        }
+        return;
     }
 
-    // Exit emulation
-    if (exitEmulationBtn) {
-        exitEmulationBtn.addEventListener('click', function () {
-            fetch('/admin/emulate/exit', {
+    // ── Send Revision cancel ───────────────────────────────────────────────────
+    var sendRevCancel = e.target.closest('.ch-send-revision-cancel');
+    if (sendRevCancel) {
+        var chId = sendRevCancel.dataset.channelId;
+        var form = document.getElementById('ch-rev-form-' + chId);
+        if (form) form.classList.add('hidden');
+        var msg = document.getElementById('ch-rev-msg-' + chId);
+        if (msg) msg.value = '';
+        var btn = document.querySelector('.ch-send-revision-btn[data-channel-id="' + chId + '"]');
+        if (btn) btn.classList.remove('hidden');
+        return;
+    }
+
+    // ── Send Revision confirm ──────────────────────────────────────────────────
+    var sendRevConfirm = e.target.closest('.ch-send-revision-confirm');
+    if (sendRevConfirm) {
+        var chId = sendRevConfirm.dataset.channelId;
+        var projectId = sendRevConfirm.dataset.projectId;
+        var msgEl = document.getElementById('ch-rev-msg-' + chId);
+        var message = msgEl ? msgEl.value.trim() : '';
+        if (!message) { showToast('Please describe what needs to be revised.', 'error'); return; }
+        sendRevConfirm.disabled = true;
+        sendRevConfirm.textContent = 'Sending...';
+        fetch('/projects/' + projectId + '/submission/send-revision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message, posm_channel_id: parseInt(chId) })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (!data.success) {
+                showToast(data.error || 'Could not send revision.', 'error');
+                sendRevConfirm.disabled = false;
+                sendRevConfirm.textContent = 'Send Revision';
+                return;
+            }
+            showToast('Revision sent. Designer has been notified.', 'success');
+            reloadToChannel(chId);
+        }).catch(function () {
+            showToast('Something went wrong.', 'error');
+            sendRevConfirm.disabled = false;
+            sendRevConfirm.textContent = 'Send Revision';
+        });
+        return;
+    }
+
+    // ── Start Revision ─────────────────────────────────────────────────────────
+    var startRevBtn = e.target.closest('.ch-start-revision-btn');
+    if (startRevBtn) {
+        var chId = startRevBtn.dataset.channelId;
+        var projectId = startRevBtn.dataset.projectId;
+        startRevBtn.disabled = true;
+        startRevBtn.textContent = 'Starting...';
+        fetch('/projects/' + projectId + '/submission/start-revision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ posm_channel_id: parseInt(chId) })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (!data.success) {
+                showToast(data.error || 'Could not start revision.', 'error');
+                startRevBtn.disabled = false;
+                startRevBtn.textContent = 'Start Revision';
+                return;
+            }
+            showToast('Revision started. CS has been notified.', 'success');
+            reloadToChannel(chId);
+        }).catch(function () {
+            showToast('Something went wrong.', 'error');
+            startRevBtn.disabled = false;
+            startRevBtn.textContent = 'Start Revision';
+        });
+        return;
+    }
+});
+
+// ── Channel file upload ────────────────────────────────────────────────────────
+// Wire up each ch-file-input so that when a file is selected it uploads immediately
+// to /submission/upload with posm_channel_id in the form data.
+document.querySelectorAll('.ch-file-input').forEach(function (fileInput) {
+    fileInput.addEventListener('change', function () {
+        if (!fileInput.files || !fileInput.files.length) return;
+        var chId = fileInput.dataset.channelId;
+        var projectId = document.querySelector('.ch-upload-btn[data-channel-id="' + chId + '"]').dataset.projectId;
+        var statusEl = document.getElementById('ch-upload-status-' + chId);
+
+        if (statusEl) { statusEl.textContent = 'Uploading...'; }
+
+        var formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('posm_channel_id', chId);
+
+        fetch('/projects/' + projectId + '/submission/upload', {
+            method: 'POST',
+            body: formData
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (!data.success) {
+                if (statusEl) { statusEl.textContent = data.error || 'Upload failed.'; }
+                showToast(data.error || 'Upload failed.', 'error');
+                return;
+            }
+            // Reload back to this channel — server will show State 2 (picker)
+            reloadToChannel(chId);
+        }).catch(function () {
+            if (statusEl) { statusEl.textContent = 'Upload failed.'; }
+            showToast('Something went wrong during upload.', 'error');
+        });
+
+        // Clear the input so the same file can be re-selected if needed
+        fileInput.value = '';
+    });
+});
+
+// Admin panel open / close
+var adminTrigger = document.getElementById('admin-panel-trigger');
+var adminPanel = document.getElementById('admin-panel');
+var closeAdminBtn = document.getElementById('close-admin-panel');
+
+if (adminTrigger) {
+    adminTrigger.addEventListener('click', function () {
+        adminPanel.classList.toggle('hidden');
+    });
+}
+
+if (closeAdminBtn) {
+    closeAdminBtn.addEventListener('click', function () {
+        adminPanel.classList.add('hidden');
+    });
+}
+
+// Admin section switching
+// Admin section switching
+document.querySelectorAll('.admin-nav-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.admin-nav-btn').forEach(function (b) {
+            b.classList.remove('active');
+        });
+        document.querySelectorAll('.admin-section').forEach(function (s) {
+            s.classList.add('hidden');
+        });
+        this.classList.add('active');
+        var sectionName = this.dataset.section;
+        var section = document.getElementById('admin-section-' + sectionName);
+        if (section) section.classList.remove('hidden');
+        if (sectionName === 'accounts') loadAccountsSection();
+        if (sectionName === 'projects') loadProjectToolsSection();
+        if (sectionName === 'activity') loadActivitySection();
+    });
+});
+
+// ── Emulation ────────────────────────────────────────
+
+var emulateSearch = document.getElementById('emulate-search');
+var emulateUserList = document.getElementById('emulate-user-list');
+var exitEmulationBtn = document.getElementById('exit-emulation-btn');
+var allUsers = [];
+
+// Fetch user list when admin panel opens
+if (adminTrigger) {
+    adminTrigger.addEventListener('click', function () {
+        if (allUsers.length === 0 && emulateUserList) {
+            fetch('/admin/api/users')
+                .then(function (r) { return r.json(); })
+                .then(function (users) {
+                    allUsers = users;
+                    renderUserList(users);
+                });
+        }
+    });
+}
+
+function renderUserList(users) {
+    emulateUserList.innerHTML = '';
+    if (users.length === 0) {
+        emulateUserList.innerHTML = '<p class="no-notifications">No users found</p>';
+        return;
+    }
+    users.forEach(function (user) {
+        var row = document.createElement('div');
+        row.className = 'emulate-user-row';
+        row.innerHTML =
+            '<div class="emulate-user-info">' +
+            '<span class="emulate-user-name">' + user.name + '</span>' +
+            '<span class="emulate-user-role">' + user.role + '</span>' +
+            '</div>' +
+            '<button type="button" class="emulate-user-btn" data-id="' + user.id + '">Emulate</button>';
+        emulateUserList.appendChild(row);
+    });
+
+    emulateUserList.querySelectorAll('.emulate-user-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            fetch('/admin/emulate/' + this.dataset.id, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -3421,303 +3392,232 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
                     if (data.success) window.location.reload();
                 });
         });
-    }
+    });
+}
 
-    // Emulation badge dropdown
-    var badgeTrigger = document.getElementById('emulation-badge-trigger');
-    var badgeDropdown = document.getElementById('emulation-badge-dropdown');
-    var badgeUserSearch = document.getElementById('badge-user-search');
-    var badgeUserList = document.getElementById('badge-user-list');
-    var badgeUsers = [];
+// Live search filter
+if (emulateSearch) {
+    emulateSearch.addEventListener('input', function () {
+        var query = this.value.toLowerCase();
+        var filtered = allUsers.filter(function (u) {
+            return u.name.toLowerCase().includes(query) || u.role.toLowerCase().includes(query);
+        });
+        renderUserList(filtered);
+    });
+}
 
-    function renderBadgeUserList(users) {
-        badgeUserList.innerHTML = '';
-        users.forEach(function (user) {
-            var row = document.createElement('div');
-            row.className = 'badge-user-row';
-            row.innerHTML =
-                '<div class="badge-user-info">' +
-                '<span class="badge-user-name">' + user.name + '</span>' +
-                '<span class="badge-user-role">' + user.role + '</span>' +
-                '</div>';
-            row.addEventListener('click', function () {
-                fetch('/admin/emulate/' + user.id, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                })
+// Exit emulation
+if (exitEmulationBtn) {
+    exitEmulationBtn.addEventListener('click', function () {
+        fetch('/admin/emulate/exit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) window.location.reload();
+            });
+    });
+}
+
+// Emulation badge dropdown
+var badgeTrigger = document.getElementById('emulation-badge-trigger');
+var badgeDropdown = document.getElementById('emulation-badge-dropdown');
+var badgeUserSearch = document.getElementById('badge-user-search');
+var badgeUserList = document.getElementById('badge-user-list');
+var badgeUsers = [];
+
+function renderBadgeUserList(users) {
+    badgeUserList.innerHTML = '';
+    users.forEach(function (user) {
+        var row = document.createElement('div');
+        row.className = 'badge-user-row';
+        row.innerHTML =
+            '<div class="badge-user-info">' +
+            '<span class="badge-user-name">' + user.name + '</span>' +
+            '<span class="badge-user-role">' + user.role + '</span>' +
+            '</div>';
+        row.addEventListener('click', function () {
+            fetch('/admin/emulate/' + user.id, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) window.location.reload();
+                });
+        });
+        badgeUserList.appendChild(row);
+    });
+}
+
+if (badgeTrigger) {
+    badgeTrigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var isHidden = badgeDropdown.classList.contains('hidden');
+        badgeDropdown.classList.toggle('hidden');
+        if (isHidden) {
+            if (badgeUsers.length === 0) {
+                fetch('/admin/api/users')
                     .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) window.location.reload();
+                    .then(function (users) {
+                        badgeUsers = users;
+                        renderBadgeUserList(users);
+                        if (badgeUserSearch) badgeUserSearch.focus();
                     });
-            });
-            badgeUserList.appendChild(row);
-        });
-    }
-
-    if (badgeTrigger) {
-        badgeTrigger.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var isHidden = badgeDropdown.classList.contains('hidden');
-            badgeDropdown.classList.toggle('hidden');
-            if (isHidden) {
-                if (badgeUsers.length === 0) {
-                    fetch('/admin/api/users')
-                        .then(function (r) { return r.json(); })
-                        .then(function (users) {
-                            badgeUsers = users;
-                            renderBadgeUserList(users);
-                            if (badgeUserSearch) badgeUserSearch.focus();
-                        });
-                } else {
-                    renderBadgeUserList(badgeUsers);
-                    if (badgeUserSearch) badgeUserSearch.focus();
-                }
-            }
-        });
-    }
-
-    if (badgeUserSearch) {
-        badgeUserSearch.addEventListener('input', function () {
-            var query = this.value.toLowerCase();
-            var filtered = badgeUsers.filter(function (u) {
-                return u.name.toLowerCase().includes(query) || u.role.toLowerCase().includes(query);
-            });
-            renderBadgeUserList(filtered);
-        });
-    }
-
-    document.addEventListener('click', function (e) {
-        if (badgeDropdown && !badgeDropdown.classList.contains('hidden')) {
-            if (!badgeDropdown.contains(e.target) && e.target !== badgeTrigger) {
-                badgeDropdown.classList.add('hidden');
+            } else {
+                renderBadgeUserList(badgeUsers);
+                if (badgeUserSearch) badgeUserSearch.focus();
             }
         }
     });
+}
 
-    // ── Accounts ─────────────────────────────────────────
+if (badgeUserSearch) {
+    badgeUserSearch.addEventListener('input', function () {
+        var query = this.value.toLowerCase();
+        var filtered = badgeUsers.filter(function (u) {
+            return u.name.toLowerCase().includes(query) || u.role.toLowerCase().includes(query);
+        });
+        renderBadgeUserList(filtered);
+    });
+}
 
-    var accountsUserList = document.getElementById('accounts-user-list');
-    var addUserToggle = document.getElementById('add-user-toggle');
-    var addUserForm = document.getElementById('add-user-form');
-    var addUserCancel = document.getElementById('add-user-cancel');
-    var newUserRole = document.getElementById('new-user-role');
-    var newUserTeam = document.getElementById('new-user-team');
+document.addEventListener('click', function (e) {
+    if (badgeDropdown && !badgeDropdown.classList.contains('hidden')) {
+        if (!badgeDropdown.contains(e.target) && e.target !== badgeTrigger) {
+            badgeDropdown.classList.add('hidden');
+        }
+    }
+});
 
-    function loadAccountsSection() {
-        if (!accountsUserList) return;
-        fetch('/admin/api/users')
-            .then(function (r) { return r.json(); })
-            .then(function (users) {
-                accountsUserList.innerHTML = '';
+// ── Accounts ─────────────────────────────────────────
 
-                var groups = [
-                    { label: 'CS & Admin', filter: function (u) { return u.role === 'cs' || u.role === 'admin'; } },
-                    { label: 'Management', filter: function (u) { return u.role === 'management'; } },
-                    { label: '2D Team', filter: function (u) { return u.team === '2D'; } },
-                    { label: '3D Team', filter: function (u) { return u.team === '3D'; } },
-                    { label: 'Technical', filter: function (u) { return u.team === 'Technical'; } }
-                ];
+var accountsUserList = document.getElementById('accounts-user-list');
+var addUserToggle = document.getElementById('add-user-toggle');
+var addUserForm = document.getElementById('add-user-form');
+var addUserCancel = document.getElementById('add-user-cancel');
+var newUserRole = document.getElementById('new-user-role');
+var newUserTeam = document.getElementById('new-user-team');
 
-                groups.forEach(function (group) {
-                    var members = users.filter(group.filter);
-                    if (members.length === 0) return;
+function loadAccountsSection() {
+    if (!accountsUserList) return;
+    fetch('/admin/api/users')
+        .then(function (r) { return r.json(); })
+        .then(function (users) {
+            accountsUserList.innerHTML = '';
 
-                    var heading = document.createElement('p');
-                    heading.className = 'accounts-group-label';
-                    heading.textContent = group.label;
-                    accountsUserList.appendChild(heading);
+            var groups = [
+                { label: 'CS & Admin', filter: function (u) { return u.role === 'cs' || u.role === 'admin'; } },
+                { label: 'Management', filter: function (u) { return u.role === 'management'; } },
+                { label: '2D Team', filter: function (u) { return u.team === '2D'; } },
+                { label: '3D Team', filter: function (u) { return u.team === '3D'; } },
+                { label: 'Technical', filter: function (u) { return u.team === 'Technical'; } }
+            ];
 
-                    members.forEach(function (user) {
-                        var row = document.createElement('div');
-                        row.className = 'account-user-row';
-                        row.dataset.id = user.id;
-                        row.innerHTML = renderAccountDisplay(user);
-                        accountsUserList.appendChild(row);
-                        attachRowActions(row, user);
-                    });
+            groups.forEach(function (group) {
+                var members = users.filter(group.filter);
+                if (members.length === 0) return;
+
+                var heading = document.createElement('p');
+                heading.className = 'accounts-group-label';
+                heading.textContent = group.label;
+                accountsUserList.appendChild(heading);
+
+                members.forEach(function (user) {
+                    var row = document.createElement('div');
+                    row.className = 'account-user-row';
+                    row.dataset.id = user.id;
+                    row.innerHTML = renderAccountDisplay(user);
+                    accountsUserList.appendChild(row);
+                    attachRowActions(row, user);
                 });
-
-                if (accountsUserList.children.length === 0) {
-                    accountsUserList.innerHTML = '<p class="no-notifications">No users found</p>';
-                }
             });
-    }
 
-    function renderAccountDisplay(user) {
-        var teamTag = user.team ? '<span class="account-user-team">' + user.team + '</span>' : '';
-        return '<div class="account-user-info">' +
-            '<span class="account-user-name">' + user.name + '</span>' +
-            '<span class="account-user-role">' + user.role + '</span>' +
-            teamTag +
-            '</div>' +
-            '<div class="account-user-actions">' +
-            '<button type="button" class="account-edit-btn" data-name="' + user.name + '" data-role="' + user.role + '" data-team="' + (user.team || '') + '">Edit</button>' +
-            '<button type="button" class="account-reset-btn" data-name="' + user.name + '">&#8635;</button>' +
-            '<button type="button" class="account-delete-btn" data-name="' + user.name + '">&times;</button>' +
-            '</div>';
-    }
+            if (accountsUserList.children.length === 0) {
+                accountsUserList.innerHTML = '<p class="no-notifications">No users found</p>';
+            }
+        });
+}
 
-    function renderAccountEdit(user) {
-        var roleOptions = ['cs', 'designer', 'team_lead', 'management', 'admin'].map(function (r) {
-            return '<option value="' + r + '"' + (user.role === r ? ' selected' : '') + '>' + r + '</option>';
-        }).join('');
-        var teamOptions = ['2D', '3D', 'Technical'].map(function (t) {
-            return '<option value="' + t + '"' + (user.team === t ? ' selected' : '') + '>' + t + '</option>';
-        }).join('');
-        var teamHidden = (user.role === 'designer' || user.role === 'team_lead') ? '' : ' hidden';
-        return '<div class="account-user-edit-form">' +
-            '<input type="text" class="form-input edit-name" value="' + user.name + '" placeholder="Full name">' +
-            '<input type="email" class="form-input edit-email" value="' + (user.email || '') + '" placeholder="Email">' +
-            '<select class="form-input edit-role">' + roleOptions + '</select>' +
-            '<select class="form-input edit-team' + teamHidden + '"><option value="">Select team...</option>' + teamOptions + '</select>' +
-            '<input type="password" class="form-input edit-password" placeholder="New password (leave blank to keep)">' +
-            '<div class="account-edit-actions">' +
-            '<button type="button" class="account-save-btn btn-primary">Save</button>' +
-            '<button type="button" class="account-cancel-edit-btn">Cancel</button>' +
-            '</div>' +
-            '</div>';
-    }
+function renderAccountDisplay(user) {
+    var teamTag = user.team ? '<span class="account-user-team">' + user.team + '</span>' : '';
+    return '<div class="account-user-info">' +
+        '<span class="account-user-name">' + user.name + '</span>' +
+        '<span class="account-user-role">' + user.role + '</span>' +
+        teamTag +
+        '</div>' +
+        '<div class="account-user-actions">' +
+        '<button type="button" class="account-edit-btn" data-name="' + user.name + '" data-role="' + user.role + '" data-team="' + (user.team || '') + '">Edit</button>' +
+        '<button type="button" class="account-reset-btn" data-name="' + user.name + '">&#8635;</button>' +
+        '<button type="button" class="account-delete-btn" data-name="' + user.name + '">&times;</button>' +
+        '</div>';
+}
 
-    function attachRowActions(row, user) {
-        var editBtn = row.querySelector('.account-edit-btn');
-        var resetBtn = row.querySelector('.account-reset-btn');
-        var deleteBtn = row.querySelector('.account-delete-btn');
-        var saveBtn = row.querySelector('.account-save-btn');
-        var cancelBtn = row.querySelector('.account-cancel-edit-btn');
-        var editRole = row.querySelector('.edit-role');
+function renderAccountEdit(user) {
+    var roleOptions = ['cs', 'designer', 'team_lead', 'management', 'admin'].map(function (r) {
+        return '<option value="' + r + '"' + (user.role === r ? ' selected' : '') + '>' + r + '</option>';
+    }).join('');
+    var teamOptions = ['2D', '3D', 'Technical'].map(function (t) {
+        return '<option value="' + t + '"' + (user.team === t ? ' selected' : '') + '>' + t + '</option>';
+    }).join('');
+    var teamHidden = (user.role === 'designer' || user.role === 'team_lead') ? '' : ' hidden';
+    return '<div class="account-user-edit-form">' +
+        '<input type="text" class="form-input edit-name" value="' + user.name + '" placeholder="Full name">' +
+        '<input type="email" class="form-input edit-email" value="' + (user.email || '') + '" placeholder="Email">' +
+        '<select class="form-input edit-role">' + roleOptions + '</select>' +
+        '<select class="form-input edit-team' + teamHidden + '"><option value="">Select team...</option>' + teamOptions + '</select>' +
+        '<input type="password" class="form-input edit-password" placeholder="New password (leave blank to keep)">' +
+        '<div class="account-edit-actions">' +
+        '<button type="button" class="account-save-btn btn-primary">Save</button>' +
+        '<button type="button" class="account-cancel-edit-btn">Cancel</button>' +
+        '</div>' +
+        '</div>';
+}
 
-        if (editBtn) {
-            editBtn.addEventListener('click', function () {
-                row.innerHTML = renderAccountEdit(user);
-                attachRowActions(row, user);
-            });
-        }
+function attachRowActions(row, user) {
+    var editBtn = row.querySelector('.account-edit-btn');
+    var resetBtn = row.querySelector('.account-reset-btn');
+    var deleteBtn = row.querySelector('.account-delete-btn');
+    var saveBtn = row.querySelector('.account-save-btn');
+    var cancelBtn = row.querySelector('.account-cancel-edit-btn');
+    var editRole = row.querySelector('.edit-role');
 
-        if (editRole) {
-            editRole.addEventListener('change', function () {
-                var teamField = row.querySelector('.edit-team');
-                if (this.value === 'designer' || this.value === 'team_lead') {
-                    teamField.classList.remove('hidden');
-                } else {
-                    teamField.classList.add('hidden');
-                }
-            });
-        }
-
-        if (saveBtn) {
-            saveBtn.addEventListener('click', function () {
-                var name = row.querySelector('.edit-name').value.trim();
-                var email = row.querySelector('.edit-email').value.trim();
-                var role = row.querySelector('.edit-role').value;
-                var team = row.querySelector('.edit-team').value;
-                var password = row.querySelector('.edit-password').value.trim();
-                fetch('/admin/api/users/' + user.id, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name, email: email, role: role, team: team, password: password })
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            row.innerHTML = renderAccountDisplay(data.user);
-                            attachRowActions(row, data.user);
-                        } else {
-                            alert(data.error);
-                        }
-                    });
-            });
-        }
-
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', function () {
-                row.innerHTML = renderAccountDisplay(user);
-                attachRowActions(row, user);
-            });
-        }
-
-        if (resetBtn) {
-            resetBtn.addEventListener('click', function () {
-                if (!confirm('Reset password for ' + user.name + ' to Vitamin2026!?')) return;
-                fetch('/admin/api/users/' + user.id + '/reset-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            resetBtn.textContent = '✓';
-                            setTimeout(function () { resetBtn.innerHTML = '&#8635;'; }, 2000);
-                        }
-                    });
-            });
-        }
-
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', function () {
-                if (!confirm('Delete ' + user.name + '? This cannot be undone.')) return;
-                fetch('/admin/api/users/' + user.id, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            row.remove();
-                        } else {
-                            alert('Could not delete user: ' + (data.error || 'Unknown error'));
-                        }
-                    })
-                    .catch(function () {
-                        alert('Server error while deleting user.');
-                    });
-            });
-        }
-    }
-
-    if (addUserToggle) {
-        addUserToggle.addEventListener('click', function () {
-            addUserForm.classList.toggle('hidden');
+    if (editBtn) {
+        editBtn.addEventListener('click', function () {
+            row.innerHTML = renderAccountEdit(user);
+            attachRowActions(row, user);
         });
     }
 
-    if (addUserCancel) {
-        addUserCancel.addEventListener('click', function () {
-            addUserForm.classList.add('hidden');
-            addUserForm.reset();
-            newUserTeam.classList.add('hidden');
-        });
-    }
-
-    if (newUserRole) {
-        newUserRole.addEventListener('change', function () {
+    if (editRole) {
+        editRole.addEventListener('change', function () {
+            var teamField = row.querySelector('.edit-team');
             if (this.value === 'designer' || this.value === 'team_lead') {
-                newUserTeam.classList.remove('hidden');
+                teamField.classList.remove('hidden');
             } else {
-                newUserTeam.classList.add('hidden');
+                teamField.classList.add('hidden');
             }
         });
     }
 
-    if (addUserForm) {
-        addUserForm.addEventListener('submit', function (e) {
-            e.preventDefault();
-            var name = document.getElementById('new-user-name').value.trim();
-            var email = document.getElementById('new-user-email').value.trim();
-            var password = document.getElementById('new-user-password').value.trim();
-            var role = newUserRole.value;
-            var team = newUserTeam.value;
-            fetch('/admin/api/users', {
-                method: 'POST',
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+            var name = row.querySelector('.edit-name').value.trim();
+            var email = row.querySelector('.edit-email').value.trim();
+            var role = row.querySelector('.edit-role').value;
+            var team = row.querySelector('.edit-team').value;
+            var password = row.querySelector('.edit-password').value.trim();
+            fetch('/admin/api/users/' + user.id, {
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name, email: email, password: password, role: role, team: team })
+                body: JSON.stringify({ name: name, email: email, role: role, team: team, password: password })
             })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (data.success) {
-                        addUserForm.reset();
-                        newUserTeam.classList.add('hidden');
-                        addUserForm.classList.add('hidden');
-                        loadAccountsSection();
+                        row.innerHTML = renderAccountDisplay(data.user);
+                        attachRowActions(row, data.user);
                     } else {
                         alert(data.error);
                     }
@@ -3725,820 +3625,917 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
         });
     }
 
-    // ── Project Tools ─────────────────────────────────────────────────────────
-
-    document.querySelectorAll('.pt-tab-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            document.querySelectorAll('.pt-tab-btn').forEach(function (b) { b.classList.remove('active'); });
-            document.querySelectorAll('.pt-panel').forEach(function (p) { p.classList.add('hidden'); });
-            this.classList.add('active');
-            var panel = document.getElementById('pt-panel-' + this.dataset.pt);
-            if (panel) panel.classList.remove('hidden');
-            loadPTPanel(this.dataset.pt);
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+            row.innerHTML = renderAccountDisplay(user);
+            attachRowActions(row, user);
         });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+            if (!confirm('Reset password for ' + user.name + ' to Vitamin2026!?')) return;
+            fetch('/admin/api/users/' + user.id + '/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        resetBtn.textContent = '✓';
+                        setTimeout(function () { resetBtn.innerHTML = '&#8635;'; }, 2000);
+                    }
+                });
+        });
+    }
+
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function () {
+            if (!confirm('Delete ' + user.name + '? This cannot be undone.')) return;
+            fetch('/admin/api/users/' + user.id, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        row.remove();
+                    } else {
+                        alert('Could not delete user: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(function () {
+                    alert('Server error while deleting user.');
+                });
+        });
+    }
+}
+
+if (addUserToggle) {
+    addUserToggle.addEventListener('click', function () {
+        addUserForm.classList.toggle('hidden');
     });
+}
 
-    function loadProjectToolsSection() {
-        var activeTab = document.querySelector('.pt-tab-btn.active');
-        if (activeTab) loadPTPanel(activeTab.dataset.pt);
-    }
+if (addUserCancel) {
+    addUserCancel.addEventListener('click', function () {
+        addUserForm.classList.add('hidden');
+        addUserForm.reset();
+        newUserTeam.classList.add('hidden');
+    });
+}
 
-    function loadPTPanel(name) {
-        if (name === 'clients') loadPTClients();
-        else if (name === 'customers') loadPTCustomers();
-        else if (name === 'projects') loadPTProjects();
-        else if (name === 'drafts') loadPTDrafts();
-        else if (name === 'deliverables') loadPTDeliverables();
-        else if (name === 'design-types') loadPTDesignTypes();
-        else if (name === 'design-directions') loadPTDesignDirections();
-    }
+if (newUserRole) {
+    newUserRole.addEventListener('change', function () {
+        if (this.value === 'designer' || this.value === 'team_lead') {
+            newUserTeam.classList.remove('hidden');
+        } else {
+            newUserTeam.classList.add('hidden');
+        }
+    });
+}
 
-    // ── Clients ───────────────────────────────────────────────────
-
-    function loadPTClients() {
-        fetch('/admin/api/clients')
-            .then(function (res) { return res.json(); })
-            .then(function (clients) {
-                var list = document.getElementById('pt-clients-list');
-                if (clients.length === 0) {
-                    list.innerHTML = '<p class="empty-state">No clients yet.</p>';
-                    return;
+if (addUserForm) {
+    addUserForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var name = document.getElementById('new-user-name').value.trim();
+        var email = document.getElementById('new-user-email').value.trim();
+        var password = document.getElementById('new-user-password').value.trim();
+        var role = newUserRole.value;
+        var team = newUserTeam.value;
+        fetch('/admin/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, email: email, password: password, role: role, team: team })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    addUserForm.reset();
+                    newUserTeam.classList.add('hidden');
+                    addUserForm.classList.add('hidden');
+                    loadAccountsSection();
+                } else {
+                    alert(data.error);
                 }
-                list.innerHTML = clients.map(function (c) {
-                    return '<div class="account-user-row" id="pt-client-' + c.id + '">' +
+            });
+    });
+}
+
+// ── Project Tools ─────────────────────────────────────────────────────────
+
+document.querySelectorAll('.pt-tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.querySelectorAll('.pt-tab-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelectorAll('.pt-panel').forEach(function (p) { p.classList.add('hidden'); });
+        this.classList.add('active');
+        var panel = document.getElementById('pt-panel-' + this.dataset.pt);
+        if (panel) panel.classList.remove('hidden');
+        loadPTPanel(this.dataset.pt);
+    });
+});
+
+function loadProjectToolsSection() {
+    var activeTab = document.querySelector('.pt-tab-btn.active');
+    if (activeTab) loadPTPanel(activeTab.dataset.pt);
+}
+
+function loadPTPanel(name) {
+    if (name === 'clients') loadPTClients();
+    else if (name === 'customers') loadPTCustomers();
+    else if (name === 'projects') loadPTProjects();
+    else if (name === 'drafts') loadPTDrafts();
+    else if (name === 'deliverables') loadPTDeliverables();
+    else if (name === 'design-types') loadPTDesignTypes();
+    else if (name === 'design-directions') loadPTDesignDirections();
+}
+
+// ── Clients ───────────────────────────────────────────────────
+
+function loadPTClients() {
+    fetch('/admin/api/clients')
+        .then(function (res) { return res.json(); })
+        .then(function (clients) {
+            var list = document.getElementById('pt-clients-list');
+            if (clients.length === 0) {
+                list.innerHTML = '<p class="empty-state">No clients yet.</p>';
+                return;
+            }
+            list.innerHTML = clients.map(function (c) {
+                return '<div class="account-user-row" id="pt-client-' + c.id + '">' +
+                    '<span class="account-user-name">' + c.name + '</span>' +
+                    '<div class="account-user-actions">' +
+                    '<button type="button" class="account-delete-btn" data-id="' + c.id + '" data-name="' + c.name + '">&times;</button>' +
+                    '</div></div>';
+            }).join('');
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete client "' + this.dataset.name + '"? This cannot be undone.')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/clients/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) { document.getElementById('pt-client-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete client.'); }
+                        });
+                });
+            });
+        });
+}
+
+var ptAddClientToggle = document.getElementById('pt-add-client-toggle');
+var ptAddClientForm = document.getElementById('pt-add-client-form');
+if (ptAddClientToggle) {
+    ptAddClientToggle.addEventListener('click', function () {
+        ptAddClientForm.classList.toggle('hidden');
+    });
+}
+document.getElementById('pt-add-client-cancel').addEventListener('click', function () {
+    ptAddClientForm.classList.add('hidden');
+    document.getElementById('pt-new-client-name').value = '';
+});
+ptAddClientForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('pt-new-client-name').value.trim();
+    if (!name) return;
+    fetch('/admin/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                ptAddClientForm.classList.add('hidden');
+                document.getElementById('pt-new-client-name').value = '';
+                loadPTClients();
+            } else { alert(data.error || 'Could not create client.'); }
+        });
+});
+
+// ── Customers ─────────────────────────────────────────────────
+
+function loadPTCustomers() {
+    fetch('/admin/api/customers')
+        .then(function (res) { return res.json(); })
+        .then(function (customers) {
+            var list = document.getElementById('pt-customers-list');
+            if (customers.length === 0) {
+                list.innerHTML = '<p class="empty-state">No customers yet.</p>';
+                return;
+            }
+            var grouped = {};
+            customers.forEach(function (c) {
+                if (!grouped[c.region]) grouped[c.region] = [];
+                grouped[c.region].push(c);
+            });
+            var html = '';
+            Object.keys(grouped).sort().forEach(function (region) {
+                html += '<div class="accounts-group-label">' + region.charAt(0).toUpperCase() + region.slice(1) + '</div>';
+                grouped[region].forEach(function (c) {
+                    html += '<div class="account-user-row" id="pt-customer-' + c.id + '">' +
                         '<span class="account-user-name">' + c.name + '</span>' +
                         '<div class="account-user-actions">' +
                         '<button type="button" class="account-delete-btn" data-id="' + c.id + '" data-name="' + c.name + '">&times;</button>' +
                         '</div></div>';
-                }).join('');
-                list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        if (!confirm('Delete client "' + this.dataset.name + '"? This cannot be undone.')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/clients/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-client-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete client.'); }
-                            });
-                    });
                 });
             });
-    }
-
-    var ptAddClientToggle = document.getElementById('pt-add-client-toggle');
-    var ptAddClientForm = document.getElementById('pt-add-client-form');
-    if (ptAddClientToggle) {
-        ptAddClientToggle.addEventListener('click', function () {
-            ptAddClientForm.classList.toggle('hidden');
-        });
-    }
-    document.getElementById('pt-add-client-cancel').addEventListener('click', function () {
-        ptAddClientForm.classList.add('hidden');
-        document.getElementById('pt-new-client-name').value = '';
-    });
-    ptAddClientForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var name = document.getElementById('pt-new-client-name').value.trim();
-        if (!name) return;
-        fetch('/admin/api/clients', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name })
-        })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    ptAddClientForm.classList.add('hidden');
-                    document.getElementById('pt-new-client-name').value = '';
-                    loadPTClients();
-                } else { alert(data.error || 'Could not create client.'); }
-            });
-    });
-
-    // ── Customers ─────────────────────────────────────────────────
-
-    function loadPTCustomers() {
-        fetch('/admin/api/customers')
-            .then(function (res) { return res.json(); })
-            .then(function (customers) {
-                var list = document.getElementById('pt-customers-list');
-                if (customers.length === 0) {
-                    list.innerHTML = '<p class="empty-state">No customers yet.</p>';
-                    return;
-                }
-                var grouped = {};
-                customers.forEach(function (c) {
-                    if (!grouped[c.region]) grouped[c.region] = [];
-                    grouped[c.region].push(c);
-                });
-                var html = '';
-                Object.keys(grouped).sort().forEach(function (region) {
-                    html += '<div class="accounts-group-label">' + region.charAt(0).toUpperCase() + region.slice(1) + '</div>';
-                    grouped[region].forEach(function (c) {
-                        html += '<div class="account-user-row" id="pt-customer-' + c.id + '">' +
-                            '<span class="account-user-name">' + c.name + '</span>' +
-                            '<div class="account-user-actions">' +
-                            '<button type="button" class="account-delete-btn" data-id="' + c.id + '" data-name="' + c.name + '">&times;</button>' +
-                            '</div></div>';
-                    });
-                });
-                list.innerHTML = html;
-                list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        if (!confirm('Delete customer "' + this.dataset.name + '"? This cannot be undone.')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/customers/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-customer-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete customer.'); }
-                            });
-                    });
-                });
-            });
-    }
-
-    var ptAddCustomerToggle = document.getElementById('pt-add-customer-toggle');
-    var ptAddCustomerForm = document.getElementById('pt-add-customer-form');
-    if (ptAddCustomerToggle) {
-        ptAddCustomerToggle.addEventListener('click', function () {
-            ptAddCustomerForm.classList.toggle('hidden');
-        });
-    }
-    document.getElementById('pt-add-customer-cancel').addEventListener('click', function () {
-        ptAddCustomerForm.classList.add('hidden');
-        document.getElementById('pt-new-customer-name').value = '';
-        document.getElementById('pt-new-customer-region').value = '';
-    });
-    ptAddCustomerForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var name = document.getElementById('pt-new-customer-name').value.trim();
-        var region = document.getElementById('pt-new-customer-region').value;
-        if (!name || !region) return;
-        fetch('/admin/api/customers', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, region: region })
-        })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    ptAddCustomerForm.classList.add('hidden');
-                    document.getElementById('pt-new-customer-name').value = '';
-                    document.getElementById('pt-new-customer-region').value = '';
-                    loadPTCustomers();
-                } else { alert(data.error || 'Could not create customer.'); }
-            });
-    });
-
-    // ── Projects ──────────────────────────────────────────────────
-
-    function loadPTProjects() {
-        fetch('/admin/api/projects')
-            .then(function (res) { return res.json(); })
-            .then(function (projects) {
-                var list = document.getElementById('pt-projects-list');
-                if (projects.length === 0) {
-                    list.innerHTML = '<p class="empty-state">No active projects.</p>';
-                    return;
-                }
-                var statusLabel = { briefed: 'Briefed', in_queue: 'In Queue', in_progress: 'In Progress', submitted: 'Submitted', revision_in_queue: 'Revision in Queue', revision_in_progress: 'Revision in Progress', approved: 'Approved', completed: 'Completed' };
-                list.innerHTML = projects.map(function (p) {
-                    return '<div class="account-user-row" id="pt-project-' + p.id + '">' +
-                        '<div class="account-user-info">' +
-                        '<span class="account-user-name">' + p.name + '</span>' +
-                        '<span class="account-user-role">' + (p.job_number || 'No job #') + ' · ' + p.cs_lead + ' · ' + (statusLabel[p.status] || p.status) + '</span>' +
-                        '</div>' +
-                        '<div class="account-user-actions">' +
-                        '<button type="button" class="account-delete-btn" data-id="' + p.id + '" data-name="' + p.name + '">&times;</button>' +
-                        '</div></div>';
-                }).join('');
-                list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        if (!confirm('Delete project "' + this.dataset.name + '"? This cannot be undone.')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/projects/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-project-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete project.'); }
-                            });
-                    });
-                });
-            });
-    }
-
-    // ── Drafts ────────────────────────────────────────────────────
-
-    function loadPTDrafts() {
-        fetch('/admin/api/drafts')
-            .then(function (res) { return res.json(); })
-            .then(function (drafts) {
-                var list = document.getElementById('pt-drafts-list');
-                if (drafts.length === 0) {
-                    list.innerHTML = '<p class="empty-state">No drafts.</p>';
-                    return;
-                }
-                list.innerHTML = drafts.map(function (d) {
-                    return '<div class="account-user-row" id="pt-draft-' + d.id + '">' +
-                        '<div class="account-user-info">' +
-                        '<span class="account-user-name">' + d.name + '</span>' +
-                        '<span class="account-user-role">' + d.cs_lead + '</span>' +
-                        '</div>' +
-                        '<div class="account-user-actions">' +
-                        '<button type="button" class="account-delete-btn" data-id="' + d.id + '" data-name="' + d.name + '">&times;</button>' +
-                        '</div></div>';
-                }).join('');
-                list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        if (!confirm('Delete draft "' + this.dataset.name + '"?')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/drafts/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-draft-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete draft.'); }
-                            });
-                    });
-                });
-            });
-    }
-
-    // ── Deliverable Types ─────────────────────────────────────────
-    var ptFormClients = [];
-    var ptFormCustomers = [];
-    var ptDelFormLoaded = false;
-
-    function loadPTDelFormData(callback) {
-        if (ptDelFormLoaded) { callback(); return; }
-        Promise.all([
-            fetch('/admin/api/clients').then(function (r) { return r.json(); }),
-            fetch('/admin/api/customers').then(function (r) { return r.json(); })
-        ]).then(function (results) {
-            ptFormClients = results[0];
-            ptFormCustomers = results[1];
-            ptDelFormLoaded = true;
-            callback();
-        });
-    }
-
-    function populatePTDelFormClients() {
-        var sel = document.getElementById('pt-new-del-client');
-        sel.innerHTML = '<option value="">Select client...</option>' +
-            ptFormClients.map(function (c) {
-                return '<option value="' + c.id + '">' + c.name + '</option>';
-            }).join('');
-    }
-
-    function populatePTDelFormCustomers(region) {
-        var filtered = region
-            ? ptFormCustomers.filter(function (c) { return c.region === region; })
-            : ptFormCustomers;
-        var sel = document.getElementById('pt-new-del-customer');
-        sel.innerHTML = '<option value="">Select customer...</option>' +
-            filtered.map(function (c) {
-                return '<option value="' + c.id + '">' + c.name + '</option>';
-            }).join('');
-    }
-
-    var ptAddDelToggle = document.getElementById('pt-add-del-toggle');
-    var ptAddDelForm = document.getElementById('pt-add-del-form');
-
-    ptAddDelToggle.addEventListener('click', function () {
-        var opening = ptAddDelForm.classList.contains('hidden');
-        ptAddDelForm.classList.toggle('hidden');
-        if (opening) {
-            loadPTDelFormData(function () {
-                populatePTDelFormClients();
-                populatePTDelFormCustomers('');
-            });
-        }
-    });
-
-    document.getElementById('pt-add-del-cancel').addEventListener('click', function () {
-        ptAddDelForm.classList.add('hidden');
-        ptAddDelForm.reset();
-    });
-
-    document.getElementById('pt-new-del-region').addEventListener('change', function () {
-        populatePTDelFormCustomers(this.value);
-    });
-
-    ptAddDelForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var name = document.getElementById('pt-new-del-name').value.trim();
-        var clientId = document.getElementById('pt-new-del-client').value;
-        var customerId = document.getElementById('pt-new-del-customer').value;
-        var disciplines = Array.from(
-            ptAddDelForm.querySelectorAll('.pt-discipline-checks input:checked')
-        ).map(function (cb) { return cb.value; });
-        var isCustom = document.getElementById('pt-new-del-custom').checked;
-        if (!name || !clientId || !customerId) {
-            alert('Name, client, and customer are all required.');
-            return;
-        }
-        fetch('/admin/api/deliverable-types', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: name,
-                client_id: clientId,
-                customer_id: customerId,
-                disciplines: disciplines,
-                is_custom: isCustom
-            })
-        })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    ptAddDelForm.classList.add('hidden');
-                    ptAddDelForm.reset();
-                    ptAllDeliverableTypes.push(data.type);
-                    ptAllDeliverableTypes.sort(function (a, b) { return a.name.localeCompare(b.name); });
-                    populatePTDelClientFilter(ptAllDeliverableTypes);
-                    renderPTDeliverableRows(ptAllDeliverableTypes);
-                } else {
-                    alert(data.error || 'Could not create deliverable type.');
-                }
-            });
-    });
-
-
-    var ptAllDeliverableTypes = [];
-
-    function loadPTDeliverables() {
-        fetch('/admin/api/deliverable-types')
-            .then(function (res) { return res.json(); })
-            .then(function (types) {
-                ptAllDeliverableTypes = types;
-                populatePTDelClientFilter(types);
-                renderPTDeliverableRows(types);
-            });
-    }
-
-    // ── Design Types ──────────────────────────────────────────────
-    function loadPTDesignTypes() {
-        fetch('/admin/api/design-types')
-            .then(function (r) { return r.json(); })
-            .then(function (types) {
-                var list = document.getElementById('pt-design-types-list');
-                list.innerHTML = types.length === 0 ? '<p class="empty-state">No design types yet.</p>' :
-                    types.map(function (t) {
-                        return '<div class="account-user-row" id="pt-dt-' + t.id + '">' +
-                            '<div class="account-user-info">' +
-                            '<span class="account-user-name">' + t.name + '</span>' +
-                            '<span class="account-user-role">' + (t.team ? t.team.split(',').join(' + ') : 'No team set') + '</span>' +
-                            '</div>' +
-                            '<div class="account-user-actions">' +
-                            '<button class="account-edit-btn pt-dt-edit" data-id="' + t.id + '" data-name="' + t.name + '" data-team="' + (t.team || '') + '">Edit</button>' +
-                            '<button class="account-delete-btn pt-dt-delete" data-id="' + t.id + '" data-name="' + t.name + '">&times;</button>' +
-                            '</div></div>';
-                    }).join('');
-                list.querySelectorAll('.pt-dt-delete').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        if (!confirm('Delete design type "' + this.dataset.name + '"?')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/design-types/' + id, { method: 'DELETE' })
-                            .then(function (r) { return r.json(); })
-                            .then(function (d) { if (d.success) { document.getElementById('pt-dt-' + id).remove(); } else { alert(d.error); } });
-                    });
-                });
-                list.querySelectorAll('.pt-dt-edit').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        var id = this.dataset.id;
-                        var row = document.getElementById('pt-dt-' + id);
-                        var currentName = this.dataset.name;
-                        var currentTeam = this.dataset.team;
-                        var currentTeams = currentTeam ? currentTeam.split(',') : [];
-                        row.innerHTML =
-                            '<div class="pt-inline-edit">' +
-                            '<input type="text" class="form-input pt-edit-name" value="' + currentName + '" style="max-width:180px;">' +
-                            '<div class="pt-discipline-checks pt-edit-teams">' +
-                            ['2D', '3D', 'Technical'].map(function (t) {
-                                return '<label><input type="checkbox" value="' + t + '"' + (currentTeams.indexOf(t) !== -1 ? ' checked' : '') + '> ' + t + '</label>';
-                            }).join('') +
-                            '</div>' +
-                            '<button class="btn-primary pt-dt-save" data-id="' + id + '">Save</button>' +
-                            '<button class="account-delete-btn pt-dt-cancel" data-id="' + id + '">Cancel</button>' +
-                            '</div>';
-                        row.querySelector('.pt-dt-save').addEventListener('click', function () {
-                            var newName = row.querySelector('.pt-edit-name').value.trim();
-                            var newTeam = Array.from(row.querySelectorAll('.pt-edit-teams input:checked')).map(function (cb) { return cb.value; }).join(',') || null;
-                            if (!newName) return;
-                            fetch('/admin/api/design-types/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, team: newTeam }) })
-                                .then(function (r) { return r.json(); })
-                                .then(function () { loadPTDesignTypes(); });
-                        });
-                        row.querySelector('.pt-dt-cancel').addEventListener('click', function () { loadPTDesignTypes(); });
-                    });
-                });
-            });
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        var addDtToggle = document.getElementById('pt-add-dt-toggle');
-        var addDtForm = document.getElementById('pt-add-dt-form');
-        var addDtCancel = document.getElementById('pt-add-dt-cancel');
-        if (addDtToggle) {
-            addDtToggle.addEventListener('click', function () { addDtForm.classList.toggle('hidden'); });
-            addDtCancel.addEventListener('click', function () { addDtForm.classList.add('hidden'); });
-            addDtForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-                var name = document.getElementById('pt-new-dt-name').value.trim();
-                var checked = Array.from(document.querySelectorAll('#pt-new-dt-teams input:checked')).map(function (cb) { return cb.value; });
-                var team = checked.join(',') || null;
-                if (!name) return;
-                fetch('/admin/api/design-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, team: team }) })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) {
-                        if (d.error) { alert(d.error); return; }
-                        document.getElementById('pt-new-dt-name').value = '';
-                        document.querySelectorAll('#pt-new-dt-teams input').forEach(function (cb) { cb.checked = false; });
-                        addDtForm.classList.add('hidden');
-                        loadPTDesignTypes();
-                    });
-            });
-        }
-
-        // ── Design Directions ──────────────────────────────────────
-        var addDdToggle = document.getElementById('pt-add-dd-toggle');
-        var addDdForm = document.getElementById('pt-add-dd-form');
-        var addDdCancel = document.getElementById('pt-add-dd-cancel');
-        if (addDdToggle) {
-            addDdToggle.addEventListener('click', function () { addDdForm.classList.toggle('hidden'); });
-            addDdCancel.addEventListener('click', function () { addDdForm.classList.add('hidden'); });
-            addDdForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-                var name = document.getElementById('pt-new-dd-name').value.trim();
-                if (!name) return;
-                fetch('/admin/api/design-directions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) {
-                        if (d.error) { alert(d.error); return; }
-                        document.getElementById('pt-new-dd-name').value = '';
-                        addDdForm.classList.add('hidden');
-                        loadPTDesignDirections();
-                    });
-            });
-        }
-    });
-
-    function loadPTDesignDirections() {
-        fetch('/admin/api/design-directions')
-            .then(function (r) { return r.json(); })
-            .then(function (dirs) {
-                var list = document.getElementById('pt-design-directions-list');
-                list.innerHTML = dirs.length === 0 ? '<p class="empty-state">No design directions yet.</p>' :
-                    dirs.map(function (d) {
-                        return '<div class="account-user-row" id="pt-dd-' + d.id + '">' +
-                            '<div class="account-user-info"><span class="account-user-name">' + d.name + '</span></div>' +
-                            '<div class="account-user-actions">' +
-                            '<button class="account-edit-btn pt-dd-edit" data-id="' + d.id + '" data-name="' + d.name + '">Edit</button>' +
-                            '<button class="account-delete-btn pt-dd-delete" data-id="' + d.id + '" data-name="' + d.name + '">&times;</button>' +
-                            '</div></div>';
-                    }).join('');
-                list.querySelectorAll('.pt-dd-delete').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        if (!confirm('Delete design direction "' + this.dataset.name + '"?')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/design-directions/' + id, { method: 'DELETE' })
-                            .then(function (r) { return r.json(); })
-                            .then(function (d) { if (d.success) { document.getElementById('pt-dd-' + id).remove(); } else { alert(d.error); } });
-                    });
-                });
-                list.querySelectorAll('.pt-dd-edit').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        var id = this.dataset.id;
-                        var row = document.getElementById('pt-dd-' + id);
-                        var currentName = this.dataset.name;
-                        row.innerHTML =
-                            '<div class="pt-inline-edit">' +
-                            '<input type="text" class="form-input pt-edit-name" value="' + currentName + '" style="max-width:240px;">' +
-                            '<button class="btn-primary pt-dd-save" data-id="' + id + '">Save</button>' +
-                            '<button class="account-delete-btn pt-dd-cancel">Cancel</button>' +
-                            '</div>';
-                        row.querySelector('.pt-dd-save').addEventListener('click', function () {
-                            var newName = row.querySelector('.pt-edit-name').value.trim();
-                            if (!newName) return;
-                            fetch('/admin/api/design-directions/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }) })
-                                .then(function (r) { return r.json(); })
-                                .then(function () { loadPTDesignDirections(); });
-                        });
-                        row.querySelector('.pt-dd-cancel').addEventListener('click', function () { loadPTDesignDirections(); });
-                    });
-                });
-            });
-    }
-
-    function populatePTDelClientFilter(types) {
-        var seen = {};
-        var clients = [];
-        types.forEach(function (t) {
-            if (t.client !== '—' && !seen[t.client]) {
-                seen[t.client] = true;
-                clients.push(t.client);
-            }
-        });
-        clients.sort();
-        var sel = document.getElementById('pt-filter-client');
-        sel.innerHTML = '<option value="">All Clients</option>' +
-            clients.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
-    }
-
-    function populatePTDelCustomerFilter(region) {
-        var filtered = region
-            ? ptAllDeliverableTypes.filter(function (t) { return t.region === region; })
-            : ptAllDeliverableTypes;
-        var seen = {};
-        var customers = [];
-        filtered.forEach(function (t) {
-            if (t.customer !== '—' && !seen[t.customer]) {
-                seen[t.customer] = true;
-                customers.push(t.customer);
-            }
-        });
-        customers.sort();
-        var sel = document.getElementById('pt-filter-customer');
-        var prev = sel.value;
-        sel.innerHTML = '<option value="">All Customers</option>' +
-            customers.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
-        if (customers.indexOf(prev) !== -1) sel.value = prev;
-    }
-
-    function filterPTDeliverables() {
-        var client = document.getElementById('pt-filter-client').value;
-        var region = document.getElementById('pt-filter-region').value;
-        var customer = document.getElementById('pt-filter-customer').value;
-        var filtered = ptAllDeliverableTypes.filter(function (t) {
-            if (client && t.client !== client) return false;
-            if (region && t.region !== region) return false;
-            if (customer && t.customer !== customer) return false;
-            return true;
-        });
-        renderPTDeliverableRows(filtered);
-    }
-
-    document.getElementById('pt-filter-client').addEventListener('change', filterPTDeliverables);
-    document.getElementById('pt-filter-region').addEventListener('change', function () {
-        populatePTDelCustomerFilter(this.value);
-        filterPTDeliverables();
-    });
-    document.getElementById('pt-filter-customer').addEventListener('change', filterPTDeliverables);
-
-    function renderPTDeliverableRows(types) {
-        var list = document.getElementById('pt-deliverables-list');
-        if (types.length === 0) {
-            list.innerHTML = '<p class="empty-state">No deliverable types match.</p>';
-            return;
-        }
-        list.innerHTML = types.map(function (t) {
-            return '<div class="account-user-row" id="pt-del-' + t.id + '">' +
-                '<div class="account-user-info">' +
-                '<span class="account-user-name">' + t.name + '</span>' +
-                '<span class="account-user-role">' + t.client + ' · ' + t.customer + (t.is_custom ? ' · Custom' : '') + '</span>' +
-                '</div>' +
-                '<div class="account-user-actions">' +
-                '<button type="button" class="account-edit-btn" data-id="' + t.id + '">Edit</button>' +
-                '<button type="button" class="account-delete-btn" data-id="' + t.id + '" data-name="' + t.name + '">&times;</button>' +
-                '</div></div>';
-        }).join('');
-
-        list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                if (!confirm('Delete "' + this.dataset.name + '"?')) return;
-                var id = this.dataset.id;
-                fetch('/admin/api/deliverable-types/' + id, { method: 'DELETE' })
-                    .then(function (res) { return res.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            ptAllDeliverableTypes = ptAllDeliverableTypes.filter(function (t) { return String(t.id) !== String(id); });
-                            document.getElementById('pt-del-' + id).remove();
-                        } else { alert(data.error || 'Could not delete.'); }
-                    });
-            });
-        });
-
-        list.querySelectorAll('.account-edit-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var id = this.dataset.id;
-                var type = ptAllDeliverableTypes.find(function (t) { return String(t.id) === String(id); });
-                if (!type) return;
-                var row = document.getElementById('pt-del-' + id);
-                row.innerHTML =
-                    '<div class="account-user-edit-form">' +
-                    '<input type="text" class="form-input pt-del-name-input" value="' + type.name + '">' +
-                    '<div class="pt-discipline-checks">' +
-                    ['2d', '3d', 'technical'].map(function (d) {
-                        var checked = type.disciplines.indexOf(d) !== -1 ? 'checked' : '';
-                        return '<label><input type="checkbox" value="' + d + '" ' + checked + '> ' + d.toUpperCase() + '</label>';
-                    }).join('') +
-                    '</div>' +
-                    '<div class="account-edit-actions">' +
-                    '<button type="button" class="btn-primary pt-del-save-btn">Save</button>' +
-                    '<button type="button" class="account-cancel-edit-btn">Cancel</button>' +
-                    '</div></div>';
-                row.querySelector('.account-cancel-edit-btn').addEventListener('click', function () {
-                    renderPTDeliverableRows(ptAllDeliverableTypes);
-                });
-                row.querySelector('.pt-del-save-btn').addEventListener('click', function () {
-                    var name = row.querySelector('.pt-del-name-input').value.trim();
-                    var disciplines = Array.from(
-                        row.querySelectorAll('.pt-discipline-checks input:checked')
-                    ).map(function (cb) { return cb.value; });
-                    if (!name) { alert('Name is required.'); return; }
-                    fetch('/admin/api/deliverable-types/' + id, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: name, disciplines: disciplines })
-                    })
+            list.innerHTML = html;
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete customer "' + this.dataset.name + '"? This cannot be undone.')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/customers/' + id, { method: 'DELETE' })
                         .then(function (res) { return res.json(); })
                         .then(function (data) {
-                            if (data.success) {
-                                var idx = ptAllDeliverableTypes.findIndex(function (t) { return String(t.id) === String(id); });
-                                if (idx !== -1) {
-                                    ptAllDeliverableTypes[idx].name = name;
-                                    ptAllDeliverableTypes[idx].disciplines = disciplines;
-                                }
-                                renderPTDeliverableRows(ptAllDeliverableTypes);
-                            } else { alert(data.error || 'Could not save.'); }
+                            if (data.success) { document.getElementById('pt-customer-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete customer.'); }
                         });
                 });
             });
         });
-    }
+}
 
-    // ── Activity Log ───────────────────────────────────────────────
+var ptAddCustomerToggle = document.getElementById('pt-add-customer-toggle');
+var ptAddCustomerForm = document.getElementById('pt-add-customer-form');
+if (ptAddCustomerToggle) {
+    ptAddCustomerToggle.addEventListener('click', function () {
+        ptAddCustomerForm.classList.toggle('hidden');
+    });
+}
+document.getElementById('pt-add-customer-cancel').addEventListener('click', function () {
+    ptAddCustomerForm.classList.add('hidden');
+    document.getElementById('pt-new-customer-name').value = '';
+    document.getElementById('pt-new-customer-region').value = '';
+});
+ptAddCustomerForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('pt-new-customer-name').value.trim();
+    var region = document.getElementById('pt-new-customer-region').value;
+    if (!name || !region) return;
+    fetch('/admin/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, region: region })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                ptAddCustomerForm.classList.add('hidden');
+                document.getElementById('pt-new-customer-name').value = '';
+                document.getElementById('pt-new-customer-region').value = '';
+                loadPTCustomers();
+            } else { alert(data.error || 'Could not create customer.'); }
+        });
+});
 
-    function loadActivitySection() {
-        var search = document.getElementById('activity-search').value.trim();
-        var from = document.getElementById('activity-from').value;
-        var to = document.getElementById('activity-to').value;
-        var category = document.getElementById('activity-category').value; // 'all' or a named category
+// ── Projects ──────────────────────────────────────────────────
 
-        var params = new URLSearchParams();
-        if (search) params.append('search', search);
-        if (from) params.append('from', from);
-        if (to) params.append('to', to);
-        // Only send category param when the user has selected a specific filter —
-        // 'all' means no filter and the backend returns everything.
-        if (category && category !== 'all') params.append('category', category);
-
-        var url = '/admin/api/activity' + (params.toString() ? '?' + params.toString() : '');
-
-        fetch(url)
-            .then(function (res) { return res.json(); })
-            .then(function (entries) {
-                var list = document.getElementById('activity-log-list');
-                if (entries.length === 0) {
-                    list.innerHTML = '<p class="empty-state">No activity found.</p>';
-                    return;
-                }
-                list.innerHTML = entries.map(function (e) {
-                    return '<div class="activity-entry" id="activity-' + e.id + '">' +
-                        '<div class="activity-entry-body">' +
-                        '<span class="activity-description">' + e.description + '</span>' +
-                        '<span class="activity-meta">' + e.user + ' · ' + e.created_at + '</span>' +
-                        '</div>' +
-                        '<button type="button" class="account-delete-btn" data-id="' + e.id + '">&times;</button>' +
-                        '</div>';
-                }).join('');
-
-                list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        var id = this.dataset.id;
-                        fetch('/admin/api/activity/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) {
-                                    document.getElementById('activity-' + id).remove();
-                                }
-                            });
-                    });
+function loadPTProjects() {
+    fetch('/admin/api/projects')
+        .then(function (res) { return res.json(); })
+        .then(function (projects) {
+            var list = document.getElementById('pt-projects-list');
+            if (projects.length === 0) {
+                list.innerHTML = '<p class="empty-state">No active projects.</p>';
+                return;
+            }
+            var statusLabel = { briefed: 'Briefed', in_queue: 'In Queue', in_progress: 'In Progress', submitted: 'Submitted', revision_in_queue: 'Revision in Queue', revision_in_progress: 'Revision in Progress', approved: 'Approved', completed: 'Completed' };
+            list.innerHTML = projects.map(function (p) {
+                return '<div class="account-user-row" id="pt-project-' + p.id + '">' +
+                    '<div class="account-user-info">' +
+                    '<span class="account-user-name">' + p.name + '</span>' +
+                    '<span class="account-user-role">' + (p.job_number || 'No job #') + ' · ' + p.cs_lead + ' · ' + (statusLabel[p.status] || p.status) + '</span>' +
+                    '</div>' +
+                    '<div class="account-user-actions">' +
+                    '<button type="button" class="account-delete-btn" data-id="' + p.id + '" data-name="' + p.name + '">&times;</button>' +
+                    '</div></div>';
+            }).join('');
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete project "' + this.dataset.name + '"? This cannot be undone.')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/projects/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) { document.getElementById('pt-project-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete project.'); }
+                        });
                 });
             });
+        });
+}
+
+// ── Drafts ────────────────────────────────────────────────────
+
+function loadPTDrafts() {
+    fetch('/admin/api/drafts')
+        .then(function (res) { return res.json(); })
+        .then(function (drafts) {
+            var list = document.getElementById('pt-drafts-list');
+            if (drafts.length === 0) {
+                list.innerHTML = '<p class="empty-state">No drafts.</p>';
+                return;
+            }
+            list.innerHTML = drafts.map(function (d) {
+                return '<div class="account-user-row" id="pt-draft-' + d.id + '">' +
+                    '<div class="account-user-info">' +
+                    '<span class="account-user-name">' + d.name + '</span>' +
+                    '<span class="account-user-role">' + d.cs_lead + '</span>' +
+                    '</div>' +
+                    '<div class="account-user-actions">' +
+                    '<button type="button" class="account-delete-btn" data-id="' + d.id + '" data-name="' + d.name + '">&times;</button>' +
+                    '</div></div>';
+            }).join('');
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete draft "' + this.dataset.name + '"?')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/drafts/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) { document.getElementById('pt-draft-' + id).remove(); }
+                            else { alert(data.error || 'Could not delete draft.'); }
+                        });
+                });
+            });
+        });
+}
+
+// ── Deliverable Types ─────────────────────────────────────────
+var ptFormClients = [];
+var ptFormCustomers = [];
+var ptDelFormLoaded = false;
+
+function loadPTDelFormData(callback) {
+    if (ptDelFormLoaded) { callback(); return; }
+    Promise.all([
+        fetch('/admin/api/clients').then(function (r) { return r.json(); }),
+        fetch('/admin/api/customers').then(function (r) { return r.json(); })
+    ]).then(function (results) {
+        ptFormClients = results[0];
+        ptFormCustomers = results[1];
+        ptDelFormLoaded = true;
+        callback();
+    });
+}
+
+function populatePTDelFormClients() {
+    var sel = document.getElementById('pt-new-del-client');
+    sel.innerHTML = '<option value="">Select client...</option>' +
+        ptFormClients.map(function (c) {
+            return '<option value="' + c.id + '">' + c.name + '</option>';
+        }).join('');
+}
+
+function populatePTDelFormCustomers(region) {
+    var filtered = region
+        ? ptFormCustomers.filter(function (c) { return c.region === region; })
+        : ptFormCustomers;
+    var sel = document.getElementById('pt-new-del-customer');
+    sel.innerHTML = '<option value="">Select customer...</option>' +
+        filtered.map(function (c) {
+            return '<option value="' + c.id + '">' + c.name + '</option>';
+        }).join('');
+}
+
+var ptAddDelToggle = document.getElementById('pt-add-del-toggle');
+var ptAddDelForm = document.getElementById('pt-add-del-form');
+
+ptAddDelToggle.addEventListener('click', function () {
+    var opening = ptAddDelForm.classList.contains('hidden');
+    ptAddDelForm.classList.toggle('hidden');
+    if (opening) {
+        loadPTDelFormData(function () {
+            populatePTDelFormClients();
+            populatePTDelFormCustomers('');
+        });
     }
+});
 
-    if (document.getElementById('activity-search-btn')) {
+document.getElementById('pt-add-del-cancel').addEventListener('click', function () {
+    ptAddDelForm.classList.add('hidden');
+    ptAddDelForm.reset();
+});
 
-        document.getElementById('activity-search-btn').addEventListener('click', function () {
-            loadActivitySection();
+document.getElementById('pt-new-del-region').addEventListener('change', function () {
+    populatePTDelFormCustomers(this.value);
+});
+
+ptAddDelForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('pt-new-del-name').value.trim();
+    var clientId = document.getElementById('pt-new-del-client').value;
+    var customerId = document.getElementById('pt-new-del-customer').value;
+    var disciplines = Array.from(
+        ptAddDelForm.querySelectorAll('.pt-discipline-checks input:checked')
+    ).map(function (cb) { return cb.value; });
+    var isCustom = document.getElementById('pt-new-del-custom').checked;
+    if (!name || !clientId || !customerId) {
+        alert('Name, client, and customer are all required.');
+        return;
+    }
+    fetch('/admin/api/deliverable-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: name,
+            client_id: clientId,
+            customer_id: customerId,
+            disciplines: disciplines,
+            is_custom: isCustom
+        })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                ptAddDelForm.classList.add('hidden');
+                ptAddDelForm.reset();
+                ptAllDeliverableTypes.push(data.type);
+                ptAllDeliverableTypes.sort(function (a, b) { return a.name.localeCompare(b.name); });
+                populatePTDelClientFilter(ptAllDeliverableTypes);
+                renderPTDeliverableRows(ptAllDeliverableTypes);
+            } else {
+                alert(data.error || 'Could not create deliverable type.');
+            }
         });
+});
 
-        document.getElementById('activity-reset-btn').addEventListener('click', function () {
-            document.getElementById('activity-search').value = '';
-            document.getElementById('activity-from').value = '';
-            document.getElementById('activity-to').value = '';
-            document.getElementById('activity-category').value = 'all';
-            loadActivitySection();
+
+var ptAllDeliverableTypes = [];
+
+function loadPTDeliverables() {
+    fetch('/admin/api/deliverable-types')
+        .then(function (res) { return res.json(); })
+        .then(function (types) {
+            ptAllDeliverableTypes = types;
+            populatePTDelClientFilter(types);
+            renderPTDeliverableRows(types);
         });
+}
 
-        // Category dropdown — filter immediately on change, no need to click Search
-        document.getElementById('activity-category').addEventListener('change', function () {
-            loadActivitySection();
-        });
-
-        document.getElementById('activity-export-btn').addEventListener('click', function () {
-            fetch('/admin/api/activity/export', { method: 'POST' })
-                .then(function (res) {
-                    if (!res.ok) {
-                        return res.json().then(function (d) { alert(d.error || 'Export failed.'); });
-                    }
-                    var disposition = res.headers.get('Content-Disposition');
-                    var filename = 'activity-log.txt';
-                    if (disposition) {
-                        var match = disposition.match(/filename="(.+)"/);
-                        if (match) filename = match[1];
-                    }
-                    return res.blob().then(function (blob) {
-                        var url = URL.createObjectURL(blob);
-                        var a = document.createElement('a');
-                        a.href = url;
-                        a.download = filename;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
+// ── Design Types ──────────────────────────────────────────────
+function loadPTDesignTypes() {
+    fetch('/admin/api/design-types')
+        .then(function (r) { return r.json(); })
+        .then(function (types) {
+            var list = document.getElementById('pt-design-types-list');
+            list.innerHTML = types.length === 0 ? '<p class="empty-state">No design types yet.</p>' :
+                types.map(function (t) {
+                    return '<div class="account-user-row" id="pt-dt-' + t.id + '">' +
+                        '<div class="account-user-info">' +
+                        '<span class="account-user-name">' + t.name + '</span>' +
+                        '<span class="account-user-role">' + (t.team ? t.team.split(',').join(' + ') : 'No team set') + '</span>' +
+                        '</div>' +
+                        '<div class="account-user-actions">' +
+                        '<button class="account-edit-btn pt-dt-edit" data-id="' + t.id + '" data-name="' + t.name + '" data-team="' + (t.team || '') + '">Edit</button>' +
+                        '<button class="account-delete-btn pt-dt-delete" data-id="' + t.id + '" data-name="' + t.name + '">&times;</button>' +
+                        '</div></div>';
+                }).join('');
+            list.querySelectorAll('.pt-dt-delete').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete design type "' + this.dataset.name + '"?')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/design-types/' + id, { method: 'DELETE' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) { if (d.success) { document.getElementById('pt-dt-' + id).remove(); } else { alert(d.error); } });
+                });
+            });
+            list.querySelectorAll('.pt-dt-edit').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = this.dataset.id;
+                    var row = document.getElementById('pt-dt-' + id);
+                    var currentName = this.dataset.name;
+                    var currentTeam = this.dataset.team;
+                    var currentTeams = currentTeam ? currentTeam.split(',') : [];
+                    row.innerHTML =
+                        '<div class="pt-inline-edit">' +
+                        '<input type="text" class="form-input pt-edit-name" value="' + currentName + '" style="max-width:180px;">' +
+                        '<div class="pt-discipline-checks pt-edit-teams">' +
+                        ['2D', '3D', 'Technical'].map(function (t) {
+                            return '<label><input type="checkbox" value="' + t + '"' + (currentTeams.indexOf(t) !== -1 ? ' checked' : '') + '> ' + t + '</label>';
+                        }).join('') +
+                        '</div>' +
+                        '<button class="btn-primary pt-dt-save" data-id="' + id + '">Save</button>' +
+                        '<button class="account-delete-btn pt-dt-cancel" data-id="' + id + '">Cancel</button>' +
+                        '</div>';
+                    row.querySelector('.pt-dt-save').addEventListener('click', function () {
+                        var newName = row.querySelector('.pt-edit-name').value.trim();
+                        var newTeam = Array.from(row.querySelectorAll('.pt-edit-teams input:checked')).map(function (cb) { return cb.value; }).join(',') || null;
+                        if (!newName) return;
+                        fetch('/admin/api/design-types/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, team: newTeam }) })
+                            .then(function (r) { return r.json(); })
+                            .then(function () { loadPTDesignTypes(); });
                     });
+                    row.querySelector('.pt-dt-cancel').addEventListener('click', function () { loadPTDesignTypes(); });
+                });
+            });
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var addDtToggle = document.getElementById('pt-add-dt-toggle');
+    var addDtForm = document.getElementById('pt-add-dt-form');
+    var addDtCancel = document.getElementById('pt-add-dt-cancel');
+    if (addDtToggle) {
+        addDtToggle.addEventListener('click', function () { addDtForm.classList.toggle('hidden'); });
+        addDtCancel.addEventListener('click', function () { addDtForm.classList.add('hidden'); });
+        addDtForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var name = document.getElementById('pt-new-dt-name').value.trim();
+            var checked = Array.from(document.querySelectorAll('#pt-new-dt-teams input:checked')).map(function (cb) { return cb.value; });
+            var team = checked.join(',') || null;
+            if (!name) return;
+            fetch('/admin/api/design-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, team: team }) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.error) { alert(d.error); return; }
+                    document.getElementById('pt-new-dt-name').value = '';
+                    document.querySelectorAll('#pt-new-dt-teams input').forEach(function (cb) { cb.checked = false; });
+                    addDtForm.classList.add('hidden');
+                    loadPTDesignTypes();
                 });
         });
+    }
 
-        document.getElementById('activity-wipe-btn').addEventListener('click', function () {
-            if (!confirm('Wipe the entire activity log? This cannot be undone.')) return;
-            fetch('/admin/api/activity/clear', { method: 'POST' })
+    // ── Design Directions ──────────────────────────────────────
+    var addDdToggle = document.getElementById('pt-add-dd-toggle');
+    var addDdForm = document.getElementById('pt-add-dd-form');
+    var addDdCancel = document.getElementById('pt-add-dd-cancel');
+    if (addDdToggle) {
+        addDdToggle.addEventListener('click', function () { addDdForm.classList.toggle('hidden'); });
+        addDdCancel.addEventListener('click', function () { addDdForm.classList.add('hidden'); });
+        addDdForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var name = document.getElementById('pt-new-dd-name').value.trim();
+            if (!name) return;
+            fetch('/admin/api/design-directions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.error) { alert(d.error); return; }
+                    document.getElementById('pt-new-dd-name').value = '';
+                    addDdForm.classList.add('hidden');
+                    loadPTDesignDirections();
+                });
+        });
+    }
+});
+
+function loadPTDesignDirections() {
+    fetch('/admin/api/design-directions')
+        .then(function (r) { return r.json(); })
+        .then(function (dirs) {
+            var list = document.getElementById('pt-design-directions-list');
+            list.innerHTML = dirs.length === 0 ? '<p class="empty-state">No design directions yet.</p>' :
+                dirs.map(function (d) {
+                    return '<div class="account-user-row" id="pt-dd-' + d.id + '">' +
+                        '<div class="account-user-info"><span class="account-user-name">' + d.name + '</span></div>' +
+                        '<div class="account-user-actions">' +
+                        '<button class="account-edit-btn pt-dd-edit" data-id="' + d.id + '" data-name="' + d.name + '">Edit</button>' +
+                        '<button class="account-delete-btn pt-dd-delete" data-id="' + d.id + '" data-name="' + d.name + '">&times;</button>' +
+                        '</div></div>';
+                }).join('');
+            list.querySelectorAll('.pt-dd-delete').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    if (!confirm('Delete design direction "' + this.dataset.name + '"?')) return;
+                    var id = this.dataset.id;
+                    fetch('/admin/api/design-directions/' + id, { method: 'DELETE' })
+                        .then(function (r) { return r.json(); })
+                        .then(function (d) { if (d.success) { document.getElementById('pt-dd-' + id).remove(); } else { alert(d.error); } });
+                });
+            });
+            list.querySelectorAll('.pt-dd-edit').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = this.dataset.id;
+                    var row = document.getElementById('pt-dd-' + id);
+                    var currentName = this.dataset.name;
+                    row.innerHTML =
+                        '<div class="pt-inline-edit">' +
+                        '<input type="text" class="form-input pt-edit-name" value="' + currentName + '" style="max-width:240px;">' +
+                        '<button class="btn-primary pt-dd-save" data-id="' + id + '">Save</button>' +
+                        '<button class="account-delete-btn pt-dd-cancel">Cancel</button>' +
+                        '</div>';
+                    row.querySelector('.pt-dd-save').addEventListener('click', function () {
+                        var newName = row.querySelector('.pt-edit-name').value.trim();
+                        if (!newName) return;
+                        fetch('/admin/api/design-directions/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }) })
+                            .then(function (r) { return r.json(); })
+                            .then(function () { loadPTDesignDirections(); });
+                    });
+                    row.querySelector('.pt-dd-cancel').addEventListener('click', function () { loadPTDesignDirections(); });
+                });
+            });
+        });
+}
+
+function populatePTDelClientFilter(types) {
+    var seen = {};
+    var clients = [];
+    types.forEach(function (t) {
+        if (t.client !== '—' && !seen[t.client]) {
+            seen[t.client] = true;
+            clients.push(t.client);
+        }
+    });
+    clients.sort();
+    var sel = document.getElementById('pt-filter-client');
+    sel.innerHTML = '<option value="">All Clients</option>' +
+        clients.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+}
+
+function populatePTDelCustomerFilter(region) {
+    var filtered = region
+        ? ptAllDeliverableTypes.filter(function (t) { return t.region === region; })
+        : ptAllDeliverableTypes;
+    var seen = {};
+    var customers = [];
+    filtered.forEach(function (t) {
+        if (t.customer !== '—' && !seen[t.customer]) {
+            seen[t.customer] = true;
+            customers.push(t.customer);
+        }
+    });
+    customers.sort();
+    var sel = document.getElementById('pt-filter-customer');
+    var prev = sel.value;
+    sel.innerHTML = '<option value="">All Customers</option>' +
+        customers.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+    if (customers.indexOf(prev) !== -1) sel.value = prev;
+}
+
+function filterPTDeliverables() {
+    var client = document.getElementById('pt-filter-client').value;
+    var region = document.getElementById('pt-filter-region').value;
+    var customer = document.getElementById('pt-filter-customer').value;
+    var filtered = ptAllDeliverableTypes.filter(function (t) {
+        if (client && t.client !== client) return false;
+        if (region && t.region !== region) return false;
+        if (customer && t.customer !== customer) return false;
+        return true;
+    });
+    renderPTDeliverableRows(filtered);
+}
+
+document.getElementById('pt-filter-client').addEventListener('change', filterPTDeliverables);
+document.getElementById('pt-filter-region').addEventListener('change', function () {
+    populatePTDelCustomerFilter(this.value);
+    filterPTDeliverables();
+});
+document.getElementById('pt-filter-customer').addEventListener('change', filterPTDeliverables);
+
+function renderPTDeliverableRows(types) {
+    var list = document.getElementById('pt-deliverables-list');
+    if (types.length === 0) {
+        list.innerHTML = '<p class="empty-state">No deliverable types match.</p>';
+        return;
+    }
+    list.innerHTML = types.map(function (t) {
+        return '<div class="account-user-row" id="pt-del-' + t.id + '">' +
+            '<div class="account-user-info">' +
+            '<span class="account-user-name">' + t.name + '</span>' +
+            '<span class="account-user-role">' + t.client + ' · ' + t.customer + (t.is_custom ? ' · Custom' : '') + '</span>' +
+            '</div>' +
+            '<div class="account-user-actions">' +
+            '<button type="button" class="account-edit-btn" data-id="' + t.id + '">Edit</button>' +
+            '<button type="button" class="account-delete-btn" data-id="' + t.id + '" data-name="' + t.name + '">&times;</button>' +
+            '</div></div>';
+    }).join('');
+
+    list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            if (!confirm('Delete "' + this.dataset.name + '"?')) return;
+            var id = this.dataset.id;
+            fetch('/admin/api/deliverable-types/' + id, { method: 'DELETE' })
                 .then(function (res) { return res.json(); })
                 .then(function (data) {
                     if (data.success) {
-                        loadActivitySection();
-                    } else {
-                        alert('Could not wipe log.');
-                    }
+                        ptAllDeliverableTypes = ptAllDeliverableTypes.filter(function (t) { return String(t.id) !== String(id); });
+                        document.getElementById('pt-del-' + id).remove();
+                    } else { alert(data.error || 'Could not delete.'); }
                 });
         });
+    });
 
-    }
-
-    // ── Reference File Uploads ────────────────────────────────────
-
-    // Only run on pages that have the upload button
-    var refFileBtn = document.getElementById('refFileBtn');
-    var refFileInput = document.getElementById('refFileInput');
-
-    if (refFileBtn && refFileInput) {
-
-        // Clicking the button triggers the hidden file input
-        refFileBtn.addEventListener('click', function () {
-            refFileInput.click();
+    list.querySelectorAll('.account-edit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.dataset.id;
+            var type = ptAllDeliverableTypes.find(function (t) { return String(t.id) === String(id); });
+            if (!type) return;
+            var row = document.getElementById('pt-del-' + id);
+            row.innerHTML =
+                '<div class="account-user-edit-form">' +
+                '<input type="text" class="form-input pt-del-name-input" value="' + type.name + '">' +
+                '<div class="pt-discipline-checks">' +
+                ['2d', '3d', 'technical'].map(function (d) {
+                    var checked = type.disciplines.indexOf(d) !== -1 ? 'checked' : '';
+                    return '<label><input type="checkbox" value="' + d + '" ' + checked + '> ' + d.toUpperCase() + '</label>';
+                }).join('') +
+                '</div>' +
+                '<div class="account-edit-actions">' +
+                '<button type="button" class="btn-primary pt-del-save-btn">Save</button>' +
+                '<button type="button" class="account-cancel-edit-btn">Cancel</button>' +
+                '</div></div>';
+            row.querySelector('.account-cancel-edit-btn').addEventListener('click', function () {
+                renderPTDeliverableRows(ptAllDeliverableTypes);
+            });
+            row.querySelector('.pt-del-save-btn').addEventListener('click', function () {
+                var name = row.querySelector('.pt-del-name-input').value.trim();
+                var disciplines = Array.from(
+                    row.querySelectorAll('.pt-discipline-checks input:checked')
+                ).map(function (cb) { return cb.value; });
+                if (!name) { alert('Name is required.'); return; }
+                fetch('/admin/api/deliverable-types/' + id, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, disciplines: disciplines })
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            var idx = ptAllDeliverableTypes.findIndex(function (t) { return String(t.id) === String(id); });
+                            if (idx !== -1) {
+                                ptAllDeliverableTypes[idx].name = name;
+                                ptAllDeliverableTypes[idx].disciplines = disciplines;
+                            }
+                            renderPTDeliverableRows(ptAllDeliverableTypes);
+                        } else { alert(data.error || 'Could not save.'); }
+                    });
+            });
         });
+    });
+}
 
-        // When a file is selected, upload it immediately via fetch
-        refFileInput.addEventListener('change', function () {
-            var file = refFileInput.files[0];
-            if (!file) return;
+// ── Activity Log ───────────────────────────────────────────────
 
-            // Get the project ID from a data attribute we'll add to the button
-            var projectId = refFileBtn.dataset.projectId;
-            var status = document.getElementById('refFileStatus');
+function loadActivitySection() {
+    var search = document.getElementById('activity-search').value.trim();
+    var from = document.getElementById('activity-from').value;
+    var to = document.getElementById('activity-to').value;
+    var category = document.getElementById('activity-category').value; // 'all' or a named category
 
-            status.textContent = 'Uploading...';
+    var params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    // Only send category param when the user has selected a specific filter —
+    // 'all' means no filter and the backend returns everything.
+    if (category && category !== 'all') params.append('category', category);
 
-            // Build a FormData object — this is how we send files via fetch
-            var formData = new FormData();
-            formData.append('file', file);
+    var url = '/admin/api/activity' + (params.toString() ? '?' + params.toString() : '');
 
-            fetch('/projects/' + projectId + '/upload-file', {
-                method: 'POST',
-                body: formData
-                // Note: do NOT set Content-Type header — the browser sets it
-                // automatically with the correct multipart boundary when using FormData
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) {
-                        status.textContent = 'Error: ' + data.error;
-                        return;
-                    }
+    fetch(url)
+        .then(function (res) { return res.json(); })
+        .then(function (entries) {
+            var list = document.getElementById('activity-log-list');
+            if (entries.length === 0) {
+                list.innerHTML = '<p class="empty-state">No activity found.</p>';
+                return;
+            }
+            list.innerHTML = entries.map(function (e) {
+                return '<div class="activity-entry" id="activity-' + e.id + '">' +
+                    '<div class="activity-entry-body">' +
+                    '<span class="activity-description">' + e.description + '</span>' +
+                    '<span class="activity-meta">' + e.user + ' · ' + e.created_at + '</span>' +
+                    '</div>' +
+                    '<button type="button" class="account-delete-btn" data-id="' + e.id + '">&times;</button>' +
+                    '</div>';
+            }).join('');
 
-                    status.textContent = 'Uploaded.';
-                    setTimeout(function () { status.textContent = ''; }, 3000);
+            list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = this.dataset.id;
+                    fetch('/admin/api/activity/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                document.getElementById('activity-' + id).remove();
+                            }
+                        });
+                });
+            });
+        });
+}
 
-                    // Reset input so the same file can be re-uploaded if needed
-                    refFileInput.value = '';
+if (document.getElementById('activity-search-btn')) {
 
-                    // Build and inject the new file row into the list
-                    var list = document.getElementById('reference-files-list');
+    document.getElementById('activity-search-btn').addEventListener('click', function () {
+        loadActivitySection();
+    });
 
-                    // Remove the "no files" message if present
-                    var noFilesMsg = list.querySelector('.no-files-msg');
-                    if (noFilesMsg) noFilesMsg.remove();
+    document.getElementById('activity-reset-btn').addEventListener('click', function () {
+        document.getElementById('activity-search').value = '';
+        document.getElementById('activity-from').value = '';
+        document.getElementById('activity-to').value = '';
+        document.getElementById('activity-category').value = 'all';
+        loadActivitySection();
+    });
 
-                    var icons = { jpg: '🖼', jpeg: '🖼', png: '🖼', pdf: '📄', docx: '📝', xlsx: '📊' };
-                    var icon = icons[data.file.file_type] || '📎';
+    // Category dropdown — filter immediately on change, no need to click Search
+    document.getElementById('activity-category').addEventListener('change', function () {
+        loadActivitySection();
+    });
 
-                    var item = document.createElement('div');
-                    item.className = 'reference-file-item';
-                    item.dataset.fileId = data.file.id;
-                    item.innerHTML = `
+    document.getElementById('activity-export-btn').addEventListener('click', function () {
+        fetch('/admin/api/activity/export', { method: 'POST' })
+            .then(function (res) {
+                if (!res.ok) {
+                    return res.json().then(function (d) { alert(d.error || 'Export failed.'); });
+                }
+                var disposition = res.headers.get('Content-Disposition');
+                var filename = 'activity-log.txt';
+                if (disposition) {
+                    var match = disposition.match(/filename="(.+)"/);
+                    if (match) filename = match[1];
+                }
+                return res.blob().then(function (blob) {
+                    var url = URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+            });
+    });
+
+    document.getElementById('activity-wipe-btn').addEventListener('click', function () {
+        if (!confirm('Wipe the entire activity log? This cannot be undone.')) return;
+        fetch('/admin/api/activity/clear', { method: 'POST' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    loadActivitySection();
+                } else {
+                    alert('Could not wipe log.');
+                }
+            });
+    });
+
+}
+
+// ── Reference File Uploads ────────────────────────────────────
+
+// Only run on pages that have the upload button
+var refFileBtn = document.getElementById('refFileBtn');
+var refFileInput = document.getElementById('refFileInput');
+
+if (refFileBtn && refFileInput) {
+
+    // Clicking the button triggers the hidden file input
+    refFileBtn.addEventListener('click', function () {
+        refFileInput.click();
+    });
+
+    // When a file is selected, upload it immediately via fetch
+    refFileInput.addEventListener('change', function () {
+        var file = refFileInput.files[0];
+        if (!file) return;
+
+        // Get the project ID from a data attribute we'll add to the button
+        var projectId = refFileBtn.dataset.projectId;
+        var status = document.getElementById('refFileStatus');
+
+        status.textContent = 'Uploading...';
+
+        // Build a FormData object — this is how we send files via fetch
+        var formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/projects/' + projectId + '/upload-file', {
+            method: 'POST',
+            body: formData
+            // Note: do NOT set Content-Type header — the browser sets it
+            // automatically with the correct multipart boundary when using FormData
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    status.textContent = 'Error: ' + data.error;
+                    return;
+                }
+
+                status.textContent = 'Uploaded.';
+                setTimeout(function () { status.textContent = ''; }, 3000);
+
+                // Reset input so the same file can be re-uploaded if needed
+                refFileInput.value = '';
+
+                // Build and inject the new file row into the list
+                var list = document.getElementById('reference-files-list');
+
+                // Remove the "no files" message if present
+                var noFilesMsg = list.querySelector('.no-files-msg');
+                if (noFilesMsg) noFilesMsg.remove();
+
+                var icons = { jpg: '🖼', jpeg: '🖼', png: '🖼', pdf: '📄', docx: '📝', xlsx: '📊' };
+                var icon = icons[data.file.file_type] || '📎';
+
+                var item = document.createElement('div');
+                item.className = 'reference-file-item';
+                item.dataset.fileId = data.file.id;
+                item.innerHTML = `
                 <span class="reference-file-icon">${icon}</span>
                 <span class="reference-file-name">${data.file.original_filename}</span>
                 <span class="reference-file-meta">${data.file.uploaded_by}</span>
@@ -4550,46 +4547,46 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
                 </div>
             `;
 
-                    // Attach delete handler to the new button
-                    item.querySelector('.reference-file-delete-btn').addEventListener('click', handleFileDelete);
+                // Attach delete handler to the new button
+                item.querySelector('.reference-file-delete-btn').addEventListener('click', handleFileDelete);
 
-                    list.appendChild(item);
-                })
-                .catch(function (err) {
-                    status.textContent = 'Upload failed.';
-                    console.error('File upload error:', err);
-                });
-        });
-
-        // Delete handler — attached to existing buttons on page load and new ones dynamically
-        function handleFileDelete(e) {
-            var fileId = this.dataset.fileId;
-            var item = this.closest('.reference-file-item');
-
-            if (!confirm('Remove this file?')) return;
-
-            fetch('/projects/files/' + fileId + '/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                list.appendChild(item);
             })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) return;
-                    item.remove();
+            .catch(function (err) {
+                status.textContent = 'Upload failed.';
+                console.error('File upload error:', err);
+            });
+    });
 
-                    // Show empty message if no files remain
-                    var list = document.getElementById('reference-files-list');
-                    if (list.querySelectorAll('.reference-file-item').length === 0) {
-                        var msg = document.createElement('p');
-                        msg.className = 'no-files-msg';
-                        msg.textContent = 'No reference files uploaded yet.';
-                        list.appendChild(msg);
-                    }
-                });
-        }
+    // Delete handler — attached to existing buttons on page load and new ones dynamically
+    function handleFileDelete(e) {
+        var fileId = this.dataset.fileId;
+        var item = this.closest('.reference-file-item');
 
-        // Attach delete handler to all existing delete buttons on page load
-        document.querySelectorAll('.reference-file-delete-btn').forEach(function (btn) {
-            btn.addEventListener('click', handleFileDelete);
-        });
+        if (!confirm('Remove this file?')) return;
+
+        fetch('/projects/files/' + fileId + '/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) return;
+                item.remove();
+
+                // Show empty message if no files remain
+                var list = document.getElementById('reference-files-list');
+                if (list.querySelectorAll('.reference-file-item').length === 0) {
+                    var msg = document.createElement('p');
+                    msg.className = 'no-files-msg';
+                    msg.textContent = 'No reference files uploaded yet.';
+                    list.appendChild(msg);
+                }
+            });
     }
+
+    // Attach delete handler to all existing delete buttons on page load
+    document.querySelectorAll('.reference-file-delete-btn').forEach(function (btn) {
+        btn.addEventListener('click', handleFileDelete);
+    });
+}

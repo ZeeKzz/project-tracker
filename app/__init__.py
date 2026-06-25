@@ -97,6 +97,16 @@ def create_app():
            'effective_user': current_user,
            'is_emulating': False
        }
+    
+    from datetime import timezone, timedelta
+
+    def dubai_time(dt):
+        if dt is None:
+            return '_'
+        dubai_tz = timezone(timedelta(hours=4))
+        return dt.replace(tzinfo=timezone.utc).astimezone(dubai_tz).strftime('%d %b %Y, %H:%M')
+    
+    app.jinja_env_filters['dubai_time'] = dubai_time
         
 
     return app
