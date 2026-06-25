@@ -34,7 +34,7 @@
                         </span>
                         <span class="draft-meta">
                             {% if draft.last_autosaved_at %}
-                            Last saved {{ draft.last_autosaved_at.strftime('%d %b %Y, %H:%M') }}
+                            Last saved {{ draft.last_autosaved_at | dubai_time }}
                             {% else %}
                             Not yet autosaved
                             {% endif %}

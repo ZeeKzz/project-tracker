@@ -23,7 +23,7 @@ def projects():
     else:
         effective_role = current_user.role
 
-    if effective_role in ['cs', 'admin']:
+    if effective_role in ['cs', 'admin', 'management']:
         return cs_dashboard()
     elif effective_role == 'designer':
         return designer_dashboard()
@@ -89,7 +89,8 @@ def cs_dashboard():
     all_projects=all_projects,
     approved_projects=approved_projects,
     cs_users=cs_users,
-    today=today
+    today=today,
+    effective_role=effective_user.role
 )
 
 

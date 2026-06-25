@@ -127,7 +127,7 @@
                 data-id="{{ notification.id }}">
                 <div class="notification-content">
                     <p class="notification-message">{{ notification.message }}</p>
-                    <span class="notification-time">{{ notification.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                    <span class="notification-time">{{ notification.created_at | dubai_time }}</span>
                 </div>
                 <button type="button" class="notification-archive-btn" data-id="{{ notification.id }}"
                     title="Archive">×</button>
@@ -150,7 +150,7 @@
                 <input type="checkbox" class="notif-checkbox hidden" value="{{ notification.id }}">
                 <div class="notification-content">
                     <p class="notification-message">{{ notification.message }}</p>
-                    <span class="notification-time">{{ notification.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                    <span class="notification-time">{{ notification.created_at | dubai_time }}</span>
                 </div>
                 <!-- Restore button — moves notification back to inbox -->
                 <button type="button" class="notification-restore-btn" data-id="{{ notification.id }}"
@@ -169,7 +169,6 @@
             <span class="admin-panel-title">Admin Panel</span>
             <button type="button" id="close-admin-panel" aria-label="Close">&lt;</button>
         </div>
-
         <div class="admin-nav-grid">
             <button type="button" class="admin-nav-btn active" data-section="emulate">
                 <div class="admin-nav-img-wrap">
@@ -342,6 +341,13 @@
             <div class="admin-section hidden" id="admin-section-accounts">
                 <!-- Account tools -->
                 <button type="button" id="add-user-toggle" class="accounts-add-btn">+ Add User</button>
+                {# Dev Tools — only rendered when DEV_TOOLS_ENABLED=true in __init__.py.
+                   Server route is also gated, so this is safe to leave ungated in the template. #}
+                {% if dev_tools_enabled %}
+                <button type="button" class="accounts-add-btn"
+                    style="background: var(--rose); color: #fff; border-color: var(--rose);"
+                    onclick="openWipeModal()">⚠ Wipe Projects</button>
+                {% endif %}
 
                 <form id="add-user-form" class="add-user-form hidden">
                     <input type="text" id="new-user-name" class="form-input" placeholder="Full name">
@@ -352,6 +358,7 @@
                         <option value="cs">CS</option>
                         <option value="designer">Designer</option>
                         <option value="team_lead">Team Lead</option>
+                        <option value="management">Management</option>
                         <option value="admin">Admin</option>
                     </select>
                     <select id="new-user-team" class="form-input hidden">
@@ -386,6 +393,7 @@
                         </select>
                         <button type="button" class="btn-primary" id="activity-search-btn">Search</button>
                         <button type="button" class="activity-clear-btn" id="activity-reset-btn">Reset</button>
+                        
                     </div>
                     <div class="activity-action-row">
                         <button type="button" class="accounts-add-btn activity-export-btn"
@@ -400,6 +408,28 @@
         </div>
     </aside>
     {% endif %}
+    {% endif %}
+
+    {# Wipe Projects modal — only rendered when DEV_TOOLS_ENABLED=true.
+       Double-gated: server route also refuses if the flag is off. #}
+    {% if dev_tools_enabled %}
+    <div id="wipe-modal" class="modal-overlay hidden" onclick="if(event.target===this) closeWipeModal()">
+        <div class="modal-box">
+            <h3 class="modal-title" style="color: var(--rose);">⚠ Wipe All Projects?</h3>
+            <p>This permanently deletes <strong>every project</strong> and all related data.
+                The FOC counter resets to FOC-001. <strong>This cannot be undone.</strong></p>
+            <p style="margin-top: 1rem;">Type <strong>WIPE</strong> to confirm:</p>
+            <input type="text" id="wipe-confirm-input" class="form-input"
+                placeholder="Type WIPE here" oninput="checkWipeConfirm()"
+                style="margin-top: 0.5rem;">
+            <div class="modal-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn-secondary" onclick="closeWipeModal()">Cancel</button>
+                {# Starts disabled — enabled only when user types exactly 'WIPE' #}
+                <button type="button" class="btn-danger" id="wipe-confirm-btn"
+                    onclick="confirmWipe()" disabled>Wipe Everything</button>
+            </div>
+        </div>
+    </div>
     {% endif %}
 
     <main class="main-content">
@@ -418,7 +448,7 @@
     </main>
 
     <footer class="footer">
-        <p>Vitamin-E &copy; 2026 - v1.0</p>
+        <p>Vitamin-E &copy; 2026 - v1.1</p>
     </footer>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>

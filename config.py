@@ -11,7 +11,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
-    MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32 MB limit for file uploads
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB limit for file uploads
 
     # Email configuration — reads from .env so switching providers requires no code changes
     MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.resend.com')
@@ -22,3 +22,7 @@ class Config:
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', os.environ.get('MAIL_USERNAME'))
     MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'false'
+
+    # Dev-only tools — set DEV_TOOLS_ENABLED=true in .env on your local machine only.
+    # NEVER set this on the production server — it exposes destructive data operations.
+    DEV_TOOLS_ENABLED = os.environ.get('DEV_TOOLS_ENABLED', 'false').lower() == 'true'

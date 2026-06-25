@@ -106,12 +106,6 @@
                 {% endif %}
                 {% endif %}
 
-                {% if project.revision_count > 0 %}
-                <div class="detail-field">
-                    <span class="detail-label">Revision Count</span>
-                    <span class="detail-value">{{ project.revision_count }}</span>
-                </div>
-                {% endif %}
 
                 {# Admin sees the editable status dropdown; all other roles see a read-only label #}
                 {% if effective_user.role == 'admin' %}
@@ -288,9 +282,10 @@
                 {% if flag.deliverable %}
                 <span class="flag-subject">{{ flag.deliverable.name }}</span>
                 {% endif %}
-                <span class="flag-meta">Raised by {{ flag.created_by.name }} · {{ flag.created_at.strftime('%d %b %Y,
-                    %H:%M') }} UTC</span>
-                {% if effective_user.id == flag.created_by_id or effective_user.role == 'admin' %}
+                <span class="flag-meta">Raised by {{ flag.created_by.name }} · {{ flag.created_at | dubai_time }}
+                    GST</span></span>
+                {# Flag creator, admin, or management can resolve — management has oversight across all projects #}
+                {% if effective_user.id == flag.created_by_id or effective_user.role in ('admin', 'management') %}
                 <button type="button" class="btn-flag-resolve" onclick="resolveFlag({{ flag.id }}, {{ project.id }})">✓
                     Mark Resolved</button>
                 {% endif %}
@@ -300,7 +295,7 @@
                 <div class="flag-message {% if msg.author_id == effective_user.id %}flag-message--mine{% endif %}">
                     <div class="flag-message-header">
                         <span class="flag-message-author">{{ msg.author.name }}</span>
-                        <span class="flag-message-time">{{ msg.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
+                        <span class="flag-message-time">{{ msg.created_at | dubai_time }} GST</span>
                     </div>
                     <p class="flag-message-text">{{ msg.message }}</p>
                 </div>
@@ -372,6 +367,11 @@
                 <span class="detail-value mono">{{ project.first_output_deadline.strftime('%d %b %Y') if
                     project.first_output_deadline else '—' }}</span>
             </div>
+            <div class="detail-field">
+                <span class="detail-label">Final Deadline</span>
+                <span class="detail-value mono">{{ project.execution_date.strftime('%d %b %Y') if
+                    project.execution_date else '—' }}</span>
+            </div>
         </div>
 
         {# ── Concept & KV (merged) ── #}
@@ -379,22 +379,36 @@
         <div class="brief-concept-block">
             <h3 class="brief-section-heading">Concept &amp; KV
                 {% if project.concept_status %}
-                <span class="status-badge s-{{ project.concept_status }}">{{ project.concept_status | replace('_', ' ') | title }}</span>
+                <span class="status-badge s-{{ project.concept_status }}">{{ project.concept_status | replace('_', ' ')
+                    | title }}</span>
                 {% endif %}
                 {# Show KV status separately only if it differs from concept (legacy projects) #}
                 {% if project.kv_status and project.kv_status != project.concept_status %}
-                <span class="status-badge s-{{ project.kv_status }}">KV: {{ project.kv_status | replace('_', ' ') | title }}</span>
+                <span class="status-badge s-{{ project.kv_status }}">KV: {{ project.kv_status | replace('_', ' ') |
+                    title }}</span>
                 {% endif %}
             </h3>
             <div class="detail-fields">
                 <div class="detail-field">
                     <span class="detail-label">Deadline</span>
-                    <span class="detail-value mono">{{ project.concept_deadline.strftime('%d %b %Y') if project.concept_deadline else '—' }}</span>
+                    <span class="detail-value mono">
+                        {%- if project.concept_deadline -%}
+                            {{ project.concept_deadline.strftime('%d %b %Y') }}
+                            {%- if project.concept_deadline_time %} · {{ project.concept_deadline_time.strftime('%H:%M') }}{% endif %}
+                        {%- else %}—{% endif -%}
+                    </span>
                 </div>
                 <div class="detail-field">
                     <span class="detail-label">Options Required</span>
-                    <span class="detail-value">{{ project.concept_options_required if project.concept_options_required else '—' }}</span>
+                    <span class="detail-value">{{ project.concept_options_required if project.concept_options_required
+                        else '—' }}</span>
                 </div>
+                {% if project.revision_count > 0 %}
+                <div class="detail-field">
+                    <span class="detail-label">Revisions</span>
+                    <span class="detail-value">{{ project.revision_count }}</span>
+                </div>
+                {% endif %}
                 <div class="detail-field">
                     <span class="detail-label">Concept Designer</span>
                     <span class="detail-value">
@@ -410,7 +424,8 @@
                     </span>
                 </div>
             </div>
-            {% if effective_user.role == 'admin' or (effective_user.role == 'team_lead' and effective_user.team == '2D') %}
+            {% if effective_user.role == 'admin' or (effective_user.role == 'team_lead' and effective_user.team == '2D')
+            %}
             <form method="POST" action="{{ url_for('projects.assign_concept_kv', project_id=project.id) }}"
                 class="inline-form" style="margin-top: 1rem;">
                 <div class="detail-fields">
@@ -420,7 +435,8 @@
                             <select name="concept_designer_id" class="form-select">
                                 <option value="">— Select —</option>
                                 {% for designer in designers_by_team['2D'] %}
-                                <option value="{{ designer.id }}" {{ 'selected' if project.concept_designer_id==designer.id }}>{{ designer.name }}</option>
+                                <option value="{{ designer.id }}" {{ 'selected' if
+                                    project.concept_designer_id==designer.id }}>{{ designer.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -431,7 +447,8 @@
                             <select name="kv_designer_id" class="form-select">
                                 <option value="">— Select —</option>
                                 {% for designer in designers_by_team['2D'] %}
-                                <option value="{{ designer.id }}" {{ 'selected' if project.kv_designer_id==designer.id }}>{{ designer.name }}</option>
+                                <option value="{{ designer.id }}" {{ 'selected' if project.kv_designer_id==designer.id
+                                    }}>{{ designer.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -464,30 +481,13 @@
             {% if effective_user.role in ['designer', 'team_lead'] %}
             <div class="flag-section-btn-row">
                 <button class="btn-brief-flag" data-flag-type="concept" data-project-id="{{ project.id }}"
-                    data-context="Concept &amp; KV" onclick="openFlagModalFromBtn(this)">⚑ Flag Concept &amp; KV Issue</button>
+                    data-context="Concept &amp; KV" onclick="openFlagModalFromBtn(this)">⚑ Flag Concept &amp; KV
+                    Issue</button>
             </div>
             {% endif %}
         </div>
         {% endif %}
 
-        {# ── Begin POSM button (CS/Admin only; only when concept/KV exists and POSM not yet started) ── #}
-        {% if (project.has_concept or project.has_kv) and not project.posm_started and effective_user.role in ['admin',
-        'cs'] %}
-        <div class="posm-begin-row">
-            <button class="btn-begin-posm" id="beginPosmBtn" data-project-id="{{ project.id }}">▶ Begin POSM</button>
-        </div>
-        {% endif %}
-        {% if posm_active %}
-        <div class="posm-active-banner">
-            <span class="posm-active-label">POSM Active</span>
-            {% if project.posm_started_at %}
-            <span class="posm-active-meta">Started {{ project.posm_started_at.strftime('%d %b %Y') }} · Concept &amp; KV
-                locked at {{ project.concept_kv_revision_count or 0 }} revision(s)</span>
-            {% else %}
-            <span class="posm-active-meta">Implicit — no Concept or KV on this project</span>
-            {% endif %}
-        </div>
-        {% endif %}
 
         {% for region_key in ['uae', 'kuwait', 'qatar', 'bahrain', 'oman'] %}
         {% if region_key in brief_sections %}
@@ -500,8 +500,12 @@
                     <div class="brief-customer-dates">
                         <span class="brief-date-item">
                             <span class="brief-date-label">Design Deadline</span>
-                            <span class="brief-date-value mono">{{ pc.design_deadline.strftime('%d %b %Y') if
-                                pc.design_deadline else '—' }}</span>
+                            <span class="brief-date-value mono">
+                                {%- if pc.design_deadline -%}
+                                    {{ pc.design_deadline.strftime('%d %b %Y') }}
+                                    {%- if pc.design_deadline_time %} · {{ pc.design_deadline_time.strftime('%H:%M') }}{% endif %}
+                                {%- else %}—{% endif -%}
+                            </span>
                         </span>
                         <span class="brief-date-item">
                             <span class="brief-date-label">Installation</span>
@@ -584,7 +588,8 @@
                             onclick="openFlagModalFromBtn(this)">⚑ Flag Issue</button>
                         {% endif %}
                         {% if project.project_status == 'approved' and effective_user.role != 'admin' %}
-                        <span class="status-badge s-{{ deliverable.status }}">{{ deliverable.status | replace('_', ' ') | title }}</span>
+                        <span class="status-badge s-{{ deliverable.status }}">{{ deliverable.status | replace('_', ' ')
+                            | title }}</span>
                         {% else %}
                         <select class="status-select"
                             data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=deliverable.id) }}"
@@ -641,6 +646,11 @@
                 <span class="detail-label">First Output Deadline</span>
                 <span class="detail-value mono">{{ project.first_output_deadline.strftime('%d %b %Y') if
                     project.first_output_deadline else '—' }}</span>
+            </div>
+            <div class="detail-field">
+                <span class="detail-label">Final Deadline</span>
+                <span class="detail-value mono">{{ project.execution_date.strftime('%d %b %Y') if
+                    project.execution_date else '—' }}</span>
             </div>
         </div>
 
@@ -720,8 +730,12 @@
                 {% endif %}
                 <div class="std-deadline-col">
                     <span class="std-deadline-heading">Design Deadline</span>
-                    <span class="mono std-deadline-label">{{ d.design_deadline.strftime('%d %b %Y') if d.design_deadline
-                        else '—' }}</span>
+                    <span class="mono std-deadline-label">
+                        {%- if d.design_deadline -%}
+                            {{ d.design_deadline.strftime('%d %b %Y') }}
+                            {%- if d.design_deadline_time %} · {{ d.design_deadline_time.strftime('%H:%M') }}{% endif %}
+                        {%- else %}—{% endif -%}
+                    </span>
                 </div>
                 {% if project.project_status == 'approved' and effective_user.role != 'admin' %}
                 <span class="status-badge s-{{ d.status }}">{{ d.status | replace('_', ' ') | title }}</span>
@@ -778,7 +792,8 @@
                 <div class="reference-file-actions">
                     <a href="{{ url_for('projects.download_project_file', file_id=f.id) }}"
                         class="btn-secondary btn-sm">Download</a>
-                    {% if effective_user.role == 'admin' or (effective_user.role == 'cs' and project.project_status != 'approved') %}
+                    {% if effective_user.role == 'admin' or (effective_user.role == 'cs' and project.project_status !=
+                    'approved') %}
                     <button class="btn-danger btn-sm reference-file-delete-btn"
                         data-file-id="{{ f.id }}">Remove</button>
                     {% endif %}
@@ -811,7 +826,6 @@
         window.isGulf = {{ is_gulf | tojson }};
         window.gulfRegions = {{ gulf_regions_json | safe }};
         window.projectCustomers = {{ project_customers_json | safe }};
-        window.beginPosmUrl = '{{ url_for("projects.begin_posm", project_id=project.id) }}';
         {% if active_submission %}
         window.previousIncludesConcept = {{ active_submission.includes_concept | tojson }};
         window.previousIncludesKV = {{ active_submission.includes_kv | tojson }};
@@ -825,23 +839,32 @@
         {% endif %}
     </script>
 
-    {% if posm_channels_data %}
+    {% if posm_channels_data or (project.brief_type == 'ccm' and (project.has_concept or project.has_kv)) %}
     {# ═══════════════════════════════════════════════════════════════════════════════
-    POSM Parallel Channel Submission Section
+    POSM + C&KV Parallel Channel Submission Section
     Shown for Gulf C&CM projects once POSM is active.
-    Each Gulf region / UAE customer gets its own independent submission pipeline
-    displayed as a pill tab. Concept & KV history is shown below if it exists.
+    Concept & KV and each Gulf region / UAE customer each have their own independent
+    submission pipeline displayed as a pill tab.
     ═══════════════════════════════════════════════════════════════════════════════ #}
     <div class="detail-card detail-card--full submission-card" style="margin-top: 1.5rem;">
-        <h2 class="detail-card-title">POSM Submissions</h2>
+        <h2 class="detail-card-title">Submissions</h2>
 
-        {# ── Channel pill bar ── #}
+        {# ── Channel pill bar — C&KV first, then POSM channels ── #}
         <div class="posm-channel-pills" id="posmChannelPills">
+            {% if project.has_concept or project.has_kv %}
+            {% set _ckv_sl = {'in_queue':'Not Started','in_progress':'In Progress','internal_review':'In Review','internal_revision':'Needs Revision','approved':'Approved'} %}
+            <button class="posm-channel-pill posm-channel-pill--active" id="ckv-pill" onclick="selectCkvChannel()">
+                <span class="posm-pill-label">Concept &amp; KV</span>
+                <span class="posm-pill-status posm-pill-status--{{ project.concept_status or 'in_queue' }}">
+                    {{ _ckv_sl.get(project.concept_status or 'in_queue', project.concept_status or 'Not Started') }}
+                </span>
+            </button>
+            {% endif %}
             {% for cd in posm_channels_data %}
             {% set _sl = {'in_queue':'Not Started','in_progress':'In Progress','internal_review':'In
             Review','internal_revision':'Needs Revision','submitted_to_client':'Sent','revision_in_queue':'Rev
             Pending','revision_in_progress':'Rev In Progress'} %}
-            <button class="posm-channel-pill{% if loop.first %} posm-channel-pill--active{% endif %}"
+            <button class="posm-channel-pill"
                 data-channel-id="{{ cd.channel.id }}" onclick="selectPosmChannel({{ cd.channel.id }})">
                 <span class="posm-pill-label">{{ cd.label }}</span>
                 <span class="posm-pill-status posm-pill-status--{{ cd.channel.status }}">{{ _sl.get(cd.channel.status,
@@ -850,12 +873,113 @@
             {% endfor %}
         </div>
 
-        {# ── Per-channel sections ── #}
+        {# ── Concept & KV section (shown first by default) ── #}
+        {% if project.has_concept or project.has_kv %}
+        <div class="posm-channel-section" id="ckv-section" data-channel-id="ckv">
+            {% if project.concept_status == 'approved' %}
+            {# Approved #}
+            <div class="submission-status submission-status--approved" style="margin-top:0.5rem;">✓ Concept &amp; KV Approved</div>
+
+            {% elif project.concept_status == 'internal_review' and ckv_submission %}
+            {# State 3: In Internal Review — CS can approve or flag #}
+            <div class="reference-file-item">
+                <span class="reference-file-icon">{% if ckv_submission.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+                <span class="reference-file-name">{{ ckv_submission.original_filename }}</span>
+                <span class="reference-file-meta">Uploaded by {{ ckv_submission.uploaded_by.name }}</span>
+                <div class="reference-file-actions">
+                    <a href="{{ url_for('projects.download_submission', submission_id=ckv_submission.id) }}" class="btn-secondary btn-sm">Download</a>
+                </div>
+            </div>
+            <div class="submission-status" style="margin-top:0.5rem;">🔍 In Internal Review. Awaiting Client Servicing approval</div>
+            {% if ckv_submission.includes_concept or ckv_submission.includes_kv %}
+            <div style="margin-top:0.75rem;">
+                <p class="detail-label" style="margin-bottom:0.4rem;">Included in this submission:</p>
+                {% if ckv_submission.includes_concept %}<span class="submission-deliverable-tag submission-deliverable-tag--campaign">Concept</span>{% endif %}
+                {% if ckv_submission.includes_kv %}<span class="submission-deliverable-tag submission-deliverable-tag--campaign">Key Visual (KV)</span>{% endif %}
+            </div>
+            {% endif %}
+            {% if effective_user.role in ['admin', 'cs', 'management'] %}
+            <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+                <button type="button" class="btn-primary" onclick="approveCKV({{ project.id }})">✓ Approve Concept &amp; KV</button>
+                <button type="button" class="btn-danger btn-sm" id="submissionFlagBtn">Flag Issue</button>
+            </div>
+            <div id="submissionFlagForm" class="hidden" style="margin-top:1rem;">
+                <textarea id="submissionFlagMessage" class="form-input" placeholder="Describe the issue with this deck..." rows="3" style="width:100%;margin-bottom:0.5rem;"></textarea>
+                <div style="display:flex;gap:0.5rem;">
+                    <button type="button" class="btn-danger btn-sm" id="submissionFlagConfirm" data-project-id="{{ project.id }}">Send Flag</button>
+                    <button type="button" class="btn-secondary btn-sm" id="submissionFlagCancel">Cancel</button>
+                </div>
+            </div>
+            {% else %}
+            <p style="margin-top:0.75rem;color:var(--text-muted);font-size:0.85rem;">Waiting for CS to review and approve this deck.</p>
+            {% endif %}
+
+            {% elif ckv_submission and ckv_submission.is_flagged %}
+            {# State 4: Flagged — designer must reupload #}
+            <div class="reference-file-item">
+                <span class="reference-file-icon">{% if ckv_submission.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+                <span class="reference-file-name">{{ ckv_submission.original_filename }}</span>
+                <span class="reference-file-meta">Uploaded by {{ ckv_submission.uploaded_by.name }}</span>
+            </div>
+            <div class="submission-status submission-status--flagged" style="margin-top:0.5rem;">
+                ⚑ Flagged by {{ ckv_submission.flagged_by.name if ckv_submission.flagged_by else 'CS' }}: "{{ ckv_submission.flag_message }}"
+            </div>
+            {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+            <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
+                <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
+                <button type="button" class="btn-secondary" id="submissionUploadBtn" data-project-id="{{ project.id }}">Reupload Deck</button>
+                <span class="reference-file-upload-status" id="submissionUploadStatus"></span>
+            </div>
+            {% else %}
+            <p style="margin-top:0.75rem;color:var(--text-muted);font-size:0.85rem;">Waiting for designer to reupload a revised deck.</p>
+            {% endif %}
+
+            {% elif ckv_submission and not ckv_submission.is_flagged %}
+            {# State 2: Deck uploaded — picker then submit #}
+            <div class="reference-file-item">
+                <span class="reference-file-icon">{% if ckv_submission.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+                <span class="reference-file-name">{{ ckv_submission.original_filename }}</span>
+                <span class="reference-file-meta">Uploaded by {{ ckv_submission.uploaded_by.name }}</span>
+                <div class="reference-file-actions">
+                    <a href="{{ url_for('projects.download_submission', submission_id=ckv_submission.id) }}" class="btn-secondary btn-sm">Download</a>
+                </div>
+            </div>
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            <div class="submission-picker" id="submissionPicker" style="margin-top:1rem;">
+                <p class="detail-label" style="margin-bottom:0.5rem;">Which deliverables are included in this deck?</p>
+                <div id="pickerList" data-ckv="true" style="display:flex;flex-direction:column;gap:0.4rem;">
+                    {# Populated by JS — concept/KV checkboxes only; POSM picker NOT injected here #}
+                </div>
+            </div>
+            <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
+                <button type="button" class="btn-secondary btn-sm" id="submissionUploadBtn" data-project-id="{{ project.id }}">Reupload Deck</button>
+                <button type="button" class="btn-primary" id="submissionSubmitForReviewBtn"
+                    data-submission-id="{{ ckv_submission.id }}" data-project-id="{{ project.id }}">Submit for Internal Review</button>
+                <span class="reference-file-upload-status" id="submissionUploadStatus"></span>
+            </div>
+            {% endif %}
+
+            {% else %}
+            {# State 1: No deck yet #}
+            <p class="no-files-msg">No Concept &amp; KV deck uploaded yet.</p>
+            {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+            <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
+                <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
+                <button type="button" class="btn-secondary" id="submissionUploadBtn" data-project-id="{{ project.id }}">Upload Concept &amp; KV Deck</button>
+                <span class="reference-file-upload-status" id="submissionUploadStatus"></span>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# ── Per-POSM-channel sections — all start hidden; C&KV is shown first ── #}
         {% for cd in posm_channels_data %}
         {% set ch = cd.channel %}
         {% set ch_sub = cd.active_submission %}
         {% set ch_rev = cd.latest_revision %}
-        <div class="posm-channel-section{% if not loop.first %} hidden{% endif %}" id="posm-ch-{{ ch.id }}"
+        <div class="posm-channel-section hidden" id="posm-ch-{{ ch.id }}"
             data-channel-id="{{ ch.id }}">
 
             {# State 3: In Internal Review — CS can approve or flag #}
@@ -930,15 +1054,15 @@
                 </div>
             </div>
             <div class="submission-status submission-status--sent" style="margin-top:0.5rem;">
-                ✓ Submitted to client on {{ ch_sub.submitted_to_client_at.strftime('%d %b %Y, %H:%M') }} UTC
+                ✓ Submitted to client on {{ ch_sub.submitted_to_client_at | dubai_time }} GST
                 by {{ ch_sub.submitted_by.name if ch_sub.submitted_by else '—' }}
             </div>
             {% if effective_user.role in ['admin', 'cs'] %}
             <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
                 <button type="button" class="btn-danger btn-sm ch-send-revision-btn" data-channel-id="{{ ch.id }}">↩
                     Send for Revision</button>
-                <button type="button" class="btn-primary btn-sm ch-approve-btn"
-                    data-channel-id="{{ ch.id }}" data-project-id="{{ project.id }}">✓ Approve</button>
+                <button type="button" class="btn-primary btn-sm ch-approve-btn" data-channel-id="{{ ch.id }}"
+                    data-project-id="{{ project.id }}">✓ Approve</button>
             </div>
             <div class="ch-send-revision-form hidden" id="ch-rev-form-{{ ch.id }}" style="margin-top:1rem;">
                 <textarea class="form-input ch-revision-message" id="ch-rev-msg-{{ ch.id }}"
@@ -959,8 +1083,7 @@
             <div class="revision-card">
                 <p class="detail-label" style="margin-bottom:0.4rem;">Revision Request from CS</p>
                 <div class="revision-message">{{ ch_rev.message }}</div>
-                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at.strftime('%d %b %Y,
-                    %H:%M') }} UTC</p>
+                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at | dubai_time }} GST</p>
             </div>
             {% endif %}
             {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
@@ -979,8 +1102,7 @@
             <div class="revision-card">
                 <p class="detail-label" style="margin-bottom:0.4rem;">Active Revision</p>
                 <div class="revision-message">{{ ch_rev.message }}</div>
-                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at.strftime('%d %b %Y,
-                    %H:%M') }} UTC</p>
+                <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at | dubai_time }} GST</p>
             </div>
             {% endif %}
             {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
@@ -1142,7 +1264,7 @@
          4. Internal Revision  → designer sees flag message + Reupload; CS sees waiting msg
          5. Submitted to Client → read-only; history shown below                          -->
     <div class="detail-card detail-card--full submission-card" style="margin-top: 1.5rem;">
-        <h2 class="detail-card-title">Client Submission
+        <h2 class="detail-card-title">Submission
             {% if project.project_status == 'internal_review' %}
             <span class="submission-badge submission-badge--review">In Review</span>
             {% elif project.project_status == 'internal_revision' %}
@@ -1166,7 +1288,8 @@
                     class="btn-secondary btn-sm">Download</a>
             </div>
         </div>
-        <div class="submission-status" style="margin-top: 0.5rem;">🔍 In Internal Review. Awaiting Client Servicing approval</div>
+        <div class="submission-status" style="margin-top: 0.5rem;">🔍 In Internal Review. Awaiting Client Servicing
+            approval</div>
         {% if active_submission.included_deliverables or active_submission.includes_concept or
         active_submission.includes_kv %}
         <div style="margin-top: 0.75rem;">
@@ -1239,7 +1362,7 @@
             </div>
         </div>
         <div class="submission-status submission-status--sent" style="margin-top: 0.5rem;">
-            ✓ Submitted to client on {{ active_submission.submitted_to_client_at.strftime('%d %b %Y, %H:%M') }} UTC
+            ✓ Submitted to client on {{ active_submission.submitted_to_client_at | dubai_time }} GST
             by {{ active_submission.submitted_by.name if active_submission.submitted_by else '—' }}
             {% if project.revision_count > 0 %} — Revision #{{ project.revision_count }}{% endif %}
         </div>
@@ -1247,8 +1370,8 @@
         {% if effective_user.role in ['admin', 'cs'] %}
         <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
             <button type="button" class="btn-danger btn-sm" id="sendRevisionBtn">↩ Send for Revision</button>
-            <button type="button" class="btn-primary btn-sm" id="approveBtn"
-                data-project-id="{{ project.id }}">✓ Approve Project</button>
+            <button type="button" class="btn-primary btn-sm" id="approveBtn" data-project-id="{{ project.id }}">✓
+                Approve Project</button>
         </div>
         {# Revision form — hidden until CS clicks the button above #}
         <div id="sendRevisionForm" class="hidden" style="margin-top: 1rem;">
@@ -1317,8 +1440,8 @@
                 {% endfor %}
                 {% endif %}
             </div>
-            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{
-                latest_revision.sent_at.strftime('%d %b %Y, %H:%M') }} UTC</p>
+            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{ latest_revision.sent_at |
+                dubai_time }} GST</p>
         </div>
         {% endif %}
         {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
@@ -1374,8 +1497,8 @@
                 {% endfor %}
                 {% endif %}
             </div>
-            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{
-                latest_revision.sent_at.strftime('%d %b %Y, %H:%M') }} UTC</p>
+            <p class="revision-meta">Sent by {{ latest_revision.sent_by.name }} on {{ latest_revision.sent_at |
+                dubai_time }} GST</p>
         </div>
         {% endif %}
         {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
@@ -1394,15 +1517,18 @@
         {# ── State 8: Approved — read-only card with download; no further action possible ── #}
         {% elif project.project_status == 'approved' %}
         <div class="submission-status submission-status--approved" style="margin-top:0.5rem;">
-            ✓ Approved on {{ project.approved_at.strftime('%d %b %Y, %H:%M') }} UTC
+            ✓ Approved on {{ project.approved_at | dubai_time }} GST
             by {{ project.approved_by.name if project.approved_by else '—' }}
         </div>
         {% if active_submission %}
         <div class="reference-file-item" style="margin-top:0.75rem;">
-            <span class="reference-file-icon">{% if active_submission.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+            <span class="reference-file-icon">{% if active_submission.file_type == 'pdf' %}📄{% else %}📊{% endif
+                %}</span>
             <span class="reference-file-name">{{ active_submission.original_filename }}</span>
-            <span class="reference-file-meta">Submitted by {{ active_submission.submitted_by.name if active_submission.submitted_by else '—' }}
-                on {{ active_submission.submitted_to_client_at.strftime('%d %b %Y') if active_submission.submitted_to_client_at else '' }}</span>
+            <span class="reference-file-meta">Submitted by {{ active_submission.submitted_by.name if
+                active_submission.submitted_by else '—' }}
+                on {{ active_submission.submitted_to_client_at.strftime('%d %b %Y') if
+                active_submission.submitted_to_client_at else '' }}</span>
             <div class="reference-file-actions">
                 <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
                     class="btn-secondary btn-sm">Download</a>
@@ -1593,8 +1719,7 @@
                         'Deliverable'}.get(flag.flag_type, flag.flag_type) }}
                     </span>
                     {% if flag.deliverable %}<span class="flag-subject">{{ flag.deliverable.name }}</span>{% endif %}
-                    <span class="flag-meta">{{ flag.created_by.name }} · {{ flag.created_at.strftime('%d %b %Y')
-                        }}</span>
+                    <span class="flag-message-time">{{ flag.created_at | dubai_time }} GST</span>
                     {% if flag.is_resolved %}
                     <span class="flag-resolved-badge">✓ Resolved by {{ flag.resolved_by.name }} · {{
                         flag.resolved_at.strftime('%d %b %Y') }}</span>
@@ -1607,7 +1732,7 @@
                     <div class="flag-message">
                         <div class="flag-message-header">
                             <span class="flag-message-author">{{ msg.author.name }}</span>
-                            <span class="flag-message-time">{{ msg.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
+                            <span class="flag-message-time">{{ msg.created_at | dubai_time }} GST</span>
                         </div>
                         <p class="flag-message-text">{{ msg.message }}</p>
                     </div>
@@ -1793,34 +1918,36 @@
         btn.textContent = btn.textContent.replace(' ▾', '').replace(' ▴', '') + (isHidden ? ' ▴' : ' ▾');
     }
 
-    // ── Begin POSM button ────────────────────────────────────────────────────
-    var beginPosmBtn = document.getElementById('beginPosmBtn');
-    if (beginPosmBtn) {
-        beginPosmBtn.addEventListener('click', function () {
-            if (!confirm('Begin POSM phase?\n\nThis will lock the current revision count and start per-customer POSM tracking. This cannot be undone.')) return;
-            beginPosmBtn.disabled = true;
-            beginPosmBtn.textContent = 'Starting...';
-            fetch(window.beginPosmUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) {
-                        showToast(data.error || 'Could not begin POSM.', 'error');
-                        beginPosmBtn.disabled = false;
-                        beginPosmBtn.textContent = '▶ Begin POSM';
-                        return;
-                    }
-                    showToast('POSM phase started!', 'success');
-                    setTimeout(function () { location.reload(); }, 700);
-                })
-                .catch(function () {
-                    showToast('Something went wrong.', 'error');
-                    beginPosmBtn.disabled = false;
-                    beginPosmBtn.textContent = '▶ Begin POSM';
-                });
+    // ── C&KV channel pill switcher ────────────────────────────────────────────
+    function selectCkvChannel() {
+        document.querySelectorAll('.posm-channel-pill').forEach(function (btn) {
+            btn.classList.remove('posm-channel-pill--active');
         });
+        var ckvPill = document.getElementById('ckv-pill');
+        if (ckvPill) ckvPill.classList.add('posm-channel-pill--active');
+        document.querySelectorAll('.posm-channel-section').forEach(function (sec) {
+            sec.classList.add('hidden');
+        });
+        var ckvSection = document.getElementById('ckv-section');
+        if (ckvSection) ckvSection.classList.remove('hidden');
+    }
+
+    // ── Approve Concept & KV (POSM-parallel) ─────────────────────────────────
+    function approveCKV(projectId) {
+        if (!confirm('Approve Concept & KV?\n\nThis sets C&KV to approved. If all POSM channels are also approved, the project will be fully approved. This cannot be undone.')) return;
+        fetch('/projects/' + projectId + '/concept-kv/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                showToast(data.error || 'Could not approve Concept & KV.', 'error');
+            }
+        })
+        .catch(function () { showToast('Something went wrong.', 'error'); });
     }
 
     // ── Gulf POSM two-step picker ─────────────────────────────────────────────
@@ -1926,9 +2053,10 @@
             : buildFlatCustomerSelect(prefix, defaultCustomerId);
     }
 
-    // Inject into submission picker
+    // Inject POSM country picker into submission picker — but NOT into the C&KV section picker
+    // (C&KV submissions never have a POSM country; data-ckv="true" marks the C&KV picker)
     var pickerList = document.getElementById('pickerList');
-    if (pickerList && window.posmActive) {
+    if (pickerList && window.posmActive && !pickerList.dataset.ckv) {
         var submPicker = buildPosmPicker('posm', window.previousPosmCountry, window.previousPosmCustomerId);
         if (submPicker) pickerList.parentElement.insertBefore(submPicker, pickerList);
     }
@@ -1997,8 +2125,8 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         // ── Approval modal wiring ──
-        var modalEl    = document.getElementById('approvalModal');
-        var cancelBtn  = document.getElementById('approvalModalCancel');
+        var modalEl = document.getElementById('approvalModal');
+        var cancelBtn = document.getElementById('approvalModalCancel');
         var confirmBtn = document.getElementById('approvalModalConfirm');
 
         function closeApprovalModal() {
@@ -2006,7 +2134,7 @@
             _approveCallback = null;
         }
 
-        if (cancelBtn)  { cancelBtn.addEventListener('click',  closeApprovalModal); }
+        if (cancelBtn) { cancelBtn.addEventListener('click', closeApprovalModal); }
         if (confirmBtn) {
             confirmBtn.addEventListener('click', function () {
                 var fn = _approveCallback;   // save before closeApprovalModal nullifies it
@@ -2033,16 +2161,16 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' }
                         })
-                        .then(function (r) { return r.json(); })
-                        .then(function (data) {
-                            if (data.success) {
-                                showToast('Project approved', 'success');
-                                setTimeout(function () { location.reload(); }, 800);
-                            } else {
-                                showToast(data.error || 'Something went wrong', 'error');
-                            }
-                        })
-                        .catch(function () { showToast('Something went wrong', 'error'); });
+                            .then(function (r) { return r.json(); })
+                            .then(function (data) {
+                                if (data.success) {
+                                    showToast('Project approved', 'success');
+                                    setTimeout(function () { location.reload(); }, 800);
+                                } else {
+                                    showToast(data.error || 'Something went wrong', 'error');
+                                }
+                            })
+                            .catch(function () { showToast('Something went wrong', 'error'); });
                     }
                 );
             });
@@ -2065,16 +2193,16 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ posm_channel_id: parseInt(channelId) })
                     })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            showToast('Channel approved', 'success');
-                            setTimeout(function () { location.reload(); }, 800);
-                        } else {
-                            showToast(data.error || 'Something went wrong', 'error');
-                        }
-                    })
-                    .catch(function () { showToast('Something went wrong', 'error'); });
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                showToast('Channel approved', 'success');
+                                setTimeout(function () { location.reload(); }, 800);
+                            } else {
+                                showToast(data.error || 'Something went wrong', 'error');
+                            }
+                        })
+                        .catch(function () { showToast('Something went wrong', 'error'); });
                 }
             );
         });

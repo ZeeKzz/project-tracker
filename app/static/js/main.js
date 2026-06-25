@@ -1,6 +1,56 @@
 // main.js - Vitamin Helix
 console.log("Vitamin Helix loaded.");
 
+// ── Dev Tools: Wipe Projects ─────────────────────────────────────────────────
+// These functions only do anything if the wipe modal exists in the DOM, which
+// only happens when DEV_TOOLS_ENABLED=true is set in .env (never on production).
+
+function openWipeModal() {
+    var modal = document.getElementById('wipe-modal');
+    if (!modal) return;
+    // Reset state every time modal opens — clear the input and re-disable the button
+    document.getElementById('wipe-confirm-input').value = '';
+    document.getElementById('wipe-confirm-btn').disabled = true;
+    modal.classList.remove('hidden');
+    setTimeout(function () { document.getElementById('wipe-confirm-input').focus(); }, 100);
+}
+
+function closeWipeModal() {
+    var modal = document.getElementById('wipe-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Enable the confirm button only when the user has typed exactly 'WIPE'
+function checkWipeConfirm() {
+    var val = document.getElementById('wipe-confirm-input').value;
+    document.getElementById('wipe-confirm-btn').disabled = (val !== 'WIPE');
+}
+
+// POST to the wipe route — server double-checks DEV_TOOLS_ENABLED before touching any data
+function confirmWipe() {
+    var btn = document.getElementById('wipe-confirm-btn');
+    btn.disabled = true;
+    btn.textContent = 'Wiping…';
+
+    fetch('/admin/api/dev/wipe-projects', { method: 'POST' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            closeWipeModal();
+            if (data.success) {
+                showToast('All projects wiped. FOC counter reset to FOC-001.', 'success');
+            } else {
+                showToast(data.error || 'Wipe failed.', 'error');
+            }
+            // Reset button text for next time
+            btn.textContent = 'Wipe Everything';
+        })
+        .catch(function () {
+            showToast('Request failed. Check the server logs.', 'error');
+            closeWipeModal();
+            btn.textContent = 'Wipe Everything';
+        });
+}
+
 // ── Scroll Position: save before any form submit, restore on load ────────────
 (function () {
     var SCROLL_KEY = 'helix_scroll_' + window.location.pathname;
@@ -664,10 +714,7 @@ function buildApprovedView(containerId, projects) {
             // Table body — one row per project
             var tbody = document.createElement('tbody');
             grouped[yr][mo].rows.forEach(function (p) {
-                var d = new Date(p.approved_at);
-                var dateStr = d.getDate() + ' ' +
-                    d.toLocaleString('en-GB', { month: 'short' }) + ' ' +
-                    d.getFullYear();
+                var dateStr = p.approved_at_display;
                 var briefLabel = (p.brief_type === 'ccm') ? 'C&amp;CM' : 'Standard';
 
                 var tr = document.createElement('tr');
@@ -697,1363 +744,1347 @@ function buildApprovedView(containerId, projects) {
     });
 }
 
-// Shared approved-projects toggle elements — present on all three dashboards
-var btnApprovedProjects  = document.getElementById('btn-approved-projects');
-var approvedProjectsView = document.getElementById('approved-projects-view');
+// ── Approved Projects filters ─────────────────────────────────────────────────
+    // Three functions work together: 
+    // populateApprovedFilters() - runs once on first open, fills the CS lead and designer dropdowns with unique values from window.approvedProjects
+    // getFilteredApprovedProjects() - reads the current filter inputs and returns a filtered subset of window.approvedProjects (AND logic across all filters)
+    // initApprovedFilters() - Called afteer buildApprovedView() on first tab open; populates dropdowns and wires up all filter event listeners
+    function populateApprovedFilters() {
+        var projects = window.approvedProjects || [];
+        var csSelect = document.getElementById('approved-cs-filter');
+        var designerSelect = document.getElementById('approved-designer-filter');
+        if (!csSelect || !designerSelect) return;
 
-// Team lead + designer toggle — team view / personal view / approved projects
-const btnTeamView = document.getElementById('btn-team-view');
-const btnPersonalView = document.getElementById('btn-personal-view');
-const teamView = document.getElementById('team-view');
-const personalView = document.getElementById('personal-view');
+        // Collect unique CS leads and designers using objects as sets (key = name)
+        var csLeads = {}, designers = {};
+        projects.forEach(function (p) {
+            if (p.cs_lead) csLeads[p.cs_lead] = true;
+            (p.assigned_designers || []).forEach(function (d) { designers[d] = true; });
+        });
 
-if (btnTeamView && btnPersonalView && teamView && personalView) {
-    var dtAllViews = [teamView, personalView];
-    var dtAllBtns  = [btnTeamView, btnPersonalView];
-    if (approvedProjectsView) dtAllViews.push(approvedProjectsView);
-    if (btnApprovedProjects)  dtAllBtns.push(btnApprovedProjects);
+        // Sort alphabetically and append as <option> elements
+        Object.keys(csLeads).sort().forEach(function (name) {
+            var opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            csSelect.appendChild(opt);
+        });
 
-    function switchDTView(activeBtn, activeView) {
-        dtAllViews.forEach(function (v) { v.classList.add('hidden'); });
-        dtAllBtns.forEach(function (b)  { b.classList.remove('active'); });
-        activeView.classList.remove('hidden');
-        activeBtn.classList.add('active');
+        Object.keys(designers).sort().forEach(function (name) {
+            var opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            designerSelect.appendChild(opt);
+        });
     }
 
-    btnTeamView.addEventListener('click', function () { switchDTView(btnTeamView, teamView); });
-    btnPersonalView.addEventListener('click', function () { switchDTView(btnPersonalView, personalView); });
+    function getFilteredApprovedProjects() {
 
-    if (btnApprovedProjects && approvedProjectsView) {
-        btnApprovedProjects.addEventListener('click', function () {
-            switchDTView(btnApprovedProjects, approvedProjectsView);
-            // Lazy-render on first open so we don't build the DOM unnecessarily
-            if (!approvedProjectsView.dataset.rendered) {
-                buildApprovedView('approved-projects-container', window.approvedProjects || []);
-                approvedProjectsView.dataset.rendered = '1';
+        // Read current values from all 5 filter inputs (|| {} guards against missing elements)
+        var nameQ = (document.getElementById('approved-search') || {}).value || '';
+        var csQ = (document.getElementById('approved-cs-filter') || {}).value || '';
+        var designerQ = (document.getElementById('approved-designer-filter') || {}).value || '';
+        var fromVal = (document.getElementById('approved-from') || {}).value || '';
+        var toVal = (document.getElementById('approved-to') || {}).value || '';
+
+        nameQ = nameQ.trim().toLowerCase();
+
+        // Parse date inputs into Date objects; extend toDate to end of day so the full "to" date is included (not just midnight of that day)
+        var fromDate = fromVal ? new Date(fromVal) : null;
+        var toDate = toVal ? new Date(toVal) : null;
+        if (toDate) toDate.setHours(23, 59, 59, 999);
+
+        return (window.approvedProjects || []).filter(function (p) {
+            // Empty filter value = match everything (no restriction applied)
+            var matchName = !nameQ || p.name.toLowerCase().indexOf(nameQ) !== -1;
+            var matchCS = !csQ || p.cs_lead === csQ;
+
+            // indexOf works on the assigned_designers string array
+            var matchDesigner = !designerQ || (p.assigned_designers || []).indexOf(designerQ) !== -1;
+
+            // p.approved_at is a UTC ISO string - parse for date comparison
+            var pDate = new Date(p.approved_at);
+            var matchFrom = !fromDate || pDate >= fromDate;
+            var matchTo = !toDate || pDate <= toDate;
+
+            // All conditions must be pass (AND logic)
+            return matchName && matchCS && matchDesigner && matchFrom && matchTo;
+        });
+    }
+
+    function initApprovedFilters() {
+        // Populate the CS lead and designer dropdowns on first call
+        populateApprovedFilters();
+
+        // Wire up all filter inputs — any change re-renders with the filtered list
+        var inputs = ['approved-search', 'approved-cs-filter', 'approved-designer-filter', 'approved-from', 'approved-to'];
+        inputs.forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('input', function () {
+                buildApprovedView('approved-projects-container', getFilteredApprovedProjects());
+            });
+        });
+
+        // Clear button resets all inputs and re-renders the full unfiltered list
+        var clearBtn = document.getElementById('approved-clear-filters');
+        if (clearBtn) clearBtn.addEventListener('click', function () {
+            inputs.forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            buildApprovedView('approved-projects-container', window.approvedProjects || []);
+        });
+    }
+
+
+
+    // Shared approved-projects toggle elements — present on all three dashboards
+    var btnApprovedProjects = document.getElementById('btn-approved-projects');
+    var approvedProjectsView = document.getElementById('approved-projects-view');
+
+    // Team lead + designer toggle — team view / personal view / approved projects
+    const btnTeamView = document.getElementById('btn-team-view');
+    const btnPersonalView = document.getElementById('btn-personal-view');
+    const teamView = document.getElementById('team-view');
+    const personalView = document.getElementById('personal-view');
+
+    if (btnTeamView && btnPersonalView && teamView && personalView) {
+        var dtAllViews = [teamView, personalView];
+        var dtAllBtns = [btnTeamView, btnPersonalView];
+        if (approvedProjectsView) dtAllViews.push(approvedProjectsView);
+        if (btnApprovedProjects) dtAllBtns.push(btnApprovedProjects);
+
+        function switchDTView(activeBtn, activeView) {
+            dtAllViews.forEach(function (v) { v.classList.add('hidden'); });
+            dtAllBtns.forEach(function (b) { b.classList.remove('active'); });
+            activeView.classList.remove('hidden');
+            activeBtn.classList.add('active');
+        }
+
+        btnTeamView.addEventListener('click', function () { switchDTView(btnTeamView, teamView); });
+        btnPersonalView.addEventListener('click', function () { switchDTView(btnPersonalView, personalView); });
+
+        if (btnApprovedProjects && approvedProjectsView) {
+            btnApprovedProjects.addEventListener('click', function () {
+                switchDTView(btnApprovedProjects, approvedProjectsView);
+                // Lazy-render on first open so we don't build the DOM unnecessarily
+                if (!approvedProjectsView.dataset.rendered) {
+                    buildApprovedView('approved-projects-container', window.approvedProjects || []);
+                    initApprovedFilters();
+                    approvedProjectsView.dataset.rendered = '1';
+                }
+            });
+        }
+    }
+
+    // Conditional team dropdown on register page - shows team selector for designer/team_lead roles
+    const roleSelect = document.getElementById('role');
+    const teamGroup = document.getElementById('team-group');
+    const teamSelect = document.getElementById('team');
+
+    if (roleSelect && teamGroup && teamSelect) {
+        roleSelect.addEventListener('change', function () {
+            const needsTeam = this.value === 'designer' || this.value === 'team_lead';
+
+            if (needsTeam) {
+                teamGroup.classList.remove('hidden');
+                teamSelect.required = true;
+            } else {
+                teamGroup.classList.add('hidden');
+                teamSelect.required = false;
+                teamSelect.value = '';
             }
         });
     }
-}
 
-// Conditional team dropdown on register page - shows team selector for designer/team_lead roles
-const roleSelect = document.getElementById('role');
-const teamGroup = document.getElementById('team-group');
-const teamSelect = document.getElementById('team');
+    // CS dashboard toggle — my projects / all projects / approved projects
+    const btnMyProjects = document.getElementById('btn-my-projects');
+    const btnAllProjects = document.getElementById('btn-all-projects');
+    const myProjectsView = document.getElementById('my-projects-view');
+    const allProjectsView = document.getElementById('all-projects-view');
 
-if (roleSelect && teamGroup && teamSelect) {
-    roleSelect.addEventListener('change', function () {
-        const needsTeam = this.value === 'designer' || this.value === 'team_lead';
+    if (btnMyProjects && btnAllProjects && myProjectsView && allProjectsView) {
+        var csAllViews = [myProjectsView, allProjectsView];
+        var csAllBtns = [btnMyProjects, btnAllProjects];
+        if (approvedProjectsView) csAllViews.push(approvedProjectsView);
+        if (btnApprovedProjects) csAllBtns.push(btnApprovedProjects);
 
-        if (needsTeam) {
-            teamGroup.classList.remove('hidden');
-            teamSelect.required = true;
+        function switchCSView(activeBtn, activeView) {
+            csAllViews.forEach(function (v) { v.classList.add('hidden'); });
+            csAllBtns.forEach(function (b) { b.classList.remove('active'); });
+            activeView.classList.remove('hidden');
+            activeBtn.classList.add('active');
+        }
+
+        btnMyProjects.addEventListener('click', function () { switchCSView(btnMyProjects, myProjectsView); });
+        btnAllProjects.addEventListener('click', function () { switchCSView(btnAllProjects, allProjectsView); });
+
+        if (btnApprovedProjects && approvedProjectsView) {
+            btnApprovedProjects.addEventListener('click', function () {
+                switchCSView(btnApprovedProjects, approvedProjectsView);
+                // Lazy-render on first open
+                if (!approvedProjectsView.dataset.rendered) {
+                    buildApprovedView('approved-projects-container', window.approvedProjects || []);
+                    initApprovedFilters();
+                    approvedProjectsView.dataset.rendered = '1';
+                }
+            });
+        }
+    }
+
+    // Account dropdown toggle
+    const accountTrigger = document.getElementById('account-trigger');
+    const accountDropdown = document.getElementById('account-dropdown');
+
+    if (accountTrigger && accountDropdown) {
+        accountTrigger.addEventListener('click', function (event) {
+            event.stopPropagation();
+            accountDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!accountDropdown.classList.contains('hidden')) {
+                if (!accountDropdown.contains(event.target) && event.target !== accountTrigger) {
+                    accountDropdown.classList.add('hidden');
+                }
+            }
+        });
+    }
+
+    // ============================================================
+    // DRAFTS PAGE
+    // ============================================================
+
+    const draftItems = document.querySelectorAll('.draft-item');
+    const draftConfirmOverlay = document.getElementById('draftConfirmOverlay');
+    const draftConfirmYes = document.getElementById('draftConfirmYes');
+    const draftConfirmCancel = document.getElementById('draftConfirmCancel');
+
+    if (draftItems.length > 0) {
+
+        let pendingDeleteId = null;
+        let pendingDeleteRow = null;
+
+        draftItems.forEach(function (item) {
+            item.addEventListener('click', function () {
+                const isActive = this.classList.contains('active');
+                draftItems.forEach(function (i) { i.classList.remove('active'); });
+                if (!isActive) {
+                    this.classList.add('active');
+                }
+            });
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.draft-item')) {
+                draftItems.forEach(function (i) { i.classList.remove('active'); });
+            }
+        });
+
+        document.querySelectorAll('.draft-delete-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                pendingDeleteId = this.dataset.draftId;
+                pendingDeleteRow = this.closest('.draft-item');
+                if (draftConfirmOverlay) {
+                    draftConfirmOverlay.classList.remove('hidden');
+                }
+            });
+        });
+
+        if (draftConfirmYes) {
+            draftConfirmYes.addEventListener('click', function () {
+                if (!pendingDeleteId) return;
+
+                fetch('/projects/drafts/' + pendingDeleteId + '/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            if (draftConfirmOverlay) {
+                                draftConfirmOverlay.classList.add('hidden');
+                            }
+                            if (pendingDeleteRow) {
+                                const rowHeight = pendingDeleteRow.offsetHeight;
+                                pendingDeleteRow.style.transition = 'opacity 0.25s ease, max-height 0.35s ease 0.2s, margin-bottom 0.35s ease 0.2s, padding 0.35s ease 0.2s';
+                                pendingDeleteRow.style.overflow = 'hidden';
+                                pendingDeleteRow.style.maxHeight = rowHeight + 'px';
+                                pendingDeleteRow.style.opacity = '0';
+                                setTimeout(function () {
+                                    pendingDeleteRow.style.maxHeight = '0';
+                                    pendingDeleteRow.style.marginBottom = '0';
+                                    pendingDeleteRow.style.padding = '0';
+                                }, 250);
+                                setTimeout(function () {
+                                    pendingDeleteRow.remove();
+                                    const remaining = document.querySelectorAll('.draft-item');
+                                    if (remaining.length === 0) {
+                                        window.location.href = '/';
+                                    }
+                                }, 850);
+                            }
+                            pendingDeleteId = null;
+                            pendingDeleteRow = null;
+                        }
+                    })
+                    .catch(function (err) {
+                        console.error('Draft delete failed:', err);
+                    });
+            });
+        }
+
+        if (draftConfirmCancel) {
+            draftConfirmCancel.addEventListener('click', function () {
+                if (draftConfirmOverlay) {
+                    draftConfirmOverlay.classList.add('hidden');
+                }
+                pendingDeleteId = null;
+                pendingDeleteRow = null;
+            });
+        }
+
+    }
+
+    // ── Toast Notifications ──────────────────────────────────────
+    function showToast(message, type) {
+        var existing = document.getElementById('helixToast');
+        if (existing) existing.remove();
+
+        var toast = document.createElement('div');
+        toast.id = 'helixToast';
+        toast.textContent = message;
+
+        toast.style.position = 'fixed';
+        toast.style.top = '24px';
+        toast.style.right = '0';
+        toast.style.zIndex = '9999';
+        toast.style.padding = '16px 24px';
+        toast.style.borderRadius = '6px 0 0 6px';
+        toast.style.fontSize = '0.9rem';
+        toast.style.fontFamily = 'var(--font-sans)';
+        toast.style.boxShadow = '-4px 4px 16px rgba(0,0,0,0.12)';
+        toast.style.borderLeft = '5px solid var(--tangerine)';
+        toast.style.transform = 'translateX(110%)';
+        toast.style.transition = 'transform 0.35s ease';
+        toast.style.maxWidth = '320px';
+
+        if (type === 'success') {
+            toast.style.backgroundColor = 'var(--pine)';
+            toast.style.color = '#ffffff';
         } else {
-            teamGroup.classList.add('hidden');
-            teamSelect.required = false;
-            teamSelect.value = '';
+            toast.style.backgroundColor = 'var(--rose)';
+            toast.style.color = '#1a1a1a';
         }
-    });
-}
 
-// CS dashboard toggle — my projects / all projects / approved projects
-const btnMyProjects = document.getElementById('btn-my-projects');
-const btnAllProjects = document.getElementById('btn-all-projects');
-const myProjectsView = document.getElementById('my-projects-view');
-const allProjectsView = document.getElementById('all-projects-view');
+        document.body.appendChild(toast);
 
-if (btnMyProjects && btnAllProjects && myProjectsView && allProjectsView) {
-    var csAllViews = [myProjectsView, allProjectsView];
-    var csAllBtns  = [btnMyProjects, btnAllProjects];
-    if (approvedProjectsView) csAllViews.push(approvedProjectsView);
-    if (btnApprovedProjects)  csAllBtns.push(btnApprovedProjects);
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                toast.style.transform = 'translateX(0)';
+            });
+        });
 
-    function switchCSView(activeBtn, activeView) {
-        csAllViews.forEach(function (v) { v.classList.add('hidden'); });
-        csAllBtns.forEach(function (b)  { b.classList.remove('active'); });
-        activeView.classList.remove('hidden');
-        activeBtn.classList.add('active');
+        setTimeout(function () {
+            toast.style.transform = 'translateX(110%)';
+            setTimeout(function () {
+                toast.remove();
+            }, 350);
+        }, 5000);
     }
 
-    btnMyProjects.addEventListener('click', function () { switchCSView(btnMyProjects, myProjectsView); });
-    btnAllProjects.addEventListener('click', function () { switchCSView(btnAllProjects, allProjectsView); });
+    // ============================================================
+    // CREATE PROJECT PAGE
+    // ============================================================
 
-    if (btnApprovedProjects && approvedProjectsView) {
-        btnApprovedProjects.addEventListener('click', function () {
-            switchCSView(btnApprovedProjects, approvedProjectsView);
-            // Lazy-render on first open
-            if (!approvedProjectsView.dataset.rendered) {
-                buildApprovedView('approved-projects-container', window.approvedProjects || []);
-                approvedProjectsView.dataset.rendered = '1';
+    if (document.getElementById('sectionBasics')) {
+
+        // ── State ────────────────────────────────────────────────
+        let currentDraftId = null;
+        let autosaveTimeout = null;
+        const briefSavedState = {};
+
+        // ── Completion Bar ───────────────────────────────────────
+        var currentCompletion = 0;
+
+        function calculateCompletion() {
+            if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
+                document.getElementById('completionBarFill').style.width = '100%';
+                document.getElementById('completionLabel').textContent = '100% Complete';
+                currentCompletion = 100;
+                return;
             }
-        });
-    }
-}
 
-// Account dropdown toggle
-const accountTrigger = document.getElementById('account-trigger');
-const accountDropdown = document.getElementById('account-dropdown');
+            let score = 0;
 
-if (accountTrigger && accountDropdown) {
-    accountTrigger.addEventListener('click', function (event) {
-        event.stopPropagation();
-        accountDropdown.classList.toggle('hidden');
-    });
+            const basicChecks = [
+                function () { return document.getElementById('client_id').value !== ''; },
+                function () { return document.getElementById('project_name').value.trim() !== ''; },
+                function () { return document.getElementById('cs_lead_id').value !== ''; },
+                function () { return document.getElementById('job_number').value.trim() !== ''; },
+                function () { return document.querySelectorAll('input[name="design_teams"]:checked').length > 0; },
+                function () { return document.getElementById('briefing_date').value !== ''; },
+                function () { return document.getElementById('first_output_deadline').value !== ''; },
+                function () { return document.getElementById('final_deadline').value !== ''; },
+            ];
 
-    document.addEventListener('click', function (event) {
-        if (!accountDropdown.classList.contains('hidden')) {
-            if (!accountDropdown.contains(event.target) && event.target !== accountTrigger) {
-                accountDropdown.classList.add('hidden');
+            var basicWeight = 25 / basicChecks.length;
+            basicChecks.forEach(function (check) {
+                if (check()) score += basicWeight;
+            });
+
+            var briefType = document.getElementById('brief_type').value;
+            if (briefType === 'ccm') {
+                // Only urgency is required — region/customers/deliverables are optional at
+                // creation time and can be filled in later via Edit Project.
+                var ccmChecks = [
+                    function () { return document.getElementById('urgency').value !== ''; },
+                ];
+                var ccmWeight = 75 / ccmChecks.length;
+                ccmChecks.forEach(function (check) {
+                    if (check()) score += ccmWeight;
+                });
+            } else if (briefType === 'standard') {
+                // Only design_type_id remains — design_direction was removed from the brief form
+                var standardChecks = [
+                    function () { return document.getElementById('design_type_id') && document.getElementById('design_type_id').value !== ''; },
+                ];
+                var standardWeight = 75 / standardChecks.length;
+                standardChecks.forEach(function (check) {
+                    if (check()) score += standardWeight;
+                });
             }
+
+            var pct = Math.min(Math.round(score), 100);
+            document.getElementById('completionBarFill').style.width = pct + '%';
+            document.getElementById('completionLabel').textContent = pct + '% Complete';
+            currentCompletion = pct;
         }
-    });
-}
 
-// ============================================================
-// DRAFTS PAGE
-// ============================================================
-
-const draftItems = document.querySelectorAll('.draft-item');
-const draftConfirmOverlay = document.getElementById('draftConfirmOverlay');
-const draftConfirmYes = document.getElementById('draftConfirmYes');
-const draftConfirmCancel = document.getElementById('draftConfirmCancel');
-
-if (draftItems.length > 0) {
-
-    let pendingDeleteId = null;
-    let pendingDeleteRow = null;
-
-    draftItems.forEach(function (item) {
-        item.addEventListener('click', function () {
-            const isActive = this.classList.contains('active');
-            draftItems.forEach(function (i) { i.classList.remove('active'); });
-            if (!isActive) {
-                this.classList.add('active');
+        // ── Brief Type Switcher ──────────────────────────────────
+        function switchBriefType(type) {
+            var currentType = document.getElementById('brief_type').value;
+            if (currentType) {
+                briefSavedState[currentType] = captureBriefState(currentType);
             }
-        });
-    });
 
-    document.addEventListener('click', function (e) {
-        if (!e.target.closest('.draft-item')) {
-            draftItems.forEach(function (i) { i.classList.remove('active'); });
+            document.getElementById('brief_type').value = type;
+
+            document.querySelectorAll('.brief-type-btn').forEach(function (btn) {
+                btn.classList.toggle('active', btn.dataset.type === type);
+            });
+
+            var isCCM = type === 'ccm';
+            document.getElementById('sectionConceptKV').classList.add('hidden');
+            document.getElementById('sectionCCM').classList.toggle('hidden', !isCCM);
+            var conceptKVToggleBtn = document.getElementById('btnConceptKVToggle');
+            if (conceptKVToggleBtn) conceptKVToggleBtn.classList.remove('active');
+            var hasConceptEl2 = document.getElementById('has_concept');
+            if (hasConceptEl2) hasConceptEl2.value = 'false';
+            document.getElementById('sectionDeliverables').classList.toggle('hidden', true);
+            document.getElementById('sectionStandard').classList.toggle('hidden', type !== 'standard');
+
+            if (briefSavedState[type]) {
+                restoreBriefState(type, briefSavedState[type]);
+            }
+
+            calculateCompletion();
+            scheduleAutosave();
         }
-    });
 
-    document.querySelectorAll('.draft-delete-btn').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            pendingDeleteId = this.dataset.draftId;
-            pendingDeleteRow = this.closest('.draft-item');
-            if (draftConfirmOverlay) {
-                draftConfirmOverlay.classList.remove('hidden');
+        function captureBriefState(type) {
+            if (type === 'ccm') {
+                return {
+                    urgency: document.getElementById('urgency').value,
+                    region_uae: document.getElementById('region_uae').classList.contains('active'),
+                    region_gulf: document.getElementById('region_gulf').classList.contains('active'),
+                    gulf_kuwait: document.getElementById('gulf_kuwait').classList.contains('active'),
+                    gulf_qatar: document.getElementById('gulf_qatar').classList.contains('active'),
+                    gulf_bahrain: document.getElementById('gulf_bahrain').classList.contains('active'),
+                    gulf_oman: document.getElementById('gulf_oman').classList.contains('active'),
+                };
             }
-        });
-    });
+            return {};
+        }
 
-    if (draftConfirmYes) {
-        draftConfirmYes.addEventListener('click', function () {
-            if (!pendingDeleteId) return;
+        function restoreBriefState(type, state) {
+            if (type === 'ccm') {
+                document.getElementById('urgency').value = state.urgency || '';
 
-            fetch('/projects/drafts/' + pendingDeleteId + '/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        if (draftConfirmOverlay) {
-                            draftConfirmOverlay.classList.add('hidden');
-                        }
-                        if (pendingDeleteRow) {
-                            const rowHeight = pendingDeleteRow.offsetHeight;
-                            pendingDeleteRow.style.transition = 'opacity 0.25s ease, max-height 0.35s ease 0.2s, margin-bottom 0.35s ease 0.2s, padding 0.35s ease 0.2s';
-                            pendingDeleteRow.style.overflow = 'hidden';
-                            pendingDeleteRow.style.maxHeight = rowHeight + 'px';
-                            pendingDeleteRow.style.opacity = '0';
-                            setTimeout(function () {
-                                pendingDeleteRow.style.maxHeight = '0';
-                                pendingDeleteRow.style.marginBottom = '0';
-                                pendingDeleteRow.style.padding = '0';
-                            }, 250);
-                            setTimeout(function () {
-                                pendingDeleteRow.remove();
-                                const remaining = document.querySelectorAll('.draft-item');
-                                if (remaining.length === 0) {
-                                    window.location.href = '/';
-                                }
-                            }, 850);
-                        }
-                        pendingDeleteId = null;
-                        pendingDeleteRow = null;
+                var uaeBtn = document.getElementById('region_uae');
+                var gulfBtn = document.getElementById('region_gulf');
+                if (state.region_uae) { uaeBtn.classList.add('active'); } else { uaeBtn.classList.remove('active'); }
+                if (state.region_gulf) { gulfBtn.classList.add('active'); } else { gulfBtn.classList.remove('active'); }
+
+                ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (c) {
+                    var btn = document.getElementById('gulf_' + c);
+                    if (btn) {
+                        if (state['gulf_' + c]) { btn.classList.add('active'); } else { btn.classList.remove('active'); }
                     }
+                });
+
+                handleRegionChange();
+
+                ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (c) {
+                    if (state['gulf_' + c]) {
+                        buildGulfCountryCustomers(c);
+                    }
+                });
+            }
+        }
+
+        // ── Customer List Builders ───────────────────────────────
+        function buildCustomerChecklist(region, containerId) {
+            var container = document.getElementById(containerId);
+            if (!container) return;
+
+            var customers = CUSTOMERS_BY_REGION[region] || [];
+
+            customers.forEach(function (customer) {
+                var existing = container.querySelector('[data-customer-id="' + customer.id + '"]');
+                if (existing) return;
+
+                var pill = document.createElement('div');
+                pill.className = 'customer-pill';
+                pill.dataset.customerId = customer.id;
+                pill.dataset.customerName = customer.name;
+                pill.dataset.region = region;
+                pill.textContent = customer.name;
+
+                pill.addEventListener('click', function () {
+                    this.classList.toggle('selected');
+                    handleCustomerToggle(this);
+                    calculateCompletion();
+                    scheduleAutosave();
+                });
+
+                container.appendChild(pill);
+            });
+        }
+
+        function selectAllCustomers(containerId, btn) {
+            var container = document.getElementById(containerId);
+            if (!container) return;
+            var pills = container.querySelectorAll('.customer-pill');
+            var allSelected = Array.from(pills).every(function (p) { return p.classList.contains('selected'); });
+
+            if (allSelected) {
+                pills.forEach(function (pill) {
+                    pill.classList.remove('selected');
+                    handleCustomerToggle(pill);
+                });
+                if (btn) btn.textContent = 'Select All';
+            } else {
+                pills.forEach(function (pill) {
+                    if (!pill.classList.contains('selected')) {
+                        pill.classList.add('selected');
+                        handleCustomerToggle(pill);
+                    }
+                });
+                if (btn) btn.textContent = 'Deselect All';
+            }
+            calculateCompletion();
+            scheduleAutosave();
+        }
+
+        function buildGulfCountryCustomers(country) {
+            var grid = document.getElementById('gulfCustomerGrid');
+            if (grid.querySelector('[data-country="' + country + '"]')) return;
+
+            var customers = CUSTOMERS_BY_REGION[country] || [];
+            if (customers.length === 0) return;
+
+            var block = document.createElement('div');
+            block.className = 'gulf-country-block';
+            block.dataset.country = country;
+
+            var label = document.createElement('div');
+            label.className = 'gulf-country-label';
+            label.textContent = country.charAt(0).toUpperCase() + country.slice(1) + ' Customers';
+            block.appendChild(label);
+
+            var checklist = document.createElement('div');
+            checklist.className = 'customer-checklist';
+            checklist.id = 'gulfCustomers_' + country;
+            block.appendChild(checklist);
+
+            var selectAllBtn = document.createElement('button');
+            selectAllBtn.type = 'button';
+            selectAllBtn.className = 'btn btn--secondary btn--sm';
+            selectAllBtn.textContent = 'Select All';
+            selectAllBtn.addEventListener('click', function () {
+                selectAllCustomers('gulfCustomers_' + country, this);
+            });
+            block.insertBefore(selectAllBtn, checklist);
+
+            grid.appendChild(block);
+            buildCustomerChecklist(country, 'gulfCustomers_' + country);
+        }
+
+        function removeGulfCountryCustomers(country) {
+            var grid = document.getElementById('gulfCustomerGrid');
+            var block = grid.querySelector('[data-country="' + country + '"]');
+            if (block) {
+                block.querySelectorAll('.customer-pill.selected').forEach(function (pill) {
+                    removeDeliverableBlock(pill.dataset.customerId);
+                });
+                block.remove();
+            }
+        }
+
+        // ── Region Handling ──────────────────────────────────────
+        function handleRegionChange() {
+            var uaeActive = document.getElementById('region_uae').classList.contains('active');
+            var gulfActive = document.getElementById('region_gulf').classList.contains('active');
+
+            var uaeBlock = document.getElementById('blockUAECustomers');
+            var gulfBlock = document.getElementById('blockGulf');
+
+            if (uaeActive) {
+                uaeBlock.classList.remove('hidden');
+                buildCustomerChecklist('uae', 'uaeCustomerList');
+            } else {
+                uaeBlock.classList.add('hidden');
+                document.querySelectorAll('#uaeCustomerList .customer-pill.selected').forEach(function (pill) {
+                    removeDeliverableBlock(pill.dataset.customerId);
+                });
+            }
+
+            if (gulfActive) {
+                gulfBlock.classList.remove('hidden');
+            } else {
+                gulfBlock.classList.add('hidden');
+                ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
+                    var el = document.getElementById('gulf_' + country);
+                    if (el) el.classList.remove('active');
+                    removeGulfCountryCustomers(country);
+                });
+            }
+
+            calculateCompletion();
+        }
+
+        // ── Customer Toggle ──────────────────────────────────────
+        function handleCustomerToggle(pill) {
+            if (pill.classList.contains('selected')) {
+                addDeliverableBlock(
+                    pill.dataset.customerId,
+                    pill.dataset.customerName,
+                    pill.dataset.region
+                );
+            } else {
+                removeDeliverableBlock(pill.dataset.customerId);
+            }
+        }
+
+        // ── Deliverable Blocks ───────────────────────────────────
+        function addDeliverableBlock(customerId, customerName, region) {
+            var body = document.getElementById('deliverablesBody');
+            if (body.querySelector('[data-customer-id="' + customerId + '"]')) return;
+
+            document.getElementById('sectionDeliverables').classList.remove('hidden');
+
+            var regionSection = body.querySelector(
+                '.deliverables-region-section[data-region="' + region + '"]'
+            );
+            if (!regionSection) {
+                regionSection = document.createElement('div');
+                regionSection.className = 'deliverables-region-section';
+                regionSection.dataset.region = region;
+
+                var heading = document.createElement('div');
+                heading.className = 'deliverables-region-heading';
+                heading.textContent = region === 'uae' ? 'UAE' :
+                    region.charAt(0).toUpperCase() + region.slice(1);
+                regionSection.appendChild(heading);
+
+                if (region !== 'uae') {
+                    var applyBtn = document.createElement('button');
+                    applyBtn.type = 'button';
+                    applyBtn.className = 'btn btn--secondary apply-dates-btn';
+                    applyBtn.textContent = 'Apply same dates to all ' +
+                        region.charAt(0).toUpperCase() + region.slice(1) + ' customers';
+                    applyBtn.addEventListener('click', function () {
+                        applyDatesToRegion(region);
+                    });
+                    regionSection.appendChild(applyBtn);
+                }
+
+                body.appendChild(regionSection);
+            }
+
+            var block = document.createElement('div');
+            block.className = 'deliverables-customer-block';
+            block.dataset.customerId = customerId;
+
+            // Build the 00:00–23:00 time options once and reuse per block
+            var timeOptions = '<option value="">— Any —</option>';
+            for (var h = 0; h < 24; h++) {
+                var hh = (h < 10 ? '0' : '') + h + ':00';
+                timeOptions += '<option value="' + hh + '">' + hh + '</option>';
+            }
+
+            block.innerHTML =
+                '<h4 class="deliverables-customer-heading">' + customerName + '</h4>' +
+                '<div class="deliverables-customer-dates">' +
+                '<div class="customer-date-field">' +
+                '<label class="customer-date-label">Design Deadline</label>' +
+                '<input type="date" class="form-input" id="design_deadline_' + customerId + '">' +
+                '</div>' +
+                '<div class="customer-date-field">' +
+                '<label class="customer-date-label">Time</label>' +
+                '<select class="form-select" id="design_deadline_time_' + customerId + '" style="max-width:110px;">' +
+                timeOptions +
+                '</select>' +
+                '</div>' +
+                '<div class="customer-date-field">' +
+                '<label class="customer-date-label">Installation Date</label>' +
+                '<input type="date" class="form-input" id="installation_date_' + customerId + '">' +
+                '</div>' +
+                '</div>' +
+                '<div class="deliverable-rows" id="deliverableRows_' + customerId + '"></div>' +
+                '<button type="button" class="btn-add-inline add-deliverable-btn" ' +
+                'data-customer-id="' + customerId + '">+ Add Deliverable</button>';
+
+            var applyBtn = regionSection.querySelector('.apply-dates-btn');
+            if (applyBtn) {
+                regionSection.insertBefore(block, applyBtn);
+            } else {
+                regionSection.appendChild(block);
+            }
+
+            block.querySelector('.add-deliverable-btn').addEventListener('click', function () {
+                fetchAndShowDeliverableSelector(customerId);
+            });
+        }
+
+        function removeDeliverableBlock(customerId) {
+            var block = document.querySelector(
+                '.deliverables-customer-block[data-customer-id="' + customerId + '"]'
+            );
+            if (block) {
+                var regionSection = block.closest('.deliverables-region-section');
+                block.remove();
+                if (regionSection &&
+                    regionSection.querySelectorAll('.deliverables-customer-block').length === 0) {
+                    regionSection.remove();
+                }
+            }
+
+            if (document.querySelectorAll('.deliverables-customer-block').length === 0) {
+                document.getElementById('sectionDeliverables').classList.add('hidden');
+            }
+            calculateCompletion();
+        }
+
+        function applyDatesToRegion(region) {
+            var blocks = document.querySelectorAll(
+                '.deliverables-region-section[data-region="' + region + '"] .deliverables-customer-block'
+            );
+            if (blocks.length < 2) return;
+
+            var firstId = blocks[0].dataset.customerId;
+            var designVal = document.getElementById('design_deadline_' + firstId).value;
+            var timeEl = document.getElementById('design_deadline_time_' + firstId);
+            var timeVal = timeEl ? timeEl.value : '';
+            var installVal = document.getElementById('installation_date_' + firstId).value;
+
+            for (var i = 1; i < blocks.length; i++) {
+                var cid = blocks[i].dataset.customerId;
+                var ddEl = document.getElementById('design_deadline_' + cid);
+                var ddtEl = document.getElementById('design_deadline_time_' + cid);
+                var instEl = document.getElementById('installation_date_' + cid);
+                if (ddEl) ddEl.value = designVal;
+                if (ddtEl) ddtEl.value = timeVal;
+                if (instEl) instEl.value = installVal;
+            }
+        }
+
+        // ── Deliverable Selector ─────────────────────────────────
+        function fetchAndShowDeliverableSelector(customerId) {
+            var clientId = document.getElementById('client_id').value;
+            fetch('/projects/deliverable-types/' + customerId + '?client_id=' + clientId)
+                .then(function (res) { return res.json(); })
+                .then(function (types) {
+                    showDeliverableSelector(customerId, clientId, types);
                 })
                 .catch(function (err) {
-                    console.error('Draft delete failed:', err);
+                    console.error('Could not load deliverable types:', err);
                 });
-        });
-    }
-
-    if (draftConfirmCancel) {
-        draftConfirmCancel.addEventListener('click', function () {
-            if (draftConfirmOverlay) {
-                draftConfirmOverlay.classList.add('hidden');
-            }
-            pendingDeleteId = null;
-            pendingDeleteRow = null;
-        });
-    }
-
-}
-
-// ── Toast Notifications ──────────────────────────────────────
-function showToast(message, type) {
-    var existing = document.getElementById('helixToast');
-    if (existing) existing.remove();
-
-    var toast = document.createElement('div');
-    toast.id = 'helixToast';
-    toast.textContent = message;
-
-    toast.style.position = 'fixed';
-    toast.style.top = '24px';
-    toast.style.right = '0';
-    toast.style.zIndex = '9999';
-    toast.style.padding = '16px 24px';
-    toast.style.borderRadius = '6px 0 0 6px';
-    toast.style.fontSize = '0.9rem';
-    toast.style.fontFamily = 'var(--font-sans)';
-    toast.style.boxShadow = '-4px 4px 16px rgba(0,0,0,0.12)';
-    toast.style.borderLeft = '5px solid var(--tangerine)';
-    toast.style.transform = 'translateX(110%)';
-    toast.style.transition = 'transform 0.35s ease';
-    toast.style.maxWidth = '320px';
-
-    if (type === 'success') {
-        toast.style.backgroundColor = 'var(--pine)';
-        toast.style.color = '#ffffff';
-    } else {
-        toast.style.backgroundColor = 'var(--rose)';
-        toast.style.color = '#1a1a1a';
-    }
-
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-            toast.style.transform = 'translateX(0)';
-        });
-    });
-
-    setTimeout(function () {
-        toast.style.transform = 'translateX(110%)';
-        setTimeout(function () {
-            toast.remove();
-        }, 350);
-    }, 5000);
-}
-
-// ============================================================
-// CREATE PROJECT PAGE
-// ============================================================
-
-if (document.getElementById('sectionBasics')) {
-
-    // ── State ────────────────────────────────────────────────
-    let currentDraftId = null;
-    let autosaveTimeout = null;
-    const briefSavedState = {};
-
-    // ── Completion Bar ───────────────────────────────────────
-    var currentCompletion = 0;
-
-    function calculateCompletion() {
-        if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
-            document.getElementById('completionBarFill').style.width = '100%';
-            document.getElementById('completionLabel').textContent = '100% Complete';
-            currentCompletion = 100;
-            return;
         }
 
-        let score = 0;
+        function showDeliverableSelector(customerId, clientId, types) {
+            var existingSelector = document.getElementById('delSelector_' + customerId);
+            if (existingSelector) existingSelector.remove();
 
-        const basicChecks = [
-            function () { return document.getElementById('client_id').value !== ''; },
-            function () { return document.getElementById('project_name').value.trim() !== ''; },
-            function () { return document.getElementById('cs_lead_id').value !== ''; },
-            function () { return document.getElementById('job_number').value.trim() !== ''; },
-            function () { return document.querySelectorAll('input[name="design_teams"]:checked').length > 0; },
-            function () { return document.getElementById('briefing_date').value !== ''; },
-            function () { return document.getElementById('first_output_deadline').value !== ''; },
-            function () { return document.getElementById('final_deadline').value !== ''; },
-        ];
+            var rowsContainer = document.getElementById('deliverableRows_' + customerId);
 
-        var basicWeight = 25 / basicChecks.length;
-        basicChecks.forEach(function (check) {
-            if (check()) score += basicWeight;
-        });
+            var selector = document.createElement('div');
+            selector.id = 'delSelector_' + customerId;
+            selector.style.marginTop = '10px';
 
-        var briefType = document.getElementById('brief_type').value;
-        if (briefType === 'ccm') {
-            // Only urgency is required — region/customers/deliverables are optional at
-            // creation time and can be filled in later via Edit Project.
-            var ccmChecks = [
-                function () { return document.getElementById('urgency').value !== ''; },
-            ];
-            var ccmWeight = 75 / ccmChecks.length;
-            ccmChecks.forEach(function (check) {
-                if (check()) score += ccmWeight;
-            });
-        } else if (briefType === 'standard') {
-            // Only design_type_id remains — design_direction was removed from the brief form
-            var standardChecks = [
-                function () { return document.getElementById('design_type_id') && document.getElementById('design_type_id').value !== ''; },
-            ];
-            var standardWeight = 75 / standardChecks.length;
-            standardChecks.forEach(function (check) {
-                if (check()) score += standardWeight;
-            });
-        }
+            var select = document.createElement('select');
+            select.className = 'form-select';
 
-        var pct = Math.min(Math.round(score), 100);
-        document.getElementById('completionBarFill').style.width = pct + '%';
-        document.getElementById('completionLabel').textContent = pct + '% Complete';
-        currentCompletion = pct;
-    }
+            var defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = '— Select deliverable —';
+            select.appendChild(defaultOpt);
 
-    // ── Brief Type Switcher ──────────────────────────────────
-    function switchBriefType(type) {
-        var currentType = document.getElementById('brief_type').value;
-        if (currentType) {
-            briefSavedState[currentType] = captureBriefState(currentType);
-        }
-
-        document.getElementById('brief_type').value = type;
-
-        document.querySelectorAll('.brief-type-btn').forEach(function (btn) {
-            btn.classList.toggle('active', btn.dataset.type === type);
-        });
-
-        var isCCM = type === 'ccm';
-        document.getElementById('sectionConceptKV').classList.add('hidden');
-        document.getElementById('sectionCCM').classList.toggle('hidden', !isCCM);
-        var conceptKVToggleBtn = document.getElementById('btnConceptKVToggle');
-        if (conceptKVToggleBtn) conceptKVToggleBtn.classList.remove('active');
-        var hasConceptEl2 = document.getElementById('has_concept');
-        if (hasConceptEl2) hasConceptEl2.value = 'false';
-        document.getElementById('sectionDeliverables').classList.toggle('hidden', true);
-        document.getElementById('sectionStandard').classList.toggle('hidden', type !== 'standard');
-
-        if (briefSavedState[type]) {
-            restoreBriefState(type, briefSavedState[type]);
-        }
-
-        calculateCompletion();
-        scheduleAutosave();
-    }
-
-    function captureBriefState(type) {
-        if (type === 'ccm') {
-            return {
-                urgency: document.getElementById('urgency').value,
-                region_uae: document.getElementById('region_uae').classList.contains('active'),
-                region_gulf: document.getElementById('region_gulf').classList.contains('active'),
-                gulf_kuwait: document.getElementById('gulf_kuwait').classList.contains('active'),
-                gulf_qatar: document.getElementById('gulf_qatar').classList.contains('active'),
-                gulf_bahrain: document.getElementById('gulf_bahrain').classList.contains('active'),
-                gulf_oman: document.getElementById('gulf_oman').classList.contains('active'),
-            };
-        }
-        return {};
-    }
-
-    function restoreBriefState(type, state) {
-        if (type === 'ccm') {
-            document.getElementById('urgency').value = state.urgency || '';
-
-            var uaeBtn = document.getElementById('region_uae');
-            var gulfBtn = document.getElementById('region_gulf');
-            if (state.region_uae) { uaeBtn.classList.add('active'); } else { uaeBtn.classList.remove('active'); }
-            if (state.region_gulf) { gulfBtn.classList.add('active'); } else { gulfBtn.classList.remove('active'); }
-
-            ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (c) {
-                var btn = document.getElementById('gulf_' + c);
-                if (btn) {
-                    if (state['gulf_' + c]) { btn.classList.add('active'); } else { btn.classList.remove('active'); }
-                }
+            types.forEach(function (type) {
+                var opt = document.createElement('option');
+                opt.value = type.id;
+                opt.textContent = type.is_custom ? type.name + ' (Custom)' : type.name;
+                opt.dataset.disciplines = JSON.stringify(type.disciplines);
+                select.appendChild(opt);
             });
 
-            handleRegionChange();
+            var customOpt = document.createElement('option');
+            customOpt.value = 'custom';
+            customOpt.textContent = '+ Add custom deliverable';
+            select.appendChild(customOpt);
 
-            ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (c) {
-                if (state['gulf_' + c]) {
-                    buildGulfCountryCustomers(c);
+            selector.appendChild(select);
+            rowsContainer.after(selector);
+
+            select.addEventListener('change', function () {
+                var selected = this.options[this.selectedIndex];
+                if (this.value === 'custom') {
+                    selector.remove();
+                    showCustomDeliverableForm(customerId, clientId, types);
+                } else if (this.value) {
+                    var disciplines = JSON.parse(selected.dataset.disciplines);
+                    addDeliverableRow(customerId, this.value, selected.text, disciplines);
+                    selector.remove();
                 }
             });
         }
-    }
 
-    // ── Customer List Builders ───────────────────────────────
-    function buildCustomerChecklist(region, containerId) {
-        var container = document.getElementById(containerId);
-        if (!container) return;
+        function addDeliverableRow(customerId, typeId, name, disciplines) {
+            var rowsContainer = document.getElementById('deliverableRows_' + customerId);
 
-        var customers = CUSTOMERS_BY_REGION[region] || [];
+            var row = document.createElement('div');
+            row.className = 'deliverable-row';
+            row.dataset.typeId = typeId;
+            row.dataset.name = name;
 
-        customers.forEach(function (customer) {
-            var existing = container.querySelector('[data-customer-id="' + customer.id + '"]');
-            if (existing) return;
+            var disciplineTags = disciplines.map(function (d) {
+                return '<span class="discipline-tag tag--' + d + '">' + d.toUpperCase() + '</span>';
+            }).join('');
 
-            var pill = document.createElement('div');
-            pill.className = 'customer-pill';
-            pill.dataset.customerId = customer.id;
-            pill.dataset.customerName = customer.name;
-            pill.dataset.region = region;
-            pill.textContent = customer.name;
+            row.innerHTML =
+                '<span class="deliverable-row-name">' + name + '</span>' +
+                '<div class="deliverable-row-disciplines">' + disciplineTags + '</div>' +
+                '<button type="button" class="btn-remove-deliverable" title="Remove">&times;</button>';
 
-            pill.addEventListener('click', function () {
-                this.classList.toggle('selected');
-                handleCustomerToggle(this);
+            row.querySelector('.btn-remove-deliverable').addEventListener('click', function () {
+                row.remove();
                 calculateCompletion();
-                scheduleAutosave();
             });
 
-            container.appendChild(pill);
-        });
-    }
-
-    function selectAllCustomers(containerId, btn) {
-        var container = document.getElementById(containerId);
-        if (!container) return;
-        var pills = container.querySelectorAll('.customer-pill');
-        var allSelected = Array.from(pills).every(function (p) { return p.classList.contains('selected'); });
-
-        if (allSelected) {
-            pills.forEach(function (pill) {
-                pill.classList.remove('selected');
-                handleCustomerToggle(pill);
-            });
-            if (btn) btn.textContent = 'Select All';
-        } else {
-            pills.forEach(function (pill) {
-                if (!pill.classList.contains('selected')) {
-                    pill.classList.add('selected');
-                    handleCustomerToggle(pill);
-                }
-            });
-            if (btn) btn.textContent = 'Deselect All';
-        }
-        calculateCompletion();
-        scheduleAutosave();
-    }
-
-    function buildGulfCountryCustomers(country) {
-        var grid = document.getElementById('gulfCustomerGrid');
-        if (grid.querySelector('[data-country="' + country + '"]')) return;
-
-        var customers = CUSTOMERS_BY_REGION[country] || [];
-        if (customers.length === 0) return;
-
-        var block = document.createElement('div');
-        block.className = 'gulf-country-block';
-        block.dataset.country = country;
-
-        var label = document.createElement('div');
-        label.className = 'gulf-country-label';
-        label.textContent = country.charAt(0).toUpperCase() + country.slice(1) + ' Customers';
-        block.appendChild(label);
-
-        var checklist = document.createElement('div');
-        checklist.className = 'customer-checklist';
-        checklist.id = 'gulfCustomers_' + country;
-        block.appendChild(checklist);
-
-        var selectAllBtn = document.createElement('button');
-        selectAllBtn.type = 'button';
-        selectAllBtn.className = 'btn btn--secondary btn--sm';
-        selectAllBtn.textContent = 'Select All';
-        selectAllBtn.addEventListener('click', function () {
-            selectAllCustomers('gulfCustomers_' + country, this);
-        });
-        block.insertBefore(selectAllBtn, checklist);
-
-        grid.appendChild(block);
-        buildCustomerChecklist(country, 'gulfCustomers_' + country);
-    }
-
-    function removeGulfCountryCustomers(country) {
-        var grid = document.getElementById('gulfCustomerGrid');
-        var block = grid.querySelector('[data-country="' + country + '"]');
-        if (block) {
-            block.querySelectorAll('.customer-pill.selected').forEach(function (pill) {
-                removeDeliverableBlock(pill.dataset.customerId);
-            });
-            block.remove();
-        }
-    }
-
-    // ── Region Handling ──────────────────────────────────────
-    function handleRegionChange() {
-        var uaeActive = document.getElementById('region_uae').classList.contains('active');
-        var gulfActive = document.getElementById('region_gulf').classList.contains('active');
-
-        var uaeBlock = document.getElementById('blockUAECustomers');
-        var gulfBlock = document.getElementById('blockGulf');
-
-        if (uaeActive) {
-            uaeBlock.classList.remove('hidden');
-            buildCustomerChecklist('uae', 'uaeCustomerList');
-        } else {
-            uaeBlock.classList.add('hidden');
-            document.querySelectorAll('#uaeCustomerList .customer-pill.selected').forEach(function (pill) {
-                removeDeliverableBlock(pill.dataset.customerId);
-            });
-        }
-
-        if (gulfActive) {
-            gulfBlock.classList.remove('hidden');
-        } else {
-            gulfBlock.classList.add('hidden');
-            ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
-                var el = document.getElementById('gulf_' + country);
-                if (el) el.classList.remove('active');
-                removeGulfCountryCustomers(country);
-            });
-        }
-
-        calculateCompletion();
-    }
-
-    // ── Customer Toggle ──────────────────────────────────────
-    function handleCustomerToggle(pill) {
-        if (pill.classList.contains('selected')) {
-            addDeliverableBlock(
-                pill.dataset.customerId,
-                pill.dataset.customerName,
-                pill.dataset.region
-            );
-        } else {
-            removeDeliverableBlock(pill.dataset.customerId);
-        }
-    }
-
-    // ── Deliverable Blocks ───────────────────────────────────
-    function addDeliverableBlock(customerId, customerName, region) {
-        var body = document.getElementById('deliverablesBody');
-        if (body.querySelector('[data-customer-id="' + customerId + '"]')) return;
-
-        document.getElementById('sectionDeliverables').classList.remove('hidden');
-
-        var regionSection = body.querySelector(
-            '.deliverables-region-section[data-region="' + region + '"]'
-        );
-        if (!regionSection) {
-            regionSection = document.createElement('div');
-            regionSection.className = 'deliverables-region-section';
-            regionSection.dataset.region = region;
-
-            var heading = document.createElement('div');
-            heading.className = 'deliverables-region-heading';
-            heading.textContent = region === 'uae' ? 'UAE' :
-                region.charAt(0).toUpperCase() + region.slice(1);
-            regionSection.appendChild(heading);
-
-            if (region !== 'uae') {
-                var applyBtn = document.createElement('button');
-                applyBtn.type = 'button';
-                applyBtn.className = 'btn btn--secondary apply-dates-btn';
-                applyBtn.textContent = 'Apply same dates to all ' +
-                    region.charAt(0).toUpperCase() + region.slice(1) + ' customers';
-                applyBtn.addEventListener('click', function () {
-                    applyDatesToRegion(region);
-                });
-                regionSection.appendChild(applyBtn);
-            }
-
-            body.appendChild(regionSection);
-        }
-
-        var block = document.createElement('div');
-        block.className = 'deliverables-customer-block';
-        block.dataset.customerId = customerId;
-
-        block.innerHTML =
-            '<h4 class="deliverables-customer-heading">' + customerName + '</h4>' +
-            '<div class="deliverables-customer-dates">' +
-            '<div class="customer-date-field">' +
-            '<label class="customer-date-label">Design Deadline</label>' +
-            '<input type="date" class="form-input" id="design_deadline_' + customerId + '">' +
-            '</div>' +
-            '<div class="customer-date-field">' +
-            '<label class="customer-date-label">Installation Date</label>' +
-            '<input type="date" class="form-input" id="installation_date_' + customerId + '">' +
-            '</div>' +
-            '</div>' +
-            '<div class="deliverable-rows" id="deliverableRows_' + customerId + '"></div>' +
-            '<button type="button" class="btn-add-inline add-deliverable-btn" ' +
-            'data-customer-id="' + customerId + '">+ Add Deliverable</button>';
-
-        var applyBtn = regionSection.querySelector('.apply-dates-btn');
-        if (applyBtn) {
-            regionSection.insertBefore(block, applyBtn);
-        } else {
-            regionSection.appendChild(block);
-        }
-
-        block.querySelector('.add-deliverable-btn').addEventListener('click', function () {
-            fetchAndShowDeliverableSelector(customerId);
-        });
-    }
-
-    function removeDeliverableBlock(customerId) {
-        var block = document.querySelector(
-            '.deliverables-customer-block[data-customer-id="' + customerId + '"]'
-        );
-        if (block) {
-            var regionSection = block.closest('.deliverables-region-section');
-            block.remove();
-            if (regionSection &&
-                regionSection.querySelectorAll('.deliverables-customer-block').length === 0) {
-                regionSection.remove();
-            }
-        }
-
-        if (document.querySelectorAll('.deliverables-customer-block').length === 0) {
-            document.getElementById('sectionDeliverables').classList.add('hidden');
-        }
-        calculateCompletion();
-    }
-
-    function applyDatesToRegion(region) {
-        var blocks = document.querySelectorAll(
-            '.deliverables-region-section[data-region="' + region + '"] .deliverables-customer-block'
-        );
-        if (blocks.length < 2) return;
-
-        var firstId = blocks[0].dataset.customerId;
-        var designVal = document.getElementById('design_deadline_' + firstId).value;
-        var installVal = document.getElementById('installation_date_' + firstId).value;
-
-        for (var i = 1; i < blocks.length; i++) {
-            var cid = blocks[i].dataset.customerId;
-            var ddEl = document.getElementById('design_deadline_' + cid);
-            var instEl = document.getElementById('installation_date_' + cid);
-            if (ddEl) ddEl.value = designVal;
-            if (instEl) instEl.value = installVal;
-        }
-    }
-
-    // ── Deliverable Selector ─────────────────────────────────
-    function fetchAndShowDeliverableSelector(customerId) {
-        var clientId = document.getElementById('client_id').value;
-        fetch('/projects/deliverable-types/' + customerId + '?client_id=' + clientId)
-            .then(function (res) { return res.json(); })
-            .then(function (types) {
-                showDeliverableSelector(customerId, clientId, types);
-            })
-            .catch(function (err) {
-                console.error('Could not load deliverable types:', err);
-            });
-    }
-
-    function showDeliverableSelector(customerId, clientId, types) {
-        var existingSelector = document.getElementById('delSelector_' + customerId);
-        if (existingSelector) existingSelector.remove();
-
-        var rowsContainer = document.getElementById('deliverableRows_' + customerId);
-
-        var selector = document.createElement('div');
-        selector.id = 'delSelector_' + customerId;
-        selector.style.marginTop = '10px';
-
-        var select = document.createElement('select');
-        select.className = 'form-select';
-
-        var defaultOpt = document.createElement('option');
-        defaultOpt.value = '';
-        defaultOpt.textContent = '— Select deliverable —';
-        select.appendChild(defaultOpt);
-
-        types.forEach(function (type) {
-            var opt = document.createElement('option');
-            opt.value = type.id;
-            opt.textContent = type.is_custom ? type.name + ' (Custom)' : type.name;
-            opt.dataset.disciplines = JSON.stringify(type.disciplines);
-            select.appendChild(opt);
-        });
-
-        var customOpt = document.createElement('option');
-        customOpt.value = 'custom';
-        customOpt.textContent = '+ Add custom deliverable';
-        select.appendChild(customOpt);
-
-        selector.appendChild(select);
-        rowsContainer.after(selector);
-
-        select.addEventListener('change', function () {
-            var selected = this.options[this.selectedIndex];
-            if (this.value === 'custom') {
-                selector.remove();
-                showCustomDeliverableForm(customerId, clientId, types);
-            } else if (this.value) {
-                var disciplines = JSON.parse(selected.dataset.disciplines);
-                addDeliverableRow(customerId, this.value, selected.text, disciplines);
-                selector.remove();
-            }
-        });
-    }
-
-    function addDeliverableRow(customerId, typeId, name, disciplines) {
-        var rowsContainer = document.getElementById('deliverableRows_' + customerId);
-
-        var row = document.createElement('div');
-        row.className = 'deliverable-row';
-        row.dataset.typeId = typeId;
-        row.dataset.name = name;
-
-        var disciplineTags = disciplines.map(function (d) {
-            return '<span class="discipline-tag tag--' + d + '">' + d.toUpperCase() + '</span>';
-        }).join('');
-
-        row.innerHTML =
-            '<span class="deliverable-row-name">' + name + '</span>' +
-            '<div class="deliverable-row-disciplines">' + disciplineTags + '</div>' +
-            '<button type="button" class="btn-remove-deliverable" title="Remove">&times;</button>';
-
-        row.querySelector('.btn-remove-deliverable').addEventListener('click', function () {
-            row.remove();
+            rowsContainer.appendChild(row);
             calculateCompletion();
-        });
+        }
 
-        rowsContainer.appendChild(row);
-        calculateCompletion();
-    }
+        function showCustomDeliverableForm(customerId, clientId, types) {
+            var rowsContainer = document.getElementById('deliverableRows_' + customerId);
 
-    function showCustomDeliverableForm(customerId, clientId, types) {
-        var rowsContainer = document.getElementById('deliverableRows_' + customerId);
+            var form = document.createElement('div');
+            form.className = 'inline-add-form';
+            form.style.flexDirection = 'column';
+            form.style.alignItems = 'flex-start';
+            form.style.gap = '8px';
+            form.style.marginTop = '10px';
 
-        var form = document.createElement('div');
-        form.className = 'inline-add-form';
-        form.style.flexDirection = 'column';
-        form.style.alignItems = 'flex-start';
-        form.style.gap = '8px';
-        form.style.marginTop = '10px';
+            var nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'form-input';
+            nameInput.placeholder = 'Deliverable name';
 
-        var nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.className = 'form-input';
-        nameInput.placeholder = 'Deliverable name';
+            var disciplineRow = document.createElement('div');
+            disciplineRow.style.display = 'flex';
+            disciplineRow.style.gap = '12px';
 
-        var disciplineRow = document.createElement('div');
-        disciplineRow.style.display = 'flex';
-        disciplineRow.style.gap = '12px';
-
-        ['2d', '3d', 'technical'].forEach(function (d) {
-            var lbl = document.createElement('label');
-            lbl.style.display = 'flex';
-            lbl.style.alignItems = 'center';
-            lbl.style.gap = '4px';
-            lbl.style.fontSize = '0.85rem';
-            var cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.value = d;
-            lbl.appendChild(cb);
-            lbl.appendChild(document.createTextNode(d.toUpperCase()));
-            disciplineRow.appendChild(lbl);
-        });
-
-        var warningMsg = document.createElement('div');
-        warningMsg.style.color = 'var(--rose)';
-        warningMsg.style.fontSize = '0.85rem';
-        warningMsg.style.display = 'none';
-
-        var btnRow = document.createElement('div');
-        btnRow.style.display = 'flex';
-        btnRow.style.gap = '8px';
-
-        var confirmBtn = document.createElement('button');
-        confirmBtn.type = 'button';
-        confirmBtn.className = 'btn btn--primary btn--sm';
-        confirmBtn.textContent = 'Add';
-
-        var cancelBtn = document.createElement('button');
-        cancelBtn.type = 'button';
-        cancelBtn.className = 'btn btn--secondary btn--sm';
-        cancelBtn.textContent = 'Cancel';
-
-        btnRow.appendChild(confirmBtn);
-        btnRow.appendChild(cancelBtn);
-
-        form.appendChild(nameInput);
-        form.appendChild(disciplineRow);
-        form.appendChild(warningMsg);
-        form.appendChild(btnRow);
-
-        rowsContainer.after(form);
-
-        confirmBtn.addEventListener('click', function () {
-            var name = nameInput.value.trim();
-            var disciplines = Array.from(
-                form.querySelectorAll('input[type="checkbox"]:checked')
-            ).map(function (cb) { return cb.value; });
-
-            warningMsg.style.display = 'none';
-            warningMsg.textContent = '';
-            nameInput.style.borderColor = '';
-
-            if (!name) {
-                warningMsg.textContent = 'Please enter a deliverable name.';
-                warningMsg.style.display = 'block';
-                nameInput.style.borderColor = 'var(--rose)';
-                return;
-            }
-
-            if (disciplines.length === 0) {
-                warningMsg.textContent = 'Please select at least one discipline.';
-                warningMsg.style.display = 'block';
-                return;
-            }
-
-            var duplicate = types.find(function (t) {
-                return t.name.toLowerCase() === name.toLowerCase();
+            ['2d', '3d', 'technical'].forEach(function (d) {
+                var lbl = document.createElement('label');
+                lbl.style.display = 'flex';
+                lbl.style.alignItems = 'center';
+                lbl.style.gap = '4px';
+                lbl.style.fontSize = '0.85rem';
+                var cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = d;
+                lbl.appendChild(cb);
+                lbl.appendChild(document.createTextNode(d.toUpperCase()));
+                disciplineRow.appendChild(lbl);
             });
 
-            if (duplicate) {
-                warningMsg.textContent = 'A deliverable called "' + name + '" already exists for this customer.';
-                warningMsg.style.display = 'block';
-                nameInput.style.borderColor = 'var(--rose)';
-                return;
-            }
+            var warningMsg = document.createElement('div');
+            warningMsg.style.color = 'var(--rose)';
+            warningMsg.style.fontSize = '0.85rem';
+            warningMsg.style.display = 'none';
 
-            confirmBtn.disabled = true;
-            confirmBtn.textContent = 'Saving...';
+            var btnRow = document.createElement('div');
+            btnRow.style.display = 'flex';
+            btnRow.style.gap = '8px';
 
-            fetch('/projects/deliverable-types/add', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    client_id: clientId,
-                    customer_id: customerId,
-                    disciplines: disciplines
+            var confirmBtn = document.createElement('button');
+            confirmBtn.type = 'button';
+            confirmBtn.className = 'btn btn--primary btn--sm';
+            confirmBtn.textContent = 'Add';
+
+            var cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'btn btn--secondary btn--sm';
+            cancelBtn.textContent = 'Cancel';
+
+            btnRow.appendChild(confirmBtn);
+            btnRow.appendChild(cancelBtn);
+
+            form.appendChild(nameInput);
+            form.appendChild(disciplineRow);
+            form.appendChild(warningMsg);
+            form.appendChild(btnRow);
+
+            rowsContainer.after(form);
+
+            confirmBtn.addEventListener('click', function () {
+                var name = nameInput.value.trim();
+                var disciplines = Array.from(
+                    form.querySelectorAll('input[type="checkbox"]:checked')
+                ).map(function (cb) { return cb.value; });
+
+                warningMsg.style.display = 'none';
+                warningMsg.textContent = '';
+                nameInput.style.borderColor = '';
+
+                if (!name) {
+                    warningMsg.textContent = 'Please enter a deliverable name.';
+                    warningMsg.style.display = 'block';
+                    nameInput.style.borderColor = 'var(--rose)';
+                    return;
+                }
+
+                if (disciplines.length === 0) {
+                    warningMsg.textContent = 'Please select at least one discipline.';
+                    warningMsg.style.display = 'block';
+                    return;
+                }
+
+                var duplicate = types.find(function (t) {
+                    return t.name.toLowerCase() === name.toLowerCase();
+                });
+
+                if (duplicate) {
+                    warningMsg.textContent = 'A deliverable called "' + name + '" already exists for this customer.';
+                    warningMsg.style.display = 'block';
+                    nameInput.style.borderColor = 'var(--rose)';
+                    return;
+                }
+
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Saving...';
+
+                fetch('/projects/deliverable-types/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        client_id: clientId,
+                        customer_id: customerId,
+                        disciplines: disciplines
+                    })
                 })
-            })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data.error) {
-                        warningMsg.textContent = data.error;
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.error) {
+                            warningMsg.textContent = data.error;
+                            warningMsg.style.display = 'block';
+                            confirmBtn.disabled = false;
+                            confirmBtn.textContent = 'Add';
+                            return;
+                        }
+                        types.push({ id: data.id, name: data.name, disciplines: data.disciplines, is_custom: true });
+                        addDeliverableRow(customerId, data.id, data.name, data.disciplines, true);
+                        form.remove();
+                    })
+                    .catch(function (err) {
+                        warningMsg.textContent = 'Something went wrong. Please try again.';
                         warningMsg.style.display = 'block';
                         confirmBtn.disabled = false;
                         confirmBtn.textContent = 'Add';
-                        return;
-                    }
-                    types.push({ id: data.id, name: data.name, disciplines: data.disciplines, is_custom: true });
-                    addDeliverableRow(customerId, data.id, data.name, data.disciplines, true);
-                    form.remove();
-                })
-                .catch(function (err) {
-                    warningMsg.textContent = 'Something went wrong. Please try again.';
-                    warningMsg.style.display = 'block';
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = 'Add';
-                });
-        });
-
-        cancelBtn.addEventListener('click', function () {
-            form.remove();
-        });
-    }
-
-    // ── Autosave ─────────────────────────────────────────────
-    function collectFormData() {
-        var teams = Array.from(
-            document.querySelectorAll('input[name="design_teams"]:checked')
-        ).map(function (cb) { return cb.value; });
-
-        // Concept & KV are now merged — has_kv always mirrors has_concept
-        var hasConceptMergedEl = document.getElementById('has_concept');
-        var hasKv = hasConceptMergedEl ? hasConceptMergedEl.value === 'true' : false;
-
-        var customerDates = {};
-        document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
-            var cid = block.dataset.customerId;
-            var ddEl = document.getElementById('design_deadline_' + cid);
-            var instEl = document.getElementById('installation_date_' + cid);
-            customerDates[cid] = {
-                design_deadline: ddEl ? ddEl.value || null : null,
-                installation_date: instEl ? instEl.value || null : null
-            };
-        });
-
-        return {
-            draft_id: currentDraftId,
-            name: document.getElementById('project_name').value.trim(),
-            client_id: document.getElementById('client_id').value || null,
-            cs_lead_id: document.getElementById('cs_lead_id').value || null,
-            job_number: document.getElementById('job_number').value.trim() || null,
-            design_teams: teams,
-            brief_type: document.getElementById('brief_type').value || null,
-            urgency: document.getElementById('urgency') ? document.getElementById('urgency').value || null : null,
-            required_output: document.getElementById('required_output') ? document.getElementById('required_output').value || null : null,
-            concept_requirements: document.getElementById('concept_requirements') ? document.getElementById('concept_requirements').value.trim() || null : null,
-            concept_deadline: document.getElementById('concept_deadline') ? document.getElementById('concept_deadline').value || null : null,
-            has_concept: document.getElementById('has_concept') ? document.getElementById('has_concept').value === 'true' : false,
-            concept_options_required: document.getElementById('concept_options_required') ? parseInt(document.getElementById('concept_options_required').value) || null : null,
-            has_kv: hasKv,  // always mirrors has_concept — merged in UI
-            kv_requirements: null,
-            kv_deadline: null,
-            kv_options_required: null,
-            briefing_date: document.getElementById('briefing_date') ? document.getElementById('briefing_date').value || null : null,
-            first_output_deadline: document.getElementById('first_output_deadline') ? document.getElementById('first_output_deadline').value || null : null,
-            final_deadline: document.getElementById('final_deadline') ? document.getElementById('final_deadline').value || null : null,
-            customer_dates: customerDates,
-            standard_deliverables: (function () { var el = document.getElementById('standard_deliverables_json'); try { return el ? JSON.parse(el.value || '[]') : []; } catch (e) { return []; } })(),
-            design_type_id: document.getElementById('design_type_id') ? document.getElementById('design_type_id').value || null : null,
-            design_direction_id: document.getElementById('design_direction_id') ? document.getElementById('design_direction_id').value || null : null,
-            client_expectation: document.getElementById('client_expectation') ? document.getElementById('client_expectation').value.trim() || null : null,
-            what_to_avoid: document.getElementById('what_to_avoid') ? document.getElementById('what_to_avoid').value.trim() || null : null,
-            additional_information: document.getElementById('additional_information') ? document.getElementById('additional_information').value.trim() || null : null,
-        };
-    }
-
-    function hasAnyData(data) {
-        return data.name || data.client_id || data.job_number ||
-            data.design_teams.length > 0 || data.briefing_date ||
-            data.brief_type;
-    }
-
-    function autosave() {
-        var data = collectFormData();
-        if (!hasAnyData(data)) return;
-
-        var statusEl = document.getElementById('autosaveStatus');
-        statusEl.textContent = 'Saving...';
-
-        fetch('/projects/autosave', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-            .then(function (res) { return res.json(); })
-            .then(function (result) {
-                if (result.success) {
-                    currentDraftId = result.draft_id;
-
-                    // Show saved confirmation, then fade it out after 2s
-                    statusEl.textContent = 'Saved ✓';
-                    setTimeout(function () { statusEl.textContent = ''; }, 2000);
-
-                    // Enable the reference file upload button now that a draft exists
-                    var createRefBtn = document.getElementById('createRefFileBtn');
-                    if (createRefBtn && !createRefBtn.dataset.projectId) {
-                        createRefBtn.dataset.projectId = result.draft_id;
-                        createRefBtn.disabled = false;
-                        var createStatus = document.getElementById('createRefFileStatus');
-                        if (createStatus) createStatus.textContent = '';
-                    }
-                } else {
-                    // Server returned success: false — show the error message
-                    statusEl.textContent = 'Save failed';
-                }
-            })
-            .catch(function () {
-                // Network or parse error
-                statusEl.textContent = 'Save failed';
+                    });
             });
-    }
 
-    function scheduleAutosave() {
-        if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) return;
-        clearTimeout(autosaveTimeout);
-        autosaveTimeout = setTimeout(autosave, 5000);
-    }
+            cancelBtn.addEventListener('click', function () {
+                form.remove();
+            });
+        }
 
-    // ── Add New Client ────────────────────────────────────────
-    function setupAddClient() {
-        var btnAdd = document.getElementById('btnAddClient');
-        var addForm = document.getElementById('addClientForm');
-        var confirmBtn = document.getElementById('confirmAddClient');
-        var cancelBtn = document.getElementById('cancelAddClient');
-        var nameInput = document.getElementById('newClientName');
-        var select = document.getElementById('client_id');
+        // ── Autosave ─────────────────────────────────────────────
+        function collectFormData() {
+            var teams = Array.from(
+                document.querySelectorAll('input[name="design_teams"]:checked')
+            ).map(function (cb) { return cb.value; });
 
-        if (!btnAdd) return;
+            // Concept & KV are now merged — has_kv always mirrors has_concept
+            var hasConceptMergedEl = document.getElementById('has_concept');
+            var hasKv = hasConceptMergedEl ? hasConceptMergedEl.value === 'true' : false;
 
-        btnAdd.addEventListener('click', function () {
-            addForm.classList.remove('hidden');
-            nameInput.focus();
-        });
+            var customerDates = {};
+            document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
+                var cid = block.dataset.customerId;
+                var ddEl = document.getElementById('design_deadline_' + cid);
+                var ddtEl = document.getElementById('design_deadline_time_' + cid);
+                var instEl = document.getElementById('installation_date_' + cid);
+                customerDates[cid] = {
+                    design_deadline: ddEl ? ddEl.value || null : null,
+                    design_deadline_time: ddtEl ? ddtEl.value || null : null,
+                    installation_date: instEl ? instEl.value || null : null
+                };
+            });
 
-        cancelBtn.addEventListener('click', function () {
-            addForm.classList.add('hidden');
-            nameInput.value = '';
-        });
+            return {
+                draft_id: currentDraftId,
+                name: document.getElementById('project_name').value.trim(),
+                client_id: document.getElementById('client_id').value || null,
+                cs_lead_id: document.getElementById('cs_lead_id').value || null,
+                job_number: document.getElementById('job_number').value.trim() || null,
+                design_teams: teams,
+                brief_type: document.getElementById('brief_type').value || null,
+                urgency: document.getElementById('urgency') ? document.getElementById('urgency').value || null : null,
+                required_output: document.getElementById('required_output') ? document.getElementById('required_output').value || null : null,
+                concept_requirements: document.getElementById('concept_requirements') ? document.getElementById('concept_requirements').value.trim() || null : null,
+                concept_deadline: document.getElementById('concept_deadline') ? document.getElementById('concept_deadline').value || null : null,
+                concept_deadline_time: document.getElementById('concept_deadline_time') ? document.getElementById('concept_deadline_time').value || null : null,
+                has_concept: document.getElementById('has_concept') ? document.getElementById('has_concept').value === 'true' : false,
+                concept_options_required: document.getElementById('concept_options_required') ? parseInt(document.getElementById('concept_options_required').value) || null : null,
+                has_kv: hasKv,  // always mirrors has_concept — merged in UI
+                kv_requirements: null,
+                kv_deadline: null,
+                kv_options_required: null,
+                briefing_date: document.getElementById('briefing_date') ? document.getElementById('briefing_date').value || null : null,
+                first_output_deadline: document.getElementById('first_output_deadline') ? document.getElementById('first_output_deadline').value || null : null,
+                final_deadline: document.getElementById('final_deadline') ? document.getElementById('final_deadline').value || null : null,
+                customer_dates: customerDates,
+                standard_deliverables: (function () { var el = document.getElementById('standard_deliverables_json'); try { return el ? JSON.parse(el.value || '[]') : []; } catch (e) { return []; } })(),
+                design_type_id: document.getElementById('design_type_id') ? document.getElementById('design_type_id').value || null : null,
+                design_direction_id: document.getElementById('design_direction_id') ? document.getElementById('design_direction_id').value || null : null,
+                client_expectation: document.getElementById('client_expectation') ? document.getElementById('client_expectation').value.trim() || null : null,
+                what_to_avoid: document.getElementById('what_to_avoid') ? document.getElementById('what_to_avoid').value.trim() || null : null,
+                additional_information: document.getElementById('additional_information') ? document.getElementById('additional_information').value.trim() || null : null,
+            };
+        }
 
-        confirmBtn.addEventListener('click', function () {
-            var name = nameInput.value.trim();
-            if (!name) return;
+        function hasAnyData(data) {
+            return data.name || data.client_id || data.job_number ||
+                data.design_teams.length > 0 || data.briefing_date ||
+                data.brief_type;
+        }
 
-            fetch('/clients/add', {
+        function autosave() {
+            var data = collectFormData();
+            if (!hasAnyData(data)) return;
+
+            var statusEl = document.getElementById('autosaveStatus');
+            statusEl.textContent = 'Saving...';
+
+            fetch('/projects/autosave', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name })
+                body: JSON.stringify(data)
             })
                 .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        var option = document.createElement('option');
-                        option.value = data.client.id;
-                        option.textContent = data.client.name;
-                        option.selected = true;
-                        select.appendChild(option);
-                        addForm.classList.add('hidden');
-                        nameInput.value = '';
-                        calculateCompletion();
-                        scheduleAutosave();
+                .then(function (result) {
+                    if (result.success) {
+                        currentDraftId = result.draft_id;
+
+                        // Show saved confirmation, then fade it out after 2s
+                        statusEl.textContent = 'Saved ✓';
+                        setTimeout(function () { statusEl.textContent = ''; }, 2000);
+
+                        // Enable the reference file upload button now that a draft exists
+                        var createRefBtn = document.getElementById('createRefFileBtn');
+                        if (createRefBtn && !createRefBtn.dataset.projectId) {
+                            createRefBtn.dataset.projectId = result.draft_id;
+                            createRefBtn.disabled = false;
+                            var createStatus = document.getElementById('createRefFileStatus');
+                            if (createStatus) createStatus.textContent = '';
+                        }
                     } else {
-                        alert(data.error || 'Could not add client.');
+                        // Server returned success: false — show the error message
+                        statusEl.textContent = 'Save failed';
                     }
                 })
                 .catch(function () {
-                    alert('Something went wrong. Please try again.');
+                    // Network or parse error
+                    statusEl.textContent = 'Save failed';
                 });
-        });
-    }
-
-    // ── Submit Form ───────────────────────────────────────────
-    function showSubmitBlockedMessage() {
-        showToast('Please complete all required fields before submitting.', 'error');
-    }
-
-    function openReviewModal() {
-        var projectName = document.getElementById('project_name').value.trim();
-        var jobNumber = document.getElementById('job_number').value.trim();
-        var csLeadEl = document.getElementById('cs_lead_id');
-        var csLeadText = csLeadEl.tagName === 'SELECT'
-            ? csLeadEl.options[csLeadEl.selectedIndex].text
-            : (document.querySelector('.form-static-value') || { textContent: '' }).textContent.trim();
-        var briefType = document.getElementById('brief_type').value;
-
-        document.getElementById('reviewProjectName').textContent = projectName;
-        document.getElementById('reviewJobNumber').textContent = jobNumber;
-        document.getElementById('reviewCSLead').textContent = csLeadText;
-        document.getElementById('reviewBriefType').textContent = briefType === 'ccm' ? 'C&CM' : 'Standard';
-
-        var list = document.getElementById('reviewDeliverablesList');
-        list.innerHTML = '';
-
-        if (briefType === 'standard') {
-            var dtEl = document.getElementById('design_type_id');
-            var dtText = dtEl && dtEl.options[dtEl.selectedIndex] ? dtEl.options[dtEl.selectedIndex].text : '—';
-            var note = document.createElement('div');
-            note.className = 'review-customer-item';
-            note.innerHTML = '<div class="review-meta-grid" style="margin:0"><div class="review-meta-item"><span class="review-meta-label">Type of Design</span><span class="review-meta-value">' + dtText + '</span></div></div><p style="margin-top:0.75rem;font-size:0.85rem;color:var(--text-muted)">Deliverables are added after the project is created.</p>';
-            list.appendChild(note);
         }
 
-        var regionSections = document.querySelectorAll('.deliverables-region-section');
+        function scheduleAutosave() {
+            if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) return;
+            clearTimeout(autosaveTimeout);
+            autosaveTimeout = setTimeout(autosave, 5000);
+        }
 
-        regionSections.forEach(function (regionSection) {
-            var region = regionSection.dataset.region;
+        // ── Add New Client ────────────────────────────────────────
+        function setupAddClient() {
+            var btnAdd = document.getElementById('btnAddClient');
+            var addForm = document.getElementById('addClientForm');
+            var confirmBtn = document.getElementById('confirmAddClient');
+            var cancelBtn = document.getElementById('cancelAddClient');
+            var nameInput = document.getElementById('newClientName');
+            var select = document.getElementById('client_id');
 
-            var regionHeading = document.createElement('div');
-            regionHeading.className = 'review-region-heading';
-            regionHeading.textContent = region === 'uae' ? 'UAE' :
-                region.charAt(0).toUpperCase() + region.slice(1);
-            list.appendChild(regionHeading);
+            if (!btnAdd) return;
 
-            var customerBlocks = regionSection.querySelectorAll('.deliverables-customer-block');
+            btnAdd.addEventListener('click', function () {
+                addForm.classList.remove('hidden');
+                nameInput.focus();
+            });
 
-            customerBlocks.forEach(function (block) {
-                var customerName = block.querySelector('.deliverables-customer-heading').textContent;
+            cancelBtn.addEventListener('click', function () {
+                addForm.classList.add('hidden');
+                nameInput.value = '';
+            });
 
-                var customerItem = document.createElement('div');
-                customerItem.className = 'review-customer-item';
+            confirmBtn.addEventListener('click', function () {
+                var name = nameInput.value.trim();
+                if (!name) return;
 
-                var customerNameEl = document.createElement('div');
-                customerNameEl.className = 'review-customer-name';
-                customerNameEl.textContent = customerName;
-                customerItem.appendChild(customerNameEl);
+                fetch('/clients/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            var option = document.createElement('option');
+                            option.value = data.client.id;
+                            option.textContent = data.client.name;
+                            option.selected = true;
+                            select.appendChild(option);
+                            addForm.classList.add('hidden');
+                            nameInput.value = '';
+                            calculateCompletion();
+                            scheduleAutosave();
+                        } else {
+                            alert(data.error || 'Could not add client.');
+                        }
+                    })
+                    .catch(function () {
+                        alert('Something went wrong. Please try again.');
+                    });
+            });
+        }
 
-                var deliverableRows = block.querySelectorAll('.deliverable-row');
+        // ── Submit Form ───────────────────────────────────────────
+        function showSubmitBlockedMessage() {
+            showToast('Please complete all required fields before submitting.', 'error');
+        }
 
-                deliverableRows.forEach(function (row) {
-                    var name = row.dataset.name;
-                    var disciplines = row.querySelectorAll('.discipline-tag');
+        function openReviewModal() {
+            var projectName = document.getElementById('project_name').value.trim();
+            var jobNumber = document.getElementById('job_number').value.trim();
+            var csLeadEl = document.getElementById('cs_lead_id');
+            var csLeadText = csLeadEl.tagName === 'SELECT'
+                ? csLeadEl.options[csLeadEl.selectedIndex].text
+                : (document.querySelector('.form-static-value') || { textContent: '' }).textContent.trim();
+            var briefType = document.getElementById('brief_type').value;
 
-                    var deliverableRow = document.createElement('div');
-                    deliverableRow.className = 'review-deliverable-row';
+            document.getElementById('reviewProjectName').textContent = projectName;
+            document.getElementById('reviewJobNumber').textContent = jobNumber;
+            document.getElementById('reviewCSLead').textContent = csLeadText;
+            document.getElementById('reviewBriefType').textContent = briefType === 'ccm' ? 'C&CM' : 'Standard';
 
-                    var nameSpan = document.createElement('span');
-                    nameSpan.textContent = name;
-                    deliverableRow.appendChild(nameSpan);
+            var list = document.getElementById('reviewDeliverablesList');
+            list.innerHTML = '';
 
-                    disciplines.forEach(function (tag) {
-                        var tagClone = tag.cloneNode(true);
-                        deliverableRow.appendChild(tagClone);
+            if (briefType === 'standard') {
+                var dtEl = document.getElementById('design_type_id');
+                var dtText = dtEl && dtEl.options[dtEl.selectedIndex] ? dtEl.options[dtEl.selectedIndex].text : '—';
+                var note = document.createElement('div');
+                note.className = 'review-customer-item';
+                note.innerHTML = '<div class="review-meta-grid" style="margin:0"><div class="review-meta-item"><span class="review-meta-label">Type of Design</span><span class="review-meta-value">' + dtText + '</span></div></div><p style="margin-top:0.75rem;font-size:0.85rem;color:var(--text-muted)">Deliverables are added after the project is created.</p>';
+                list.appendChild(note);
+            }
+
+            var regionSections = document.querySelectorAll('.deliverables-region-section');
+
+            regionSections.forEach(function (regionSection) {
+                var region = regionSection.dataset.region;
+
+                var regionHeading = document.createElement('div');
+                regionHeading.className = 'review-region-heading';
+                regionHeading.textContent = region === 'uae' ? 'UAE' :
+                    region.charAt(0).toUpperCase() + region.slice(1);
+                list.appendChild(regionHeading);
+
+                var customerBlocks = regionSection.querySelectorAll('.deliverables-customer-block');
+
+                customerBlocks.forEach(function (block) {
+                    var customerName = block.querySelector('.deliverables-customer-heading').textContent;
+
+                    var customerItem = document.createElement('div');
+                    customerItem.className = 'review-customer-item';
+
+                    var customerNameEl = document.createElement('div');
+                    customerNameEl.className = 'review-customer-name';
+                    customerNameEl.textContent = customerName;
+                    customerItem.appendChild(customerNameEl);
+
+                    var deliverableRows = block.querySelectorAll('.deliverable-row');
+
+                    deliverableRows.forEach(function (row) {
+                        var name = row.dataset.name;
+                        var disciplines = row.querySelectorAll('.discipline-tag');
+
+                        var deliverableRow = document.createElement('div');
+                        deliverableRow.className = 'review-deliverable-row';
+
+                        var nameSpan = document.createElement('span');
+                        nameSpan.textContent = name;
+                        deliverableRow.appendChild(nameSpan);
+
+                        disciplines.forEach(function (tag) {
+                            var tagClone = tag.cloneNode(true);
+                            deliverableRow.appendChild(tagClone);
+                        });
+
+                        customerItem.appendChild(deliverableRow);
                     });
 
-                    customerItem.appendChild(deliverableRow);
-                });
-
-                list.appendChild(customerItem);
-            });
-        });
-
-        document.getElementById('reviewModalOverlay').classList.remove('hidden');
-    }
-
-    // ── Edit Mode: Restore State ─────────────────────────────
-    function restoreEditState() {
-        var briefTypeEl = document.getElementById('brief_type');
-        if (briefTypeEl && briefTypeEl.value) {
-            switchBriefType(briefTypeEl.value);
-        }
-
-        var hasConceptEl = document.getElementById('has_concept');
-        if (hasConceptEl && hasConceptEl.value === 'true') {
-            document.getElementById('sectionConceptKV').classList.remove('hidden');
-            var conceptKVBtn = document.getElementById('btnConceptKVToggle');
-            if (conceptKVBtn) conceptKVBtn.classList.add('active');
-        }
-
-        if (!EXISTING_CUSTOMERS || EXISTING_CUSTOMERS.length === 0) {
-            calculateCompletion();
-            return;
-        }
-
-        var hasUAE = EXISTING_CUSTOMERS.some(function (c) { return c.region === 'uae'; });
-        var gulfCountries = ['kuwait', 'qatar', 'bahrain', 'oman'];
-        var activeGulfCountries = gulfCountries.filter(function (country) {
-            return EXISTING_CUSTOMERS.some(function (c) { return c.region === country; });
-        });
-
-        if (hasUAE) {
-            var uaeBtn = document.getElementById('region_uae');
-            if (uaeBtn) {
-                uaeBtn.classList.add('active');
-                document.getElementById('blockUAECustomers').classList.remove('hidden');
-                buildCustomerChecklist('uae', 'uaeCustomerList');
-            }
-        }
-
-        if (activeGulfCountries.length > 0) {
-            var gulfBtn = document.getElementById('region_gulf');
-            if (gulfBtn) {
-                gulfBtn.classList.add('active');
-                document.getElementById('blockGulf').classList.remove('hidden');
-            }
-            activeGulfCountries.forEach(function (country) {
-                var btn = document.getElementById('gulf_' + country);
-                if (btn) {
-                    btn.classList.add('active');
-                    buildGulfCountryCustomers(country);
-                }
-            });
-        }
-
-        EXISTING_CUSTOMERS.forEach(function (ec) {
-            var pill = document.querySelector('.customer-pill[data-customer-id="' + ec.customer_id + '"]');
-            if (pill && !pill.classList.contains('selected')) {
-                pill.classList.add('selected');
-                addDeliverableBlock(ec.customer_id, pill.dataset.customerName, ec.region);
-            }
-            var ddEl = document.getElementById('design_deadline_' + ec.customer_id);
-            var instEl = document.getElementById('installation_date_' + ec.customer_id);
-            if (ddEl && ec.design_deadline) ddEl.value = ec.design_deadline;
-            if (instEl && ec.installation_date) instEl.value = ec.installation_date;
-        });
-
-        EXISTING_DELIVERABLES.forEach(function (ed) {
-            addDeliverableRow(ed.customer_id, ed.type_id, ed.name, ed.disciplines);
-        });
-
-        calculateCompletion();
-    }
-
-    // ── Edit Mode: Submit ────────────────────────────────────
-    function submitEditedProject() {
-        var btn = document.getElementById('btnReviewSubmit');
-        if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-
-        var formData = collectFormData();
-
-        var regions = [];
-        var uaeBtn2 = document.getElementById('region_uae');
-        if (uaeBtn2 && uaeBtn2.classList.contains('active')) regions.push('uae');
-        var gulfBtn2 = document.getElementById('region_gulf');
-        if (gulfBtn2 && gulfBtn2.classList.contains('active')) {
-            ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
-                var b = document.getElementById('gulf_' + country);
-                if (b && b.classList.contains('active')) regions.push(country);
-            });
-        }
-
-        var deliverables = [];
-        document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
-            var customerId = block.dataset.customerId;
-            var regionSection = block.closest('.deliverables-region-section');
-            var region = regionSection.dataset.region;
-            block.querySelectorAll('.deliverable-row').forEach(function (row) {
-                deliverables.push({
-                    customer_id: customerId,
-                    region: region,
-                    type_id: row.dataset.typeId,
-                    name: row.dataset.name
+                    list.appendChild(customerItem);
                 });
             });
-        });
 
-        var payload = Object.assign({}, formData, { regions: regions, deliverables: deliverables });
+            document.getElementById('reviewModalOverlay').classList.remove('hidden');
+        }
+        
+        // ── Start Project modal ───────────────────────────────────────────────────────
+        // The start-project-modal already exists in detail.html.
+        // These functions open/close it and POST to the start-project route on confirm.
 
-        fetch('/projects/' + EDIT_PROJECT_ID + '/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (data.error) {
-                    showToast(data.error, 'error');
-                    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
-                    return;
-                }
-                window.location.href = data.redirect_url + '?toast=Project+updated+successfully';
-            })
-            .catch(function () {
-                showToast('Something went wrong. Please try again.', 'error');
-                if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
+        var _startProjectId = null; // stores the project ID between open and confirm
+
+        function openStartProjectModal(projectId) {
+            _startProjectId = projectId;
+            document.getElementById('start-project-modal').classList.remove('hidden');
+        }
+
+        function closeStartProjectModal() {
+            document.getElementById('start-project-modal').classList.add('hidden');
+            _startProjectId = null;
+        }
+
+        var startConfirmBtn = document.getElementById('start-project-confirm');
+        if (startConfirmBtn) {
+            startConfirmBtn.addEventListener('click', function () {
+                if (!_startProjectId) return;
+                // POST to the existing start-project route
+                fetch('/projects/' + _startProjectId + '/start-project', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            // Reload so the status badge and button update correctly
+                            window.location.reload();
+                        } else {
+                            alert(data.error || 'Could not start project.');
+                            closeStartProjectModal();
+                        }
+                    });
             });
-    }
+        }
 
-    // ── Event Listeners ──────────────────────────────────────
+        // ── Edit Mode: Restore State ─────────────────────────────
+        function restoreEditState() {
+            var briefTypeEl = document.getElementById('brief_type');
+            if (briefTypeEl && briefTypeEl.value) {
+                switchBriefType(briefTypeEl.value);
+            }
 
-    document.querySelectorAll('.brief-type-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var clientId = document.getElementById('client_id').value;
-            if (!clientId) {
-                showToast('Please select a client before choosing a brief type.', 'error');
+            var hasConceptEl = document.getElementById('has_concept');
+            if (hasConceptEl && hasConceptEl.value === 'true') {
+                document.getElementById('sectionConceptKV').classList.remove('hidden');
+                var conceptKVBtn = document.getElementById('btnConceptKVToggle');
+                if (conceptKVBtn) conceptKVBtn.classList.add('active');
+            }
+
+            if (!EXISTING_CUSTOMERS || EXISTING_CUSTOMERS.length === 0) {
+                calculateCompletion();
                 return;
             }
-            switchBriefType(this.dataset.type);
-        });
-    });
 
-    var btnConceptKVToggle = document.getElementById('btnConceptKVToggle');
-    if (btnConceptKVToggle) {
-        btnConceptKVToggle.addEventListener('click', function () {
-            var section = document.getElementById('sectionConceptKV');
-            var hasConceptInput = document.getElementById('has_concept');
-            var isOpen = !section.classList.contains('hidden');
-            section.classList.toggle('hidden', isOpen);
-            hasConceptInput.value = isOpen ? 'false' : 'true';
-            btnConceptKVToggle.classList.toggle('active', !isOpen);
-            scheduleAutosave();
-        });
-    }
+            var hasUAE = EXISTING_CUSTOMERS.some(function (c) { return c.region === 'uae'; });
+            var gulfCountries = ['kuwait', 'qatar', 'bahrain', 'oman'];
+            var activeGulfCountries = gulfCountries.filter(function (country) {
+                return EXISTING_CUSTOMERS.some(function (c) { return c.region === country; });
+            });
 
-    document.querySelectorAll('.region-btn[data-region]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            this.classList.toggle('active');
-            handleRegionChange();
-        });
-    });
-
-    ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
-        var el = document.getElementById('gulf_' + country);
-        if (el) {
-            el.addEventListener('click', function () {
-                this.classList.toggle('active');
-                if (this.classList.contains('active')) {
-                    buildGulfCountryCustomers(country);
-                } else {
-                    removeGulfCountryCustomers(country);
+            if (hasUAE) {
+                var uaeBtn = document.getElementById('region_uae');
+                if (uaeBtn) {
+                    uaeBtn.classList.add('active');
+                    document.getElementById('blockUAECustomers').classList.remove('hidden');
+                    buildCustomerChecklist('uae', 'uaeCustomerList');
                 }
-                calculateCompletion();
-            });
-        }
-    });
-
-    document.querySelectorAll(
-        '#sectionBasics input, #sectionBasics select'
-    ).forEach(function (el) {
-        el.addEventListener('change', function () {
-            calculateCompletion();
-            scheduleAutosave();
-        });
-        if (el.type === 'text') {
-            el.addEventListener('keyup', function () {
-                calculateCompletion();
-                scheduleAutosave();
-            });
-        }
-    });
-
-    document.querySelectorAll(
-        '#sectionCCM select, #sectionCCM textarea'
-    ).forEach(function (el) {
-        el.addEventListener('change', function () {
-            calculateCompletion();
-            scheduleAutosave();
-        });
-    });
-
-    document.querySelectorAll(
-        '#sectionStandard select, #sectionStandard textarea'
-    ).forEach(function (el) {
-        el.addEventListener('change', function () {
-            calculateCompletion();
-            scheduleAutosave();
-        });
-    });
-
-    // btnConceptToggle and btnKVToggle replaced by merged btnConceptKVToggle above
-
-    var btnReviewSubmit = document.getElementById('btnReviewSubmit');
-    if (btnReviewSubmit) {
-        btnReviewSubmit.addEventListener('click', function () {
-            if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
-                submitEditedProject();
-            } else if (currentCompletion < 100) {
-                showSubmitBlockedMessage();
-            } else {
-                openReviewModal();
             }
-        });
-    }
 
-    var reviewModalClose = document.getElementById('reviewModalClose');
-    if (reviewModalClose) {
-        reviewModalClose.addEventListener('click', function () {
-            document.getElementById('reviewModalOverlay').classList.add('hidden');
-        });
-    }
+            if (activeGulfCountries.length > 0) {
+                var gulfBtn = document.getElementById('region_gulf');
+                if (gulfBtn) {
+                    gulfBtn.classList.add('active');
+                    document.getElementById('blockGulf').classList.remove('hidden');
+                }
+                activeGulfCountries.forEach(function (country) {
+                    var btn = document.getElementById('gulf_' + country);
+                    if (btn) {
+                        btn.classList.add('active');
+                        buildGulfCountryCustomers(country);
+                    }
+                });
+            }
 
-    var reviewModalCancel = document.getElementById('reviewModalCancel');
-    if (reviewModalCancel) {
-        reviewModalCancel.addEventListener('click', function () {
-            document.getElementById('reviewModalOverlay').classList.add('hidden');
-        });
-    }
+            EXISTING_CUSTOMERS.forEach(function (ec) {
+                var pill = document.querySelector('.customer-pill[data-customer-id="' + ec.customer_id + '"]');
+                if (pill && !pill.classList.contains('selected')) {
+                    pill.classList.add('selected');
+                    addDeliverableBlock(ec.customer_id, pill.dataset.customerName, ec.region);
+                }
+                var ddEl = document.getElementById('design_deadline_' + ec.customer_id);
+                var ddtEl = document.getElementById('design_deadline_time_' + ec.customer_id);
+                var instEl = document.getElementById('installation_date_' + ec.customer_id);
+                if (ddEl && ec.design_deadline) ddEl.value = ec.design_deadline;
+                if (ddtEl && ec.design_deadline_time) ddtEl.value = ec.design_deadline_time;
+                if (instEl && ec.installation_date) instEl.value = ec.installation_date;
+            });
 
-    var btnSubmitBrief = document.getElementById('btnSubmitBrief');
-    if (btnSubmitBrief) {
-        btnSubmitBrief.addEventListener('click', function () {
-            btnSubmitBrief.disabled = true;
-            btnSubmitBrief.textContent = 'Submitting...';
+            EXISTING_DELIVERABLES.forEach(function (ed) {
+                addDeliverableRow(ed.customer_id, ed.type_id, ed.name, ed.disciplines);
+            });
+
+            calculateCompletion();
+        }
+
+        // ── Edit Mode: Submit ────────────────────────────────────
+        function submitEditedProject() {
+            var btn = document.getElementById('btnReviewSubmit');
+            if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
             var formData = collectFormData();
 
             var regions = [];
-            var uaeBtn = document.getElementById('region_uae');
-            if (uaeBtn && uaeBtn.classList.contains('active')) {
-                regions.push('uae');
-            }
-            var gulfBtn = document.getElementById('region_gulf');
-            if (gulfBtn && gulfBtn.classList.contains('active')) {
+            var uaeBtn2 = document.getElementById('region_uae');
+            if (uaeBtn2 && uaeBtn2.classList.contains('active')) regions.push('uae');
+            var gulfBtn2 = document.getElementById('region_gulf');
+            if (gulfBtn2 && gulfBtn2.classList.contains('active')) {
                 ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
-                    var btn = document.getElementById('gulf_' + country);
-                    if (btn && btn.classList.contains('active')) {
-                        regions.push(country);
-                    }
+                    var b = document.getElementById('gulf_' + country);
+                    if (b && b.classList.contains('active')) regions.push(country);
                 });
             }
 
@@ -2062,7 +2093,6 @@ if (document.getElementById('sectionBasics')) {
                 var customerId = block.dataset.customerId;
                 var regionSection = block.closest('.deliverables-region-section');
                 var region = regionSection.dataset.region;
-
                 block.querySelectorAll('.deliverable-row').forEach(function (row) {
                     deliverables.push({
                         customer_id: customerId,
@@ -2073,12 +2103,9 @@ if (document.getElementById('sectionBasics')) {
                 });
             });
 
-            var payload = Object.assign({}, formData, {
-                regions: regions,
-                deliverables: deliverables
-            });
+            var payload = Object.assign({}, formData, { regions: regions, deliverables: deliverables });
 
-            fetch('/projects/submit', {
+            fetch('/projects/' + EDIT_PROJECT_ID + '/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -2087,95 +2114,274 @@ if (document.getElementById('sectionBasics')) {
                 .then(function (data) {
                     if (data.error) {
                         showToast(data.error, 'error');
-                        btnSubmitBrief.disabled = false;
-                        btnSubmitBrief.textContent = 'Submit Brief';
+                        if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
                         return;
                     }
-                    clearTimeout(autosaveTimeout);
-                    window.location.href = data.redirect_url + '?toast=Project+submitted+successfully';
+                    window.location.href = data.redirect_url + '?toast=Project+updated+successfully';
                 })
                 .catch(function () {
                     showToast('Something went wrong. Please try again.', 'error');
-                    btnSubmitBrief.disabled = false;
-                    btnSubmitBrief.textContent = 'Submit Brief';
+                    if (btn) { btn.disabled = false; btn.textContent = 'Save Changes'; }
                 });
-        });
-    }
-
-    // ── Initialise ───────────────────────────────────────────
-    var btnSelectAllUAE = document.getElementById('btnSelectAllUAE');
-    if (btnSelectAllUAE) {
-        btnSelectAllUAE.addEventListener('click', function () {
-            selectAllCustomers('uaeCustomerList', this);
-        });
-    }
-
-    setupAddClient();
-
-    var urlParams = new URLSearchParams(window.location.search);
-    var draftIdParam = urlParams.get('draft_id');
-    if (draftIdParam) {
-        currentDraftId = parseInt(draftIdParam);
-        var briefTypeEl = document.getElementById('brief_type');
-        if (briefTypeEl && briefTypeEl.value) {
-            switchBriefType(briefTypeEl.value);
         }
-        var hasConceptEl = document.getElementById('has_concept');
-        if (hasConceptEl && hasConceptEl.value === 'true') {
-            document.getElementById('sectionConceptKV').classList.remove('hidden');
-            var conceptKVToggleBtn = document.getElementById('btnConceptKVToggle');
-            if (conceptKVToggleBtn) conceptKVToggleBtn.classList.add('active');
-        }
-    } else if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
-        restoreEditState();
-    }
 
-    calculateCompletion();
+        // ── Event Listeners ──────────────────────────────────────
 
-    // ── Reference File Upload on Create Page ─────────────────
-    var createRefFileBtn = document.getElementById('createRefFileBtn');
-    var createRefFileInput = document.getElementById('createRefFileInput');
-
-    if (createRefFileBtn && createRefFileInput) {
-        createRefFileBtn.addEventListener('click', function () {
-            if (!this.disabled) createRefFileInput.click();
+        document.querySelectorAll('.brief-type-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var clientId = document.getElementById('client_id').value;
+                if (!clientId) {
+                    showToast('Please select a client before choosing a brief type.', 'error');
+                    return;
+                }
+                switchBriefType(this.dataset.type);
+            });
         });
 
-        createRefFileInput.addEventListener('change', function () {
-            var file = createRefFileInput.files[0];
-            if (!file) return;
+        var btnConceptKVToggle = document.getElementById('btnConceptKVToggle');
+        if (btnConceptKVToggle) {
+            btnConceptKVToggle.addEventListener('click', function () {
+                var section = document.getElementById('sectionConceptKV');
+                var hasConceptInput = document.getElementById('has_concept');
+                var isOpen = !section.classList.contains('hidden');
+                section.classList.toggle('hidden', isOpen);
+                hasConceptInput.value = isOpen ? 'false' : 'true';
+                btnConceptKVToggle.classList.toggle('active', !isOpen);
+                scheduleAutosave();
+            });
+        }
 
-            var projectId = createRefFileBtn.dataset.projectId;
-            if (!projectId) return;
+        document.querySelectorAll('.region-btn[data-region]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                this.classList.toggle('active');
+                handleRegionChange();
+            });
+        });
 
-            var status = document.getElementById('createRefFileStatus');
-            status.textContent = 'Uploading...';
+        ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
+            var el = document.getElementById('gulf_' + country);
+            if (el) {
+                el.addEventListener('click', function () {
+                    this.classList.toggle('active');
+                    if (this.classList.contains('active')) {
+                        buildGulfCountryCustomers(country);
+                    } else {
+                        removeGulfCountryCustomers(country);
+                    }
+                    calculateCompletion();
+                });
+            }
+        });
 
-            var formData = new FormData();
-            formData.append('file', file);
+        document.querySelectorAll(
+            '#sectionBasics input, #sectionBasics select'
+        ).forEach(function (el) {
+            el.addEventListener('change', function () {
+                calculateCompletion();
+                scheduleAutosave();
+            });
+            if (el.type === 'text') {
+                el.addEventListener('keyup', function () {
+                    calculateCompletion();
+                    scheduleAutosave();
+                });
+            }
+        });
 
-            fetch('/projects/' + projectId + '/upload-file', {
-                method: 'POST',
-                body: formData
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) { status.textContent = 'Error: ' + data.error; return; }
-                    status.textContent = 'Uploaded.';
-                    setTimeout(function () { status.textContent = ''; }, 3000);
-                    createRefFileInput.value = '';
+        document.querySelectorAll(
+            '#sectionCCM select, #sectionCCM textarea'
+        ).forEach(function (el) {
+            el.addEventListener('change', function () {
+                calculateCompletion();
+                scheduleAutosave();
+            });
+        });
 
-                    var list = document.getElementById('create-reference-files-list');
-                    var noFilesMsg = list.querySelector('.no-files-msg');
-                    if (noFilesMsg) noFilesMsg.remove();
+        document.querySelectorAll(
+            '#sectionStandard select, #sectionStandard textarea'
+        ).forEach(function (el) {
+            el.addEventListener('change', function () {
+                calculateCompletion();
+                scheduleAutosave();
+            });
+        });
 
-                    var icons = { jpg: '🖼', jpeg: '🖼', png: '🖼', pdf: '📄', docx: '📝', xlsx: '📊' };
-                    var icon = icons[data.file.file_type] || '📎';
+        // btnConceptToggle and btnKVToggle replaced by merged btnConceptKVToggle above
 
-                    var item = document.createElement('div');
-                    item.className = 'reference-file-item';
-                    item.dataset.fileId = data.file.id;
-                    item.innerHTML = `
+        var btnReviewSubmit = document.getElementById('btnReviewSubmit');
+        if (btnReviewSubmit) {
+            btnReviewSubmit.addEventListener('click', function () {
+                if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
+                    submitEditedProject();
+                } else if (currentCompletion < 100) {
+                    showSubmitBlockedMessage();
+                } else {
+                    openReviewModal();
+                }
+            });
+        }
+
+        var reviewModalClose = document.getElementById('reviewModalClose');
+        if (reviewModalClose) {
+            reviewModalClose.addEventListener('click', function () {
+                document.getElementById('reviewModalOverlay').classList.add('hidden');
+            });
+        }
+
+        var reviewModalCancel = document.getElementById('reviewModalCancel');
+        if (reviewModalCancel) {
+            reviewModalCancel.addEventListener('click', function () {
+                document.getElementById('reviewModalOverlay').classList.add('hidden');
+            });
+        }
+
+        var btnSubmitBrief = document.getElementById('btnSubmitBrief');
+        if (btnSubmitBrief) {
+            btnSubmitBrief.addEventListener('click', function () {
+                btnSubmitBrief.disabled = true;
+                btnSubmitBrief.textContent = 'Submitting...';
+
+                var formData = collectFormData();
+
+                var regions = [];
+                var uaeBtn = document.getElementById('region_uae');
+                if (uaeBtn && uaeBtn.classList.contains('active')) {
+                    regions.push('uae');
+                }
+                var gulfBtn = document.getElementById('region_gulf');
+                if (gulfBtn && gulfBtn.classList.contains('active')) {
+                    ['kuwait', 'qatar', 'bahrain', 'oman'].forEach(function (country) {
+                        var btn = document.getElementById('gulf_' + country);
+                        if (btn && btn.classList.contains('active')) {
+                            regions.push(country);
+                        }
+                    });
+                }
+
+                var deliverables = [];
+                document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
+                    var customerId = block.dataset.customerId;
+                    var regionSection = block.closest('.deliverables-region-section');
+                    var region = regionSection.dataset.region;
+
+                    block.querySelectorAll('.deliverable-row').forEach(function (row) {
+                        deliverables.push({
+                            customer_id: customerId,
+                            region: region,
+                            type_id: row.dataset.typeId,
+                            name: row.dataset.name
+                        });
+                    });
+                });
+
+                var payload = Object.assign({}, formData, {
+                    regions: regions,
+                    deliverables: deliverables
+                });
+
+                fetch('/projects/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.error) {
+                            showToast(data.error, 'error');
+                            btnSubmitBrief.disabled = false;
+                            btnSubmitBrief.textContent = 'Submit Brief';
+                            return;
+                        }
+                        clearTimeout(autosaveTimeout);
+                        // If the FOC number was already taken by another project, the server
+                        // silently assigned the next available one and signals us here.
+                        var toastMsg = data.job_number_changed
+                            ? 'Project submitted. Job number updated to ' + data.new_job_number + ' — ' + data.old_job_number + ' was already taken.'
+                            : 'Project submitted successfully';
+                        window.location.href = data.redirect_url + '?toast=' + encodeURIComponent(toastMsg);
+                    })
+                    .catch(function () {
+                        showToast('Something went wrong. Please try again.', 'error');
+                        btnSubmitBrief.disabled = false;
+                        btnSubmitBrief.textContent = 'Submit Brief';
+                    });
+            });
+        }
+
+        // ── Initialise ───────────────────────────────────────────
+        var btnSelectAllUAE = document.getElementById('btnSelectAllUAE');
+        if (btnSelectAllUAE) {
+            btnSelectAllUAE.addEventListener('click', function () {
+                selectAllCustomers('uaeCustomerList', this);
+            });
+        }
+
+        setupAddClient();
+
+        var urlParams = new URLSearchParams(window.location.search);
+        var draftIdParam = urlParams.get('draft_id');
+        if (draftIdParam) {
+            currentDraftId = parseInt(draftIdParam);
+            var briefTypeEl = document.getElementById('brief_type');
+            if (briefTypeEl && briefTypeEl.value) {
+                switchBriefType(briefTypeEl.value);
+            }
+            var hasConceptEl = document.getElementById('has_concept');
+            if (hasConceptEl && hasConceptEl.value === 'true') {
+                document.getElementById('sectionConceptKV').classList.remove('hidden');
+                var conceptKVToggleBtn = document.getElementById('btnConceptKVToggle');
+                if (conceptKVToggleBtn) conceptKVToggleBtn.classList.add('active');
+            }
+        } else if (typeof EDIT_MODE !== 'undefined' && EDIT_MODE) {
+            restoreEditState();
+        }
+
+        calculateCompletion();
+
+        // ── Reference File Upload on Create Page ─────────────────
+        var createRefFileBtn = document.getElementById('createRefFileBtn');
+        var createRefFileInput = document.getElementById('createRefFileInput');
+
+        if (createRefFileBtn && createRefFileInput) {
+            createRefFileBtn.addEventListener('click', function () {
+                if (!this.disabled) createRefFileInput.click();
+            });
+
+            createRefFileInput.addEventListener('change', function () {
+                var file = createRefFileInput.files[0];
+                if (!file) return;
+
+                var projectId = createRefFileBtn.dataset.projectId;
+                if (!projectId) return;
+
+                var status = document.getElementById('createRefFileStatus');
+                status.textContent = 'Uploading...';
+
+                var formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/projects/' + projectId + '/upload-file', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data.success) { status.textContent = 'Error: ' + data.error; return; }
+                        status.textContent = 'Uploaded.';
+                        setTimeout(function () { status.textContent = ''; }, 3000);
+                        createRefFileInput.value = '';
+
+                        var list = document.getElementById('create-reference-files-list');
+                        var noFilesMsg = list.querySelector('.no-files-msg');
+                        if (noFilesMsg) noFilesMsg.remove();
+
+                        var icons = { jpg: '🖼', jpeg: '🖼', png: '🖼', pdf: '📄', docx: '📝', xlsx: '📊' };
+                        var icon = icons[data.file.file_type] || '📎';
+
+                        var item = document.createElement('div');
+                        item.className = 'reference-file-item';
+                        item.dataset.fileId = data.file.id;
+                        item.innerHTML = `
                     <span class="reference-file-icon">${icon}</span>
                     <span class="reference-file-name">${data.file.original_filename}</span>
                     <span class="reference-file-meta">${data.file.uploaded_by}</span>
@@ -2186,321 +2392,321 @@ if (document.getElementById('sectionBasics')) {
                                 data-file-id="${data.file.id}">Remove</button>
                     </div>
                 `;
-                    item.querySelector('.reference-file-delete-btn').addEventListener('click', handleCreateFileDelete);
-                    list.appendChild(item);
+                        item.querySelector('.reference-file-delete-btn').addEventListener('click', handleCreateFileDelete);
+                        list.appendChild(item);
+                    })
+                    .catch(function (err) {
+                        status.textContent = 'Upload failed.';
+                        console.error(err);
+                    });
+            });
+
+            function handleCreateFileDelete(e) {
+                var fileId = this.dataset.fileId;
+                var item = this.closest('.reference-file-item');
+                if (!confirm('Remove this file?')) return;
+
+                fetch('/projects/files/' + fileId + '/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 })
-                .catch(function (err) {
-                    status.textContent = 'Upload failed.';
-                    console.error(err);
-                });
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data.success) return;
+                        item.remove();
+                        var list = document.getElementById('create-reference-files-list');
+                        if (list.querySelectorAll('.reference-file-item').length === 0) {
+                            var msg = document.createElement('p');
+                            msg.className = 'no-files-msg';
+                            msg.textContent = 'No reference files uploaded yet.';
+                            list.appendChild(msg);
+                        }
+                    });
+            }
+
+            document.querySelectorAll('#create-reference-files-list .reference-file-delete-btn').forEach(function (btn) {
+                btn.addEventListener('click', handleCreateFileDelete);
+            });
+        }
+
+    } // end sectionBasics wrapper
+
+    // ── Post-redirect Toast ──────────────────────────────────────
+    var urlParams = new URLSearchParams(window.location.search);
+    var toastMsg = urlParams.get('toast');
+    if (toastMsg) {
+        showToast(decodeURIComponent(toastMsg), 'success');
+    }
+
+    // ── Expandable customer rows ──────────────────────────────
+    document.querySelectorAll('tr[data-expand]').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            if (e.target.closest('a, button, select')) return;
+            var expandRow = this.nextElementSibling;
+            if (!expandRow || !expandRow.classList.contains('expansion-row')) return;
+            expandRow.classList.toggle('hidden');
+            var icon = this.querySelector('.chevron-icon');
+            if (icon) icon.classList.toggle('rotated');
+            var expandRow = this.nextElementSibling;
+        });
+    });
+
+    // ── Status dropdowns ─────────────────────────────────────
+    function updateStatus(select) {
+        var url = select.dataset.url;
+        var status = select.value;
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                } else {
+                    applyStatusClass(select, status);
+                    showToast('Status updated', 'success');
+                }
+            })
+            .catch(function () {
+                showToast('Something went wrong', 'error');
+            });
+    }
+
+
+
+    function applyStatusClass(select, status) {
+        // Full list of status classes — must include every value that appears in any dropdown
+        var classes = [
+            's-briefed', 's-in_queue', 's-in_progress', 's-submitted',
+            's-internal_review', 's-internal_revision', 's-submitted_to_client',
+            's-revision_in_queue', 's-revision_in_progress', 's-approved', 's-on_hold'
+        ];
+        select.classList.remove.apply(select.classList, classes);
+        select.classList.add('s-' + status);
+    }
+
+    document.querySelectorAll('.status-select').forEach(function (select) {
+        applyStatusClass(select, select.value);
+    });
+
+    function flagRevision(deliverableId, projectId) {
+        var url = '/projects/' + projectId + '/deliverable/' + deliverableId + '/flag-revision';
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.error) {
+                    showToast(data.error, 'error');
+                } else {
+                    showToast('Deliverable flagged for revision', 'warning');
+                    // Swap the flag button for the Flagged badge and update the status dropdown
+                    var btn = document.querySelector('[onclick="flagRevision(' + deliverableId + ', ' + projectId + ')"]');
+                    if (btn) {
+                        var badge = document.createElement('span');
+                        badge.className = 'revision-flagged-badge';
+                        badge.textContent = '⚑ Flagged';
+                        btn.replaceWith(badge);
+                    }
+                    // Update the status dropdown to revision_in_queue
+                    var row = document.querySelector('[data-url*="/deliverable/' + deliverableId + '/set-status"]');
+                    if (row) {
+                        row.value = 'revision_in_queue';
+                        applyStatusClass(row, 'revision_in_queue');
+                    }
+                }
+            })
+            .catch(function () { showToast('Something went wrong', 'error'); });
+    }
+
+    // ── Client Submission ─────────────────────────────────────────────────────────
+
+    // ── Client Submission Flow ────────────────────────────────────────────────────
+    // Pull project ID from the URL — detail page is always at /projects/<id>
+    var detailProjectId = parseInt(window.location.pathname.split('/')[2]);
+
+    // ── Step 1: Upload deck ───────────────────────────────────────────────────────
+    // The designer clicks "Upload Client Deck" or "Reupload Deck", picks a file,
+    // and we POST it to the server. On success the page reloads into State 2
+    // (deliverable picker) with the new submission pre-selected.
+    var submissionUploadBtn = document.getElementById('submissionUploadBtn');
+    var submissionFileInput = document.getElementById('submissionFileInput');
+    var submissionUploadStatus = document.getElementById('submissionUploadStatus');
+
+    if (submissionUploadBtn && submissionFileInput) {
+        submissionUploadBtn.addEventListener('click', function () {
+            submissionFileInput.click();
         });
 
-        function handleCreateFileDelete(e) {
-            var fileId = this.dataset.fileId;
-            var item = this.closest('.reference-file-item');
-            if (!confirm('Remove this file?')) return;
+        submissionFileInput.addEventListener('change', function () {
+            var file = submissionFileInput.files[0];
+            if (!file) return;
 
-            fetch('/projects/files/' + fileId + '/delete', {
+            submissionUploadStatus.textContent = 'Uploading...';
+
+            var formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/projects/' + detailProjectId + '/submission/upload', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                body: formData
             })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
-                    if (!data.success) return;
-                    item.remove();
-                    var list = document.getElementById('create-reference-files-list');
-                    if (list.querySelectorAll('.reference-file-item').length === 0) {
-                        var msg = document.createElement('p');
-                        msg.className = 'no-files-msg';
-                        msg.textContent = 'No reference files uploaded yet.';
-                        list.appendChild(msg);
+                    if (!data.success) {
+                        submissionUploadStatus.textContent = 'Error: ' + data.error;
+                        return;
                     }
+                    // Reload so the template renders the correct state (State 2: picker)
+                    window.location.reload();
+                })
+                .catch(function () {
+                    submissionUploadStatus.textContent = 'Upload failed.';
                 });
+        });
+    }
+
+    // ── Shared deliverable picker builder ────────────────────────────────────────
+    // Used by both the submission picker (State 2) and the revision picker (State 5).
+    // Renders checkboxes into `containerEl`, defaulting all to checked.
+    // For CCM briefs (deliverables have customer_name), groups by customer with
+    // per-customer Select/Deselect All buttons rendered inside a bordered box.
+    // `globalSelectEl` and `globalDeselectEl` wire up the global controls (optional).
+    function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCustomerIds) {
+        if (!containerEl || !window.projectDeliverables) return;
+
+        var deliverables = window.projectDeliverables;
+
+        // If a customer ID filter is provided, restrict to only those customers' deliverables
+        if (filterCustomerIds && filterCustomerIds.length > 0) {
+            var _idSet = {};
+            filterCustomerIds.forEach(function (id) { _idSet[id] = true; });
+            deliverables = deliverables.filter(function (d) { return d.customer_id && _idSet[d.customer_id]; });
         }
 
-        document.querySelectorAll('#create-reference-files-list .reference-file-delete-btn').forEach(function (btn) {
-            btn.addEventListener('click', handleCreateFileDelete);
-        });
-    }
-
-} // end sectionBasics wrapper
-
-// ── Post-redirect Toast ──────────────────────────────────────
-var urlParams = new URLSearchParams(window.location.search);
-var toastMsg = urlParams.get('toast');
-if (toastMsg) {
-    showToast(decodeURIComponent(toastMsg), 'success');
-}
-
-// ── Expandable customer rows ──────────────────────────────
-document.querySelectorAll('tr[data-expand]').forEach(function (row) {
-    row.addEventListener('click', function (e) {
-        if (e.target.closest('a, button, select')) return;
-        var expandRow = this.nextElementSibling;
-        if (!expandRow || !expandRow.classList.contains('expansion-row')) return;
-        expandRow.classList.toggle('hidden');
-        var icon = this.querySelector('.chevron-icon');
-        if (icon) icon.classList.toggle('rotated');
-        var expandRow = this.nextElementSibling;
-    });
-});
-
-// ── Status dropdowns ─────────────────────────────────────
-function updateStatus(select) {
-    var url = select.dataset.url;
-    var status = select.value;
-    fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: status })
-    })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-            if (data.error) {
-                showToast(data.error, 'error');
-            } else {
-                applyStatusClass(select, status);
-                showToast('Status updated', 'success');
-            }
-        })
-        .catch(function () {
-            showToast('Something went wrong', 'error');
-        });
-}
-
-
-
-function applyStatusClass(select, status) {
-    // Full list of status classes — must include every value that appears in any dropdown
-    var classes = [
-        's-briefed', 's-in_queue', 's-in_progress', 's-submitted',
-        's-internal_review', 's-internal_revision', 's-submitted_to_client',
-        's-revision_in_queue', 's-revision_in_progress', 's-approved', 's-on_hold'
-    ];
-    select.classList.remove.apply(select.classList, classes);
-    select.classList.add('s-' + status);
-}
-
-document.querySelectorAll('.status-select').forEach(function (select) {
-    applyStatusClass(select, select.value);
-});
-
-function flagRevision(deliverableId, projectId) {
-    var url = '/projects/' + projectId + '/deliverable/' + deliverableId + '/flag-revision';
-    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-            if (data.error) {
-                showToast(data.error, 'error');
-            } else {
-                showToast('Deliverable flagged for revision', 'warning');
-                // Swap the flag button for the Flagged badge and update the status dropdown
-                var btn = document.querySelector('[onclick="flagRevision(' + deliverableId + ', ' + projectId + ')"]');
-                if (btn) {
-                    var badge = document.createElement('span');
-                    badge.className = 'revision-flagged-badge';
-                    badge.textContent = '⚑ Flagged';
-                    btn.replaceWith(badge);
-                }
-                // Update the status dropdown to revision_in_queue
-                var row = document.querySelector('[data-url*="/deliverable/' + deliverableId + '/set-status"]');
-                if (row) {
-                    row.value = 'revision_in_queue';
-                    applyStatusClass(row, 'revision_in_queue');
-                }
-            }
-        })
-        .catch(function () { showToast('Something went wrong', 'error'); });
-}
-
-// ── Client Submission ─────────────────────────────────────────────────────────
-
-// ── Client Submission Flow ────────────────────────────────────────────────────
-// Pull project ID from the URL — detail page is always at /projects/<id>
-var detailProjectId = parseInt(window.location.pathname.split('/')[2]);
-
-// ── Step 1: Upload deck ───────────────────────────────────────────────────────
-// The designer clicks "Upload Client Deck" or "Reupload Deck", picks a file,
-// and we POST it to the server. On success the page reloads into State 2
-// (deliverable picker) with the new submission pre-selected.
-var submissionUploadBtn = document.getElementById('submissionUploadBtn');
-var submissionFileInput = document.getElementById('submissionFileInput');
-var submissionUploadStatus = document.getElementById('submissionUploadStatus');
-
-if (submissionUploadBtn && submissionFileInput) {
-    submissionUploadBtn.addEventListener('click', function () {
-        submissionFileInput.click();
-    });
-
-    submissionFileInput.addEventListener('change', function () {
-        var file = submissionFileInput.files[0];
-        if (!file) return;
-
-        submissionUploadStatus.textContent = 'Uploading...';
-
-        var formData = new FormData();
-        formData.append('file', file);
-
-        fetch('/projects/' + detailProjectId + '/submission/upload', {
-            method: 'POST',
-            body: formData
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!data.success) {
-                    submissionUploadStatus.textContent = 'Error: ' + data.error;
-                    return;
-                }
-                // Reload so the template renders the correct state (State 2: picker)
-                window.location.reload();
-            })
-            .catch(function () {
-                submissionUploadStatus.textContent = 'Upload failed.';
-            });
-    });
-}
-
-// ── Shared deliverable picker builder ────────────────────────────────────────
-// Used by both the submission picker (State 2) and the revision picker (State 5).
-// Renders checkboxes into `containerEl`, defaulting all to checked.
-// For CCM briefs (deliverables have customer_name), groups by customer with
-// per-customer Select/Deselect All buttons rendered inside a bordered box.
-// `globalSelectEl` and `globalDeselectEl` wire up the global controls (optional).
-function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCustomerIds) {
-    if (!containerEl || !window.projectDeliverables) return;
-
-    var deliverables = window.projectDeliverables;
-
-    // If a customer ID filter is provided, restrict to only those customers' deliverables
-    if (filterCustomerIds && filterCustomerIds.length > 0) {
-        var _idSet = {};
-        filterCustomerIds.forEach(function (id) { _idSet[id] = true; });
-        deliverables = deliverables.filter(function (d) { return d.customer_id && _idSet[d.customer_id]; });
-    }
-
-    // One checkbox row: a <label class="picker-row"> containing a checkbox + name span.
-    function makeRow(d) {
-        var label = document.createElement('label');
-        label.className = 'picker-row';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = d.id;
-        cb.checked = true;
-        cb.dataset.deliverableId = d.id;
-        var span = document.createElement('span');
-        span.textContent = d.name;
-        label.appendChild(cb);
-        label.appendChild(span);
-        return label;
-    }
-
-    var isCCM = deliverables.some(function (d) { return d.customer_name; });
-
-    if (isCCM) {
-        // CCM brief: group deliverables by customer, render one bordered box per customer
-        // with per-group Select All / Deselect All buttons above the checkbox rows.
-        var groups = {}, order = [];
-        deliverables.forEach(function (d) {
-            var key = d.customer_id || '__none__';
-            if (!groups[key]) {
-                groups[key] = { name: d.customer_name || 'Other', items: [] };
-                order.push(key);
-            }
-            groups[key].items.push(d);
-        });
-        order.forEach(function (key) {
-            var g = groups[key];
-            // Bordered box wrapping one customer's deliverables
-            var wrap = document.createElement('div');
-            wrap.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.75rem;margin-bottom:0.5rem;';
-            // Customer name header
-            var header = document.createElement('div');
-            header.style.cssText = 'font-size:0.7rem;font-weight:700;letter-spacing:0.06em;color:var(--tangerine);text-transform:uppercase;margin-bottom:0.4rem;';
-            header.textContent = g.name;
-            wrap.appendChild(header);
-            // Per-group Select All / Deselect All
-            var actions = document.createElement('div');
-            actions.style.cssText = 'display:flex;gap:0.4rem;margin-bottom:0.4rem;';
-            var selAll = document.createElement('button');
-            selAll.type = 'button';
-            selAll.className = 'btn-secondary btn-sm';
-            selAll.textContent = 'Select All';
-            var deselAll = document.createElement('button');
-            deselAll.type = 'button';
-            deselAll.className = 'btn-secondary btn-sm';
-            deselAll.textContent = 'Deselect All';
-            selAll.addEventListener('click', function () {
-                wrap.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = true; });
-            });
-            deselAll.addEventListener('click', function () {
-                wrap.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = false; });
-            });
-            actions.appendChild(selAll);
-            actions.appendChild(deselAll);
-            wrap.appendChild(actions);
-            // Deliverable rows
-            g.items.forEach(function (d) { wrap.appendChild(makeRow(d)); });
-            containerEl.appendChild(wrap);
-        });
-    } else {
-        // Standard brief: flat list with optional global Select / Deselect All controls
-        deliverables.forEach(function (d) { containerEl.appendChild(makeRow(d)); });
-        if (globalSelectEl) {
-            globalSelectEl.addEventListener('click', function () {
-                containerEl.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = true; });
-            });
-        }
-        if (globalDeselectEl) {
-            globalDeselectEl.addEventListener('click', function () {
-                containerEl.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = false; });
-            });
-        }
-    }
-}
-
-// ── Step 2: Deliverable picker (submission) ───────────────────────────────────
-// Shown in State 2 (deck uploaded, not yet in review).
-// For CCM briefs this is the concept/KV phase — only Concept and Initial KV
-// campaign assets are selectable. Regular deliverables are handled per-customer
-// during the POSM phase via the channel pickers (ch-picker-list-*).
-// For Standard briefs this renders the flat deliverable list via buildPickerInto.
-(function () {
-    var pickerList = document.getElementById('pickerList');
-    if (!pickerList) return;
-
-    var selAll = document.getElementById('pickerSelectAll');
-    var deselAll = document.getElementById('pickerDeselectAll');
-
-    if (window.projectHasConcept || window.projectHasKV) {
-        // CCM concept/KV phase: only show campaign asset checkboxes
-        function makeCampaignRow(value, label) {
-            var lbl = document.createElement('label');
-            lbl.className = 'picker-row picker-row--campaign';
+        // One checkbox row: a <label class="picker-row"> containing a checkbox + name span.
+        function makeRow(d) {
+            var label = document.createElement('label');
+            label.className = 'picker-row';
             var cb = document.createElement('input');
             cb.type = 'checkbox';
-            cb.value = value;
+            cb.value = d.id;
             cb.checked = true;
+            cb.dataset.deliverableId = d.id;
             var span = document.createElement('span');
-            span.textContent = label;
-            lbl.appendChild(cb);
-            lbl.appendChild(span);
-            return lbl;
-        }
-        if (window.projectHasConcept && window.projectHasKV) {
-            pickerList.appendChild(makeCampaignRow('__concept__', 'Concept & KV'));
-        } else {
-            if (window.projectHasConcept) pickerList.appendChild(makeCampaignRow('__concept__', 'Concept'));
-            if (window.projectHasKV)      pickerList.appendChild(makeCampaignRow('__kv__', 'Initial KV'));
+            span.textContent = d.name;
+            label.appendChild(cb);
+            label.appendChild(span);
+            return label;
         }
 
-        // Wire global Select / Deselect All to the campaign rows
-        if (selAll)   selAll.addEventListener('click',   function () { pickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
-        if (deselAll) deselAll.addEventListener('click', function () { pickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = false; }); });
-    } else {
-        // Standard brief: flat deliverable list (no customer grouping)
-        buildPickerInto(pickerList, selAll, deselAll);
+        var isCCM = deliverables.some(function (d) { return d.customer_name; });
+
+        if (isCCM) {
+            // CCM brief: group deliverables by customer, render one bordered box per customer
+            // with per-group Select All / Deselect All buttons above the checkbox rows.
+            var groups = {}, order = [];
+            deliverables.forEach(function (d) {
+                var key = d.customer_id || '__none__';
+                if (!groups[key]) {
+                    groups[key] = { name: d.customer_name || 'Other', items: [] };
+                    order.push(key);
+                }
+                groups[key].items.push(d);
+            });
+            order.forEach(function (key) {
+                var g = groups[key];
+                // Bordered box wrapping one customer's deliverables
+                var wrap = document.createElement('div');
+                wrap.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.75rem;margin-bottom:0.5rem;';
+                // Customer name header
+                var header = document.createElement('div');
+                header.style.cssText = 'font-size:0.7rem;font-weight:700;letter-spacing:0.06em;color:var(--tangerine);text-transform:uppercase;margin-bottom:0.4rem;';
+                header.textContent = g.name;
+                wrap.appendChild(header);
+                // Per-group Select All / Deselect All
+                var actions = document.createElement('div');
+                actions.style.cssText = 'display:flex;gap:0.4rem;margin-bottom:0.4rem;';
+                var selAll = document.createElement('button');
+                selAll.type = 'button';
+                selAll.className = 'btn-secondary btn-sm';
+                selAll.textContent = 'Select All';
+                var deselAll = document.createElement('button');
+                deselAll.type = 'button';
+                deselAll.className = 'btn-secondary btn-sm';
+                deselAll.textContent = 'Deselect All';
+                selAll.addEventListener('click', function () {
+                    wrap.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = true; });
+                });
+                deselAll.addEventListener('click', function () {
+                    wrap.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = false; });
+                });
+                actions.appendChild(selAll);
+                actions.appendChild(deselAll);
+                wrap.appendChild(actions);
+                // Deliverable rows
+                g.items.forEach(function (d) { wrap.appendChild(makeRow(d)); });
+                containerEl.appendChild(wrap);
+            });
+        } else {
+            // Standard brief: flat list with optional global Select / Deselect All controls
+            deliverables.forEach(function (d) { containerEl.appendChild(makeRow(d)); });
+            if (globalSelectEl) {
+                globalSelectEl.addEventListener('click', function () {
+                    containerEl.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = true; });
+                });
+            }
+            if (globalDeselectEl) {
+                globalDeselectEl.addEventListener('click', function () {
+                    containerEl.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = false; });
+                });
+            }
+        }
     }
-})();
+
+    // ── Step 2: Deliverable picker (submission) ───────────────────────────────────
+    // Shown in State 2 (deck uploaded, not yet in review).
+    // For CCM briefs this is the concept/KV phase — only Concept and Initial KV
+    // campaign assets are selectable. Regular deliverables are handled per-customer
+    // during the POSM phase via the channel pickers (ch-picker-list-*).
+    // For Standard briefs this renders the flat deliverable list via buildPickerInto.
+    (function () {
+        var pickerList = document.getElementById('pickerList');
+        if (!pickerList) return;
+
+        var selAll = document.getElementById('pickerSelectAll');
+        var deselAll = document.getElementById('pickerDeselectAll');
+
+        if (window.projectHasConcept || window.projectHasKV) {
+            // CCM concept/KV phase: only show campaign asset checkboxes
+            function makeCampaignRow(value, label) {
+                var lbl = document.createElement('label');
+                lbl.className = 'picker-row picker-row--campaign';
+                var cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = value;
+                cb.checked = true;
+                var span = document.createElement('span');
+                span.textContent = label;
+                lbl.appendChild(cb);
+                lbl.appendChild(span);
+                return lbl;
+            }
+            if (window.projectHasConcept && window.projectHasKV) {
+                pickerList.appendChild(makeCampaignRow('__concept__', 'Concept & KV'));
+            } else {
+                if (window.projectHasConcept) pickerList.appendChild(makeCampaignRow('__concept__', 'Concept'));
+                if (window.projectHasKV) pickerList.appendChild(makeCampaignRow('__kv__', 'Initial KV'));
+            }
+
+            // Wire global Select / Deselect All to the campaign rows
+            if (selAll) selAll.addEventListener('click', function () { pickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
+            if (deselAll) deselAll.addEventListener('click', function () { pickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = false; }); });
+        } else {
+            // Standard brief: flat deliverable list (no customer grouping)
+            buildPickerInto(pickerList, selAll, deselAll);
+        }
+    })();
 
     // ── Step 2 → 3: Submit for Internal Review ───────────────────────────────────
     // Designer confirms the deliverable selection and sends the deck to CS.
@@ -2736,11 +2942,11 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
                         revisionPickerList.appendChild(makeRevCampaignRow('__concept__', 'Concept & KV'));
                     } else {
                         if (window.projectHasConcept) revisionPickerList.appendChild(makeRevCampaignRow('__concept__', 'Concept'));
-                        if (window.projectHasKV)      revisionPickerList.appendChild(makeRevCampaignRow('__kv__', 'Initial KV'));
+                        if (window.projectHasKV) revisionPickerList.appendChild(makeRevCampaignRow('__kv__', 'Initial KV'));
                     }
-                    var revSelAll   = document.getElementById('revisionPickerSelectAll');
+                    var revSelAll = document.getElementById('revisionPickerSelectAll');
                     var revDeselAll = document.getElementById('revisionPickerDeselectAll');
-                    if (revSelAll)   revSelAll.addEventListener('click',   function () { revisionPickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
+                    if (revSelAll) revSelAll.addEventListener('click', function () { revisionPickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = true; }); });
                     if (revDeselAll) revDeselAll.addEventListener('click', function () { revisionPickerList.querySelectorAll('input').forEach(function (cb) { cb.checked = false; }); });
                 } else if (window.projectDeliverables) {
                     buildPickerInto(revisionPickerList,
@@ -3512,6 +3718,7 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
 
                 var groups = [
                     { label: 'CS & Admin', filter: function (u) { return u.role === 'cs' || u.role === 'admin'; } },
+                    { label: 'Management', filter: function (u) { return u.role === 'management'; } },
                     { label: '2D Team', filter: function (u) { return u.team === '2D'; } },
                     { label: '3D Team', filter: function (u) { return u.team === '3D'; } },
                     { label: 'Technical', filter: function (u) { return u.team === 'Technical'; } }
@@ -3557,7 +3764,7 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
     }
 
     function renderAccountEdit(user) {
-        var roleOptions = ['cs', 'designer', 'team_lead', 'admin'].map(function (r) {
+        var roleOptions = ['cs', 'designer', 'team_lead', 'management', 'admin'].map(function (r) {
             return '<option value="' + r + '"' + (user.role === r ? ' selected' : '') + '>' + r + '</option>';
         }).join('');
         var teamOptions = ['2D', '3D', 'Technical'].map(function (t) {
@@ -3660,7 +3867,14 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
-                        if (data.success) row.remove();
+                        if (data.success) {
+                            row.remove();
+                        } else {
+                            alert('Could not delete user: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(function () {
+                        alert('Server error while deleting user.');
                     });
             });
         }
@@ -4049,7 +4263,7 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
                     ptAllDeliverableTypes.push(data.type);
                     ptAllDeliverableTypes.sort(function (a, b) { return a.name.localeCompare(b.name); });
                     populatePTDelClientFilter(ptAllDeliverableTypes);
-                    renderPTDeliverableRows(ptAllDeliverableTypes);
+                    filterPTDeliverables(); // re-apply current filters instead of showing all rows
                 } else {
                     alert(data.error || 'Could not create deliverable type.');
                 }
@@ -4234,8 +4448,10 @@ function buildPickerInto(containerEl, globalSelectEl, globalDeselectEl, filterCu
         });
         clients.sort();
         var sel = document.getElementById('pt-filter-client');
+        var prev = sel.value; // Save current selection befoe rebuilding
         sel.innerHTML = '<option value="">All Clients</option>' +
             clients.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+        if (clients.indexOf(prev) !== -1) sel.value = prev; // restore if still valid
     }
 
     function populatePTDelCustomerFilter(region) {

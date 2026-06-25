@@ -1844,6 +1844,7 @@ textarea {
     background: #e0d9d0;
     border-radius: 99px;
     overflow: hidden;
+    align-items: center;
 }
 
 .completion-bar-fill {
@@ -4837,4 +4838,22 @@ select.s-internal_revision {
         max-width: 100%;
         margin: 0 0.75rem;
     }
+}
+
+/* -- Approved projects filter bar -- */
+.approved-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--white);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.approved-filter-bar .form-input {
+    flex: 1;
+    min-width: 140px;
 }

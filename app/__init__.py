@@ -97,6 +97,19 @@ def create_app():
            'effective_user': current_user,
            'is_emulating': False
        }
-        
+    
+    from datetime import timezone, timedelta
+
+    def dubai_time(dt):
+        if dt is None:
+            return '_'
+        dubai_tz = timezone(timedelta(hours=4))
+        return dt.replace(tzinfo=timezone.utc).astimezone(dubai_tz).strftime('%d %b %Y, %H:%M')
+    
+    app.jinja_env.filters['dubai_time'] = dubai_time
+
+    # DEV TOOLS — hardcoded True for now. Switch back to env var check before deploying to prod:
+    # app.jinja_env.globals['dev_tools_enabled'] = os.environ.get('DEV_TOOLS_ENABLED', '').lower() == 'true'
+    app.jinja_env.globals['dev_tools_enabled'] = True
 
     return app

@@ -19,7 +19,7 @@ projects = Blueprint('projects', __name__)
 
 @projects.route('/projects/create', methods=['GET'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def create():
     cs_users = User.query.filter(
         User.role.in_(['cs', 'admin'])
@@ -70,7 +70,7 @@ def create():
 
 @projects.route('/projects/<int:project_id>/edit', methods=['GET'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def edit_project(project_id):
     project = Project.query.get_or_404(project_id)
 
@@ -98,6 +98,7 @@ def edit_project(project_id):
             'customer_id': pc.customer_id,
             'region': pc.customer.region,
             'design_deadline': pc.design_deadline.isoformat() if pc.design_deadline else None,
+            'design_deadline_time': pc.design_deadline_time.strftime('%H:%M') if pc.design_deadline_time else None,
             'installation_date': pc.installation_date.isoformat() if pc.installation_date else None,
         })
 
@@ -121,6 +122,7 @@ def edit_project(project_id):
         {
             'name': d.name,
             'design_deadline': d.design_deadline.isoformat() if d.design_deadline else None,
+            'design_deadline_time': d.design_deadline_time.strftime('%H:%M') if d.design_deadline_time else None,
             'teams': [t.strip() for t in d.teams.split(',')] if d.teams else []
         }
         for d in Deliverable.query.filter_by(
@@ -148,7 +150,7 @@ def edit_project(project_id):
 
 @projects.route('/projects/<int:project_id>/update', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def update_project(project_id):
     project = Project.query.get_or_404(project_id)
 
@@ -187,6 +189,8 @@ def update_project(project_id):
         project.required_output = data.get('required_output')
         project.campaign_notes = data.get('concept_requirements')
         project.concept_deadline = parse_date(data.get('concept_deadline'))
+        raw_cdt = data.get('concept_deadline_time')
+        project.concept_deadline_time = datetime.strptime(raw_cdt, '%H:%M').time() if raw_cdt else None
         project.has_concept = bool(data.get('has_concept', False))
         project.concept_options_required = data.get('concept_options_required')
         project.has_kv = bool(data.get('has_kv', False))
@@ -240,11 +244,14 @@ def update_project(project_id):
             for item in submitted_items:
                 raw_dd = item.get('design_deadline')
                 del_deadline = parse_date(raw_dd) if raw_dd else None
+                raw_time = item.get('design_deadline_time')
+                del_time = datetime.strptime(raw_time, '%H:%M').time() if raw_time else None
                 del_teams = ','.join(item['teams']) if item['teams'] else None
                 if item['name'] in existing_std:
                     # Keep status and assignments — only refresh editable fields
                     d = existing_std[item['name']]
                     d.design_deadline = del_deadline
+                    d.design_deadline_time = del_time
                     d.teams = del_teams
                 else:
                     db.session.add(Deliverable(
@@ -253,6 +260,7 @@ def update_project(project_id):
                         deliverable_type_id=None,
                         name=item['name'],
                         design_deadline=del_deadline,
+                        design_deadline_time=del_time,
                         teams=del_teams,
                         status='in_queue',
                         created_by=current_user
@@ -272,10 +280,12 @@ def update_project(project_id):
                 if customer_id not in customer_map:
                     customer_dates = data.get('customer_dates', {})
                     dates = customer_dates.get(str(customer_id), {})
+                    raw_time = dates.get('design_deadline_time')
                     pc = ProjectCustomer(
                         project_id=project.id,
                         customer_id=customer_id,
                         design_deadline=parse_date(dates.get('design_deadline')),
+                        design_deadline_time=datetime.strptime(raw_time, '%H:%M').time() if raw_time else None,
                         installation_date=parse_date(dates.get('installation_date')),
                     )
                     db.session.add(pc)
@@ -306,7 +316,7 @@ def update_project(project_id):
 
 @projects.route('/projects/autosave', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def autosave():
     try:
         data = request.get_json()
@@ -368,6 +378,8 @@ def autosave():
 
         if data.get('concept_deadline'):
             draft.concept_deadline = date.fromisoformat(data['concept_deadline'])
+        raw_cdt = data.get('concept_deadline_time')
+        draft.concept_deadline_time = datetime.strptime(raw_cdt, '%H:%M').time() if raw_cdt else None
 
         if data.get('concept_requirements') is not None:
             draft.campaign_notes = data['concept_requirements']
@@ -397,7 +409,7 @@ def autosave():
             draft.first_output_deadline = date.fromisoformat(data['first_output_deadline'])
 
         if data.get('final_deadline'):
-            draft.design_needed_by = date.fromisoformat(data['final_deadline'])
+            draft.execution_date = date.fromisoformat(data['final_deadline'])
 
         if data.get('installation_date'):
             draft.installation_date = date.fromisoformat(data['installation_date'])
@@ -445,6 +457,13 @@ def detail(project_id):
     active_submission = ProjectSubmission.query.filter_by(
         project_id=project_id, is_active=True
     ).first()
+
+    # For CCM projects with concept/KV: the active C&KV submission (separate from POSM channel submissions)
+    ckv_submission = None
+    if project.brief_type == 'ccm' and (project.has_concept or project.has_kv):
+        ckv_submission = ProjectSubmission.query.filter_by(
+            project_id=project_id, is_active=True, phase='concept_kv'
+        ).first()
 
     # Submission history: only decks that were fully submitted to the client.
     # Drafts/flagged decks that were replaced are not in this list (their files were deleted).
@@ -572,13 +591,6 @@ def detail(project_id):
         ~User.id.in_(secondary_cs_ids) if secondary_cs_ids else True
     ).order_by(User.name).all()
 
-    # POSM is active when explicitly started, OR when the project has no concept/KV at all
-    posm_active = project.posm_started or (
-        project.brief_type == 'ccm'
-        and not project.has_concept
-        and not project.has_kv
-    )
-
     # Gulf regions: C&CM projects with customers in UAE/Kuwait/Qatar/Bahrain/Oman
     # submit POSM by region then customer, not just by customer.
     GULF_REGION_KEYS  = ['uae', 'kuwait', 'qatar', 'bahrain', 'oman']
@@ -587,6 +599,9 @@ def detail(project_id):
         'qatar': 'Qatar', 'bahrain': 'Bahrain', 'oman': 'Oman'
     }
     is_gulf = project.brief_type == 'ccm' and any(k in brief_sections for k in GULF_REGION_KEYS)
+
+    # POSM is always active for Gulf C&CM projects — no manual "Begin POSM" step required
+    posm_active = is_gulf
 
     # Pass each Gulf region with its customers so the JS can build the two-step picker.
     gulf_regions_json = _json.dumps([
@@ -612,34 +627,46 @@ def detail(project_id):
     gulf_posm_counts = project.posm_country_revision_counts or {}
 
     # ── Parallel POSM channels ──────────────────────────────────────────────────
-    # For Gulf C&CM POSM projects: build per-channel data for the pill UI.
-    # For non-Gulf / concept-KV projects: posm_channels_data is empty and the
-    # template falls back to the single-pipeline submission card.
+    # For Gulf C&CM projects: always build per-channel data for the pill UI.
+    # Channels are auto-created on page load — no "Begin POSM" step required.
+    # New customers added to the brief get a channel automatically.
     posm_channels_data = []
-    if posm_active and is_gulf:
+    if is_gulf:
         from app.models import ProjectPosmChannel, ProjectSubmission as _PS, ProjectRevision as _PR
 
-        # Auto-create channels for projects that became POSM implicitly
-        # (no concept/KV uploaded → posm_started never set → no channels in DB yet)
-        if not project.posm_channels:
-            for region_key in GULF_REGION_KEYS:
-                if region_key not in brief_sections:
-                    continue
-                if region_key == 'uae':
-                    for pc in brief_sections['uae']:
+        # Build a set of channel keys that already exist
+        existing_channel_keys = set()
+        for ch in project.posm_channels:
+            if ch.posm_country == 'uae':
+                existing_channel_keys.add(('uae', ch.posm_customer_id))
+            else:
+                existing_channel_keys.add((ch.posm_country, None))
+
+        # Create any channels that are missing (new customers / first-time load)
+        new_channels_added = False
+        for region_key in GULF_REGION_KEYS:
+            if region_key not in brief_sections:
+                continue
+            if region_key == 'uae':
+                for pc in brief_sections['uae']:
+                    if ('uae', pc.id) not in existing_channel_keys:
                         db.session.add(ProjectPosmChannel(
                             project_id=project_id,
                             posm_country='uae',
                             posm_customer_id=pc.id,
                             status='in_queue',
                         ))
-                else:
+                        new_channels_added = True
+            else:
+                if (region_key, None) not in existing_channel_keys:
                     db.session.add(ProjectPosmChannel(
                         project_id=project_id,
                         posm_country=region_key,
                         posm_customer_id=None,
                         status='in_queue',
                     ))
+                    new_channels_added = True
+        if new_channels_added:
             db.session.commit()
 
         # Sort channels: UAE first (by customer name), then other regions in Gulf key order
@@ -715,6 +742,7 @@ def detail(project_id):
         project_customers_json=project_customers_json,
         gulf_region_names=GULF_REGION_NAMES,
         posm_channels_data=posm_channels_data,
+        ckv_submission=ckv_submission,
     )
 
 @projects.route('/projects/<int:project_id>/update-status', methods=['POST'])
@@ -818,7 +846,7 @@ def toggle_hold(project_id):
 
 @projects.route('/projects/<int:project_id>/begin-posm', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def begin_posm(project_id):
     """CS clicks 'Begin POSM' after concept/KV work is done.
     - Snapshots the current revision_count as concept_kv_revision_count.
@@ -982,7 +1010,7 @@ def set_deliverable_status(project_id, d_id):
 
 @projects.route('/projects/<int:project_id>/deliverable/<int:d_id>/flag-revision', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def flag_deliverable_revision(project_id, d_id):
     from app.models import Deliverable
     project = Project.query.get_or_404(project_id)
@@ -1056,7 +1084,7 @@ def assign_deliverable(project_id, d_id):
 
 @projects.route('/projects/<int:project_id>/flags/create', methods=['POST'])
 @login_required
-@role_required('admin', 'cs', 'designer', 'team_lead')
+@role_required('admin', 'cs', 'designer', 'team_lead', 'management')  # management can raise flags to escalate issues
 def create_flag(project_id):
     from app.models import BriefFlag, BriefFlagMessage, User as UserModel
     project = Project.query.get_or_404(project_id)
@@ -1101,7 +1129,7 @@ def create_flag(project_id):
 
 @projects.route('/projects/<int:project_id>/flags/<int:flag_id>/reply', methods=['POST'])
 @login_required
-@role_required('admin', 'cs', 'designer', 'team_lead')
+@role_required('admin', 'cs', 'designer', 'team_lead', 'management')  # management can participate in flag threads
 def reply_flag(project_id, flag_id):
     from app.models import BriefFlag, BriefFlagMessage, User as UserModel
     project = Project.query.get_or_404(project_id)
@@ -1134,7 +1162,7 @@ def reply_flag(project_id, flag_id):
 
 @projects.route('/projects/<int:project_id>/flags/<int:flag_id>/resolve', methods=['POST'])
 @login_required
-@role_required('admin', 'designer', 'team_lead')
+@role_required('admin', 'designer', 'team_lead', 'management')  # management can resolve any flag (oversight role)
 def resolve_flag(project_id, flag_id):
     from app.models import BriefFlag, User as UserModel
     project = Project.query.get_or_404(project_id)
@@ -1143,7 +1171,8 @@ def resolve_flag(project_id, flag_id):
     emulating_id = session.get('emulating_user_id')
     actor = UserModel.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
 
-    if flag.created_by_id != actor.id and current_user.role != 'admin':
+    # Only the flag creator, admin, or management can resolve — others (e.g. designers on unrelated flags) cannot
+    if flag.created_by_id != actor.id and current_user.role not in ('admin', 'management'):
         return jsonify({'error': 'Only the person who raised this flag can resolve it'}), 403
 
     flag.is_resolved = True
@@ -1283,6 +1312,33 @@ def assign_lead(project_id):
 
     return jsonify({'success': True})
 
+# _____________ Auto-generate FOC Job Number __________
+# Returns the next available FOC-NNN job number.
+# FOC_PAD controls zero-padding width - change to 4 to get FOC-1000 etc.
+@projects.route('/projects/generate-job-number', methods=['GET'])
+@login_required
+@role_required('admin', 'cs', 'management')
+def generate_job_number():
+    FOC_PAD = 3 # Digits: 3 -> FOC-001 ... FOC-999. Change to 4 for FOC-1000+
+
+    #Pull all existing FOC job numbers from the DB
+    existing = Project.query.with_entities(Project.job_number).filter(
+        Project.job_number.like('FOC-%')
+    ).all()
+
+    # Parse the numeric suffix from each, collect into a list
+    used_numbers = []
+    for (jn,) in existing:
+        suffix = jn[4:] # strip 'FOC- prefix
+        if suffix.isdigit():
+            used_numbers.append(int(suffix))
+    
+    # Next number is max +1, or 1 if none exist yet
+    next_num = (max(used_numbers) + 1) if used_numbers else 1
+    job_number = 'FOC-' + str(next_num).zfill(FOC_PAD)
+
+    return jsonify({'job_number': job_number})
+
 # _____________ Start Project ________________________
 # Transitions project_status from Briefed to In Progress.
 # Accessible to designers who team is requested on the project, and admins.
@@ -1325,7 +1381,7 @@ def start_project(project_id):
 
 @projects.route('/projects/<int:project_id>/secondary-cs', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def add_secondary_cs(project_id):
     """Add a CS user as secondary CS on a project. Only the CS lead or admin can do this."""
     from app.models import ProjectSecondaryCS
@@ -1363,7 +1419,7 @@ def add_secondary_cs(project_id):
 
 @projects.route('/projects/<int:project_id>/secondary-cs/<int:user_id>/remove', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def remove_secondary_cs(project_id, user_id):
     """Remove a secondary CS from a project."""
     from app.models import ProjectSecondaryCS, ProjectSecondaryCsRegion
@@ -1492,7 +1548,7 @@ def delete_project(project_id):
 
 @projects.route('/projects/drafts')
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def drafts():
     user_drafts = Project.query.filter_by(
         created_by_id=current_user.id,
@@ -1507,7 +1563,7 @@ def drafts():
 
 @projects.route('/projects/drafts/<int:draft_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def delete_draft(draft_id):
     draft = Project.query.get_or_404(draft_id)
 
@@ -1543,7 +1599,7 @@ def get_deliverable_types(customer_id):
 
 @projects.route('/clients/add', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def add_client():
     data = request.get_json()
     if not data or not data.get('name'):
@@ -1572,7 +1628,7 @@ def add_client():
     
 @projects.route('/projects/deliverable-types/add', methods=['POST'])
 @login_required
-@role_required('cs', 'admin')
+@role_required('cs', 'admin', 'management')
 def add_deliverable_type():
     try:
         data = request.get_json()
@@ -1634,7 +1690,7 @@ def add_deliverable_type():
 
 @projects.route('/projects/submit', methods=['POST'])
 @login_required
-@role_required('cs', 'admin')
+@role_required('cs', 'admin', 'management')
 def submit_project():
     try:
         data = request.get_json()
@@ -1690,6 +1746,8 @@ def submit_project():
         project.required_output = data.get('required_output')
         project.campaign_notes = data.get('concept_requirements')
         project.concept_deadline = parse_date(data.get('concept_deadline'))
+        raw_cdt = data.get('concept_deadline_time')
+        project.concept_deadline_time = datetime.strptime(raw_cdt, '%H:%M').time() if raw_cdt else None
         project.has_concept = bool(data.get('has_concept', False))
         project.concept_options_required = data.get('concept_options_required')
         project.has_kv = bool(data.get('has_kv', False))
@@ -1722,6 +1780,8 @@ def submit_project():
                     del_name = (del_item.get('name') or '').strip()
                     raw_dd = del_item.get('design_deadline')
                     del_deadline = datetime.strptime(raw_dd, '%Y-%m-%d').date() if raw_dd else None
+                    raw_time = del_item.get('design_deadline_time')
+                    del_time = datetime.strptime(raw_time, '%H:%M').time() if raw_time else None
                     raw_teams = del_item.get('teams') or []
                     del_teams = ','.join(raw_teams) if raw_teams else None
                 if not del_name:
@@ -1732,6 +1792,7 @@ def submit_project():
                     deliverable_type_id=None,
                     name=del_name,
                     design_deadline=del_deadline,
+                    design_deadline_time=del_time,
                     teams=del_teams,
                     status='in_queue',
                     created_by=current_user
@@ -1759,10 +1820,12 @@ def submit_project():
                 if customer_id not in customer_map:
                     customer_dates = data.get('customer_dates', {})
                     dates = customer_dates.get(str(customer_id), {})
+                    raw_time = dates.get('design_deadline_time')
                     project_customer = ProjectCustomer(
                         project_id=project.id,
                         customer_id=customer_id,
                         design_deadline=datetime.strptime(dates['design_deadline'], '%Y-%m-%d').date() if dates.get('design_deadline') else None,
+                        design_deadline_time=datetime.strptime(raw_time, '%H:%M').time() if raw_time else None,
                         installation_date=datetime.strptime(dates['installation_date'], '%Y-%m-%d').date() if dates.get('installation_date') else None,
                         status='briefed'
                     )
@@ -1782,10 +1845,43 @@ def submit_project():
 
         db.session.commit()
 
+        # ── FOC conflict check ────────────────────────────────────
+        # A draft can sit for a long time. By the time it's submitted,
+        # another project may have claimed the same FOC number. If that
+        # happens we silently reassign the next available number and
+        # signal the client to show a toast explaining the change.
+        job_number_changed = False
+        old_job_number = None
+        import re as _re
+        if project.job_number and _re.match(r'^FOC-\d+$', project.job_number):
+            conflict = Project.query.filter(
+                Project.job_number == project.job_number,
+                Project.id != project.id,
+                Project.project_status != 'draft'
+            ).first()
+            if conflict:
+                # Reuse the same generation logic as generate_job_number
+                FOC_PAD = 3
+                existing = Project.query.with_entities(Project.job_number).filter(
+                    Project.job_number.like('FOC-%')
+                ).all()
+                used_numbers = []
+                for (jn,) in existing:
+                    suffix = jn[4:]
+                    if suffix.isdigit():
+                        used_numbers.append(int(suffix))
+                next_num = (max(used_numbers) + 1) if used_numbers else 1
+                old_job_number = project.job_number
+                project.job_number = 'FOC-' + str(next_num).zfill(FOC_PAD)
+                db.session.commit()
+                job_number_changed = True
+
         # Notifications (non-blocking)
         try:
             selected_cs_id = int(data['cs_lead_id'])
-            if selected_cs_id != current_user.id:
+            # Skip CS lead notification if they are the one submitting, OR if they created
+            # the project — in both cases they already know they own it.
+            if selected_cs_id != current_user.id and selected_cs_id != project.created_by_id:
                 cs_lead = User.query.get(selected_cs_id)
                 if cs_lead:
                     create_notification(
@@ -1796,24 +1892,17 @@ def submit_project():
                         triggered_by=current_user
                     )
 
-            disciplines_used = set()
-            for item in data.get('deliverables', []):
-                if item.get('type_id') and item['type_id'] != 'custom':
-                    dt = DeliverableType.query.get(int(item['type_id']))
-                    if dt:
-                        for d in dt.disciplines:
-                            disciplines_used.add(d.team)
-
-            team_leads = User.query.filter_by(role='team_lead').all()
-            for lead in team_leads:
-                if lead.team in disciplines_used:
-                    create_notification(
-                        recipient=lead,
-                        message=f'New project "{project.name}" requires your team. Please assign designers.',
-                        notification_type='project_assigned',
-                        project=project,
-                        triggered_by=current_user
-                    )
+            # Notify all team members (leads + designers) on every requested team.
+            # Uses design_teams_requested from the submitted form, which is reliable for both
+            # standard and C&CM briefs. Replaces the old disciplines_used approach, which could
+            # miss teams when deliverables had no type_id (e.g. custom deliverables).
+            teams_requested = data.get('design_teams', [])
+            if teams_requested:
+                notify_team_leads_of_new_project(
+                    project=project,
+                    teams_requested=teams_requested,
+                    triggered_by=current_user
+                )
         except Exception as notif_err:
             import traceback
             traceback.print_exc()
@@ -1823,7 +1912,10 @@ def submit_project():
         return jsonify({
             'success': True,
             'project_id': project.id,
-            'redirect_url': '/'
+            'redirect_url': '/',
+            'job_number_changed': job_number_changed,
+            'old_job_number': old_job_number,
+            'new_job_number': project.job_number if job_number_changed else None,
         }), 201
 
     except Exception as e:
@@ -1882,7 +1974,7 @@ def add_standard_deliverable(project_id):
 
 @projects.route('/projects/<int:project_id>/standard-deliverables/<int:d_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def delete_standard_deliverable(project_id, d_id):
     deliverable = Deliverable.query.filter_by(id=d_id, project_id=project_id).first_or_404()
     name = deliverable.name
@@ -1935,7 +2027,7 @@ import uuid
 
 @projects.route('/projects/<int:project_id>/upload-file', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def upload_project_file(project_id):
     """Handle reference file uploads for a project. CS and admin only."""
     from app.models import ProjectFile
@@ -2010,7 +2102,7 @@ def download_project_file(file_id):
 
 @projects.route('/projects/files/<int:file_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def delete_project_file(file_id):
     """Delete a reference file. CS and admin only."""
     from app.models import ProjectFile
@@ -2215,16 +2307,12 @@ def submit_for_internal_review(project_id):
         ).first()
 
     # Determine submission phase and Gulf/POSM context
-    posm_active = project.posm_started or (
-        project.brief_type == 'ccm'
-        and not project.has_concept
-        and not project.has_kv
-    )
     if channel:
         # Channel-aware POSM: metadata already tagged on the submission at upload time
         submission.phase = 'posm'
         channel.status = 'internal_review'
-    elif posm_active and posm_country:
+    elif posm_country:
+        # Legacy Gulf POSM path (country provided without a channel object)
         from app.models import ProjectCustomer
         submission.posm_country = posm_country
         submission.phase = 'posm'
@@ -2240,7 +2328,10 @@ def submit_for_internal_review(project_id):
         submission.phase = 'concept_kv'
         submission.posm_country    = None
         submission.posm_customer_id = None
-        project.project_status = 'internal_review'
+        # When the project has POSM channels, project status is driven by those channels.
+        # C&KV is a parallel channel — don't overwrite project status here.
+        if not project.posm_channels:
+            project.project_status = 'internal_review'
 
     # Save concept/KV flags on the submission and advance their statuses (concept/KV phase only)
     submission.includes_concept = includes_concept
@@ -2286,7 +2377,7 @@ def submit_for_internal_review(project_id):
 
 @projects.route('/projects/<int:project_id>/submission/flag', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def flag_submission(project_id):
     """CS flags the active deck with a revision note.
     - Sets project status → internal_revision.
@@ -2376,7 +2467,7 @@ def flag_submission(project_id):
 
 @projects.route('/projects/<int:project_id>/submission/submit-to-client', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def submit_to_client(project_id):
     """CS approves the deck and marks it as submitted to the client.
     - Guards: must have an active, unflagged submission in internal_review state.
@@ -2551,7 +2642,7 @@ def download_submission(submission_id):
 
 @projects.route('/projects/<int:project_id>/submission/send-revision', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def send_revision(project_id):
     """CS sends a revision request back to the designer after the deck has been
     submitted to the client.
@@ -2817,7 +2908,7 @@ def start_revision(project_id):
 
 @projects.route('/projects/<int:project_id>/submission/approve', methods=['POST'])
 @login_required
-@role_required('admin', 'cs')
+@role_required('admin', 'cs', 'management')
 def approve_submission(project_id):
     """CS approves the final client submission, locking the project.
 
@@ -2888,12 +2979,19 @@ def approve_submission(project_id):
                     link.deliverable.status = 'approved'
 
         # Check whether ALL channels on this project are now approved.
-        # If so, cascade to project-level approval automatically.
+        # If so, also require C&KV to be approved (if this project has concept/KV).
+        # Only then cascade to project-level approval.
         all_channels = ProjectPosmChannel.query.filter_by(project_id=project_id).all()
         if all_channels and all(c.status == 'approved' for c in all_channels):
-            project.project_status = 'approved'
-            project.approved_at = now
-            project.approved_by_id = current_user.id
+            ckv_gate = True
+            if project.has_concept and project.concept_status != 'approved':
+                ckv_gate = False
+            if project.has_kv and project.kv_status != 'approved':
+                ckv_gate = False
+            if ckv_gate:
+                project.project_status = 'approved'
+                project.approved_at = now
+                project.approved_by_id = current_user.id
 
     else:
         # ── Standard (non-POSM) approval path ──────────────────────────────
@@ -2922,6 +3020,55 @@ def approve_submission(project_id):
     log_activity(
         'project_approved',
         f'"{project.name}" approved by {current_user.name}',
+        user=current_user, entity_type='project',
+        entity_name=project.name, entity_id=project.id
+    )
+
+    return jsonify({'success': True})
+
+
+@projects.route('/projects/<int:project_id>/concept-kv/approve', methods=['POST'])
+@login_required
+@role_required('admin', 'cs', 'management')
+def approve_concept_kv(project_id):
+    """Approve the Concept & KV channel independently during a POSM-parallel project.
+
+    Sets concept_status and kv_status to 'approved', then checks whether all
+    POSM channels are also approved — if so, cascades to project-level approval."""
+    from datetime import datetime as dt
+    from app.models import ProjectPosmChannel
+    from app.utils import log_activity
+
+    project = Project.query.get_or_404(project_id)
+
+    if not project.posm_channels:
+        return jsonify({'success': False, 'error': 'Concept & KV is only approved independently on projects with POSM channels'}), 400
+
+    if (not project.has_concept and not project.has_kv):
+        return jsonify({'success': False, 'error': 'This project has no Concept or KV'}), 400
+
+    if project.concept_status == 'approved' and project.kv_status == 'approved':
+        return jsonify({'success': False, 'error': 'Concept & KV is already approved'}), 400
+
+    now = dt.utcnow()
+
+    if project.has_concept:
+        project.concept_status = 'approved'
+    if project.has_kv:
+        project.kv_status = 'approved'
+
+    # Cascade: if all POSM channels are also approved, approve the whole project
+    all_channels = ProjectPosmChannel.query.filter_by(project_id=project_id).all()
+    if all_channels and all(c.status == 'approved' for c in all_channels):
+        project.project_status = 'approved'
+        project.approved_at = now
+        project.approved_by_id = current_user.id
+
+    db.session.commit()
+
+    log_activity(
+        'concept_kv_approved',
+        f'Concept & KV approved for "{project.name}" by {current_user.name}',
         user=current_user, entity_type='project',
         entity_name=project.name, entity_id=project.id
     )
