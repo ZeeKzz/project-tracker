@@ -1605,7 +1605,7 @@
                         'Deliverable'}.get(flag.flag_type, flag.flag_type) }}
                     </span>
                     {% if flag.deliverable %}<span class="flag-subject">{{ flag.deliverable.name }}</span>{% endif %}
-                    <span class="flag-message-time">{{ msg.created_at | dubai_time }} GST</span>
+                    <span class="flag-message-time">{{ flag.created_at | dubai_time }} GST</span>
                     {% if flag.is_resolved %}
                     <span class="flag-resolved-badge">✓ Resolved by {{ flag.resolved_by.name }} · {{
                         flag.resolved_at.strftime('%d %b %Y') }}</span>
@@ -1618,7 +1618,7 @@
                     <div class="flag-message">
                         <div class="flag-message-header">
                             <span class="flag-message-author">{{ msg.author.name }}</span>
-                            <span class="flag-message-time">{{ msg.created_at.strftime('%d %b %Y, %H:%M') }} UTC</span>
+                            <span class="flag-message-time">{{ msg.created_at | dubai_time }} GST</span>
                         </div>
                         <p class="flag-message-text">{{ msg.message }}</p>
                     </div>
