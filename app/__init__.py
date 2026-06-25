@@ -106,7 +106,7 @@ def create_app():
         dubai_tz = timezone(timedelta(hours=4))
         return dt.replace(tzinfo=timezone.utc).astimezone(dubai_tz).strftime('%d %b %Y, %H:%M')
     
-    app.jinja_env_filters['dubai_time'] = dubai_time
+    app.jinja_env.filters['dubai_time'] = dubai_time
         
 
     return app
