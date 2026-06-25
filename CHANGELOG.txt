@@ -1,0 +1,175 @@
+================================================================================
+VITAMIN HELIX — CHANGELOG
+================================================================================
+
+================================================================================
+v1.1 — 25 JUNE 2026
+================================================================================
+New Features:
+
+- Added all known C&CM deliverables
+- Added date filtering and search function to the approved projects section
+- Email notifications are active. You can choose which notifications you want in your account section
+- Added Generate FOC Job Number button. This automatically generates a FOC job number, starting from 001. The count only increases upon     brief submission. This also checks for any FOC numbers in drafts and autogenerates a new one if there is a conflict.
+
+
+Bug Fixes:
+
+- Fixed admin panel filtering persistence
+- Fixed standard brief not having start project button
+- Fixed flagging an issue causing the project to crash
+- Fixed time of all data to be in local Dubai time
+- Fixed management role access to flagging system
+- Fixed notifications not firing to designers when a new standard brief is added
+- Removed notification for project owner when adding their own project.
+- Fixed final deadline not showing on the project details view
+
+
+================================================================================
+v1.0 — 22 JUNE 2026
+================================================================================
+
+SUBMISSION SYSTEM
+-------------------------------------
+- Full 8-state designer → CS → admin workflow for both C&CM and Standard briefs
+  State order: In Queue → In Progress → Submitted → Awaiting Review →
+  Revision Requested → Re-submitted → CS Approved → Approved
+- Designers can submit deliverables individually or in bulk via a picker
+- CS can approve or request revision per submission, with a message
+- Revision counter tracks how many rounds a submission has gone through
+- All state transitions logged to Activity Log and trigger notifications
+- Standard brief: submission is project-level (one approval covers all deliverables)
+- POSM: submission is per-channel per-customer; project cascades to Approved
+  when all channels are approved
+
+POSM CHANNEL SYSTEM
+-------------------------------------
+- UAE channel tracks approval per customer
+- Gulf channel (KSA, Kuwait, Bahrain, Oman, Qatar) tracks approval per country
+- Each channel has its own submission → revision → CS approval flow
+- Project cannot reach Approved status until every active channel is approved
+- POSM revision count tracked separately from C&CM revision count
+- "Begin POSM" button appears after concept/KV phase is completed
+
+PROJECT APPROVAL SYSTEM
+-------------------------------------
+- Admin can mark a project as Approved (final lock) from the project detail page
+- Approval requires confirmation modal — cannot be undone
+- Approved projects are locked: CS cannot change deliverable statuses or remove
+  reference files; all mutating routes return 403
+- Approved projects move to a dedicated "Approved Projects" tab on all three
+  dashboards (CS, Team Lead, Management) and are removed from active lists
+- Approved date and approving admin are stamped on the project record
+
+CONCEPT & KEY VISUAL — MERGED
+-------------------------------------
+- Concept and KV are now always submitted as a single unit
+- Create form: one combined "Concept & KV" toggle replaces two separate toggles;
+  single requirements field, single deadline, single options count
+- Project detail page: one merged "Concept & KV" block with both designer
+  assignment fields (Concept Designer and KV Designer remain separate)
+- Revision picker shows a single "Concept & KV" row; selecting it revises both
+- Progress bar logic updated: region selection no longer required for 100%
+
+STANDARD BRIEF — EDIT FIX
+-------------------------------------
+- Editing a standard brief no longer wipes deliverable progress
+- Deliverables are now upserted by name: existing status/revision data is
+  preserved; only deadline and team tags are updated
+- Previously saved deliverables now correctly appear when reopening the edit form
+  (fixed a silent JSON.parse failure caused by quote escaping in HTML attributes)
+
+NOTIFICATIONS — BULK OPERATIONS
+-------------------------------------
+- New "Archive All" button in the inbox: archives every notification at once
+  and immediately moves them to the Archived tab without a page refresh
+- New "Delete All" button in the Archived tab: permanently removes all archived
+  notifications in one click
+- Archived tab updates in real time after Archive All — no refresh needed
+- If Archived tab was previously empty, its toolbar is injected automatically
+
+BUG FIXES
+-------------------------------------
+- Approval confirmation modal: title was rendering in all-caps due to global
+  CSS rule — fixed with explicit text-transform override
+- Approval modal background was transparent (--surface CSS variable undefined) —
+  fixed to use --white
+- Approval confirm button was unresponsive — callback reference was being nullified
+  before it could be called; fixed by saving reference before closing modal
+- Deliverable status dropdowns are now read-only badges for CS on approved projects
+- Reference file Remove button is hidden for CS on approved projects
+
+
+================================================================================
+2026-06-19 — INFRASTRUCTURE & DESIGNER QOL
+================================================================================
+
+INFRASTRUCTURE
+-------------------------------------
+- Production server now live: Ubuntu Server 24.04 on Mini-PC in server room
+  Accessible at http://10.101.20.159:5000 (local) and https://app.vitamin-e.work
+- Cloudflare Tunnel configured: app.vitamin-e.work → localhost:5000
+- Cloudflare Zero Trust SSH: ssh ssh.vitamin-e.work (browser auth via Cloudflare)
+- Systemd helix.service: auto-starts on boot, restarts cleanly
+- PostgreSQL data migrated from dev via pg_dump / pg_restore
+- Synology DS925+ NAS installed (1x WD Red Pro 18TB, single-drive Basic pool)
+
+DESIGNER EXPERIENCE
+-------------------------------------
+- Design Direction field removed from create form and project detail page
+- Briefing date now auto-fills to today on create form
+- Draft delete: added 850ms timeout before redirect to ensure DB write completes
+- CS blocked from assigning concept/KV designers (template guard + backend 403)
+
+BUG FIXES
+-------------------------------------
+- Notification archive/restore now updates the DOM in real time (no page refresh)
+  using buildArchivedItem / buildInboxItem helpers
+- buildArchivedItem typo fixed (capital I was breaking archive direction)
+- SQLAlchemy SAWarning resolved: overlaps= on Deliverable.project relationship
+
+
+================================================================================
+2026-06-17 — STANDARD BRIEF DELIVERABLES & ADMIN PANEL
+================================================================================
+
+STANDARD BRIEF — DELIVERABLES
+-------------------------------------
+- Each deliverable now has its own Design Deadline
+- CS can set deadlines per deliverable when building a brief,
+  with a quick button to apply the same date to all at once
+- Design Deadline now shows on the project view page
+- CS can tag each deliverable with the team(s) responsible for it (2D, 3D, Technical)
+- Team tags display on each deliverable row once added
+
+DESIGNER ASSIGNMENT
+-------------------------------------
+- Assignment dropdowns now only show designers from the correct team
+  (e.g. a 3D deliverable only shows 3D designers)
+- Designers can now assign themselves to Standard Brief deliverables directly
+
+UI — TEAM TAG BUTTONS
+-------------------------------------
+- Team selectors throughout the app converted from checkboxes to clickable pill buttons
+- Buttons now have a visible background when unselected so they look clickable
+
+ADMIN PANEL
+-------------------------------------
+- New: Design Types section — admin can add, edit, and delete design types
+  and assign which team(s) they belong to
+- New: Design Directions section — admin can add, edit, and delete directions
+- Project list now correctly shows all active projects (was showing none)
+
+REVISION LABELS
+-------------------------------------
+- Revision badges now read "Revision 2" instead of "R2" across all project types
+
+BUG FIXES
+-------------------------------------
+- Flagging a project now correctly shows the name of the person who raised it,
+  even when an admin is acting on behalf of another user
+
+
+================================================================================
+END OF LOG
+================================================================================
