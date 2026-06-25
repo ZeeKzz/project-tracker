@@ -1416,12 +1416,25 @@ function buildApprovedView(containerId, projects) {
             block.className = 'deliverables-customer-block';
             block.dataset.customerId = customerId;
 
+            // Build the 00:00–23:00 time options once and reuse per block
+            var timeOptions = '<option value="">— Any —</option>';
+            for (var h = 0; h < 24; h++) {
+                var hh = (h < 10 ? '0' : '') + h + ':00';
+                timeOptions += '<option value="' + hh + '">' + hh + '</option>';
+            }
+
             block.innerHTML =
                 '<h4 class="deliverables-customer-heading">' + customerName + '</h4>' +
                 '<div class="deliverables-customer-dates">' +
                 '<div class="customer-date-field">' +
                 '<label class="customer-date-label">Design Deadline</label>' +
                 '<input type="date" class="form-input" id="design_deadline_' + customerId + '">' +
+                '</div>' +
+                '<div class="customer-date-field">' +
+                '<label class="customer-date-label">Time</label>' +
+                '<select class="form-select" id="design_deadline_time_' + customerId + '" style="max-width:110px;">' +
+                timeOptions +
+                '</select>' +
                 '</div>' +
                 '<div class="customer-date-field">' +
                 '<label class="customer-date-label">Installation Date</label>' +
@@ -1471,13 +1484,17 @@ function buildApprovedView(containerId, projects) {
 
             var firstId = blocks[0].dataset.customerId;
             var designVal = document.getElementById('design_deadline_' + firstId).value;
+            var timeEl = document.getElementById('design_deadline_time_' + firstId);
+            var timeVal = timeEl ? timeEl.value : '';
             var installVal = document.getElementById('installation_date_' + firstId).value;
 
             for (var i = 1; i < blocks.length; i++) {
                 var cid = blocks[i].dataset.customerId;
                 var ddEl = document.getElementById('design_deadline_' + cid);
+                var ddtEl = document.getElementById('design_deadline_time_' + cid);
                 var instEl = document.getElementById('installation_date_' + cid);
                 if (ddEl) ddEl.value = designVal;
+                if (ddtEl) ddtEl.value = timeVal;
                 if (instEl) instEl.value = installVal;
             }
         }
@@ -1717,9 +1734,11 @@ function buildApprovedView(containerId, projects) {
             document.querySelectorAll('.deliverables-customer-block').forEach(function (block) {
                 var cid = block.dataset.customerId;
                 var ddEl = document.getElementById('design_deadline_' + cid);
+                var ddtEl = document.getElementById('design_deadline_time_' + cid);
                 var instEl = document.getElementById('installation_date_' + cid);
                 customerDates[cid] = {
                     design_deadline: ddEl ? ddEl.value || null : null,
+                    design_deadline_time: ddtEl ? ddtEl.value || null : null,
                     installation_date: instEl ? instEl.value || null : null
                 };
             });
@@ -1736,6 +1755,7 @@ function buildApprovedView(containerId, projects) {
                 required_output: document.getElementById('required_output') ? document.getElementById('required_output').value || null : null,
                 concept_requirements: document.getElementById('concept_requirements') ? document.getElementById('concept_requirements').value.trim() || null : null,
                 concept_deadline: document.getElementById('concept_deadline') ? document.getElementById('concept_deadline').value || null : null,
+                concept_deadline_time: document.getElementById('concept_deadline_time') ? document.getElementById('concept_deadline_time').value || null : null,
                 has_concept: document.getElementById('has_concept') ? document.getElementById('has_concept').value === 'true' : false,
                 concept_options_required: document.getElementById('concept_options_required') ? parseInt(document.getElementById('concept_options_required').value) || null : null,
                 has_kv: hasKv,  // always mirrors has_concept — merged in UI
@@ -2036,8 +2056,10 @@ function buildApprovedView(containerId, projects) {
                     addDeliverableBlock(ec.customer_id, pill.dataset.customerName, ec.region);
                 }
                 var ddEl = document.getElementById('design_deadline_' + ec.customer_id);
+                var ddtEl = document.getElementById('design_deadline_time_' + ec.customer_id);
                 var instEl = document.getElementById('installation_date_' + ec.customer_id);
                 if (ddEl && ec.design_deadline) ddEl.value = ec.design_deadline;
+                if (ddtEl && ec.design_deadline_time) ddtEl.value = ec.design_deadline_time;
                 if (instEl && ec.installation_date) instEl.value = ec.installation_date;
             });
 
@@ -2271,7 +2293,12 @@ function buildApprovedView(containerId, projects) {
                             return;
                         }
                         clearTimeout(autosaveTimeout);
-                        window.location.href = data.redirect_url + '?toast=Project+submitted+successfully';
+                        // If the FOC number was already taken by another project, the server
+                        // silently assigned the next available one and signals us here.
+                        var toastMsg = data.job_number_changed
+                            ? 'Project submitted. Job number updated to ' + data.new_job_number + ' — ' + data.old_job_number + ' was already taken.'
+                            : 'Project submitted successfully';
+                        window.location.href = data.redirect_url + '?toast=' + encodeURIComponent(toastMsg);
                     })
                     .catch(function () {
                         showToast('Something went wrong. Please try again.', 'error');

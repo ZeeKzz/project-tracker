@@ -119,8 +119,7 @@
                                             {% for pc in project.project_customers %}
                                             <tr>
                                                 <td>{{ pc.customer.name }}</td>
-                                                <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if
-                                                    pc.design_deadline else '—' }}</td>
+                                                <td class="mono">{% if pc.design_deadline %}{{ pc.design_deadline.strftime('%d %b %Y') }}{% if pc.design_deadline_time %} · {{ pc.design_deadline_time.strftime('%H:%M') }}{% endif %}{% else %}—{% endif %}</td>
                                                 <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if
                                                     pc.installation_date else '—' }}</td>
                                                 <td><span class="status-badge">{{ pc.status.replace('_', ' ').title() if
@@ -263,8 +262,7 @@
                                             {% for pc in project.project_customers %}
                                             <tr>
                                                 <td>{{ pc.customer.name }}</td>
-                                                <td class="mono">{{ pc.design_deadline.strftime('%d %b %Y') if
-                                                    pc.design_deadline else '—' }}</td>
+                                                <td class="mono">{% if pc.design_deadline %}{{ pc.design_deadline.strftime('%d %b %Y') }}{% if pc.design_deadline_time %} · {{ pc.design_deadline_time.strftime('%H:%M') }}{% endif %}{% else %}—{% endif %}</td>
                                                 <td class="mono">{{ pc.installation_date.strftime('%d %b %Y') if
                                                     pc.installation_date else '—' }}</td>
                                                 <td>—</td>

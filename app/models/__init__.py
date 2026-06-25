@@ -117,6 +117,7 @@ class Project(db.Model):
     installation_date = db.Column(db.Date, nullable=True)
     last_autosaved_at = db.Column(db.DateTime, nullable=True)
     concept_deadline = db.Column(db.Date, nullable=True)
+    concept_deadline_time = db.Column(db.Time, nullable=True)
     has_concept = db.Column(db.Boolean, default=False, nullable=False)
     concept_options_required = db.Column(db.Integer, nullable=True)
     has_kv = db.Column(db.Boolean, default=False, nullable=False)
@@ -288,6 +289,7 @@ class ProjectCustomer(db.Model):
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     design_deadline = db.Column(db.Date, nullable=True)
+    design_deadline_time = db.Column(db.Time, nullable=True)
     installation_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(50), default='briefed', nullable=False)
     posm_revision_count = db.Column(db.Integer, default=0, nullable=False)
@@ -316,6 +318,7 @@ class Deliverable(db.Model):
     reference_image = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(50), default='in_progress', nullable=False)
     design_deadline = db.Column(db.Date, nullable=True)
+    design_deadline_time = db.Column(db.Time, nullable=True)
     installation_deadline = db.Column(db.Date, nullable=True)
     teams = db.Column(db.String(100), nullable=True)  # comma-separated e.g. "3D,Technical"
     revision_comment = db.Column(db.Text, nullable=True)
