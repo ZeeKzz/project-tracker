@@ -6,17 +6,17 @@
 
 <div class="page-container">
 
-    <div class="page-header">
+    <div class="dashboard-header" style="margin-bottom: 1.5rem;">
         <h1 class="dashboard-greeting">{{ project.name }}</h1>
         <div style="display: flex; gap: 0.75rem; align-items: center;">
             {% if effective_user.role == 'admin' or project.cs_lead_id == effective_user.id or is_secondary_cs %}
             {% if project.project_status != 'approved' %}
-            <form method="POST" action="{{ url_for('projects.toggle_hold', project_id=project.id) }}">
+            <form method="POST" action="{{ url_for('projects.toggle_hold', project_id=project.id) }}" id="hold-project-form">
                 {% if project.project_status == 'on_hold' %}
+                {# Resume has no confirm — it's a safe, reversible action #}
                 <button type="submit" class="btn-resume">▶ Resume Project</button>
                 {% else %}
-                <button type="submit" class="btn-hold" onclick="return confirm('Put {{ project.name }} on hold?')">⏸ Put
-                    on Hold</button>
+                <button type="button" class="btn-hold" id="hold-project-btn">⏸ Put on Hold</button>
                 {% endif %}
             </form>
             {% endif %}
@@ -26,9 +26,8 @@
             <a href="{{ url_for('projects.edit_project', project_id=project.id) }}" class="btn-secondary">Edit
                 Project</a>
             {% endif %}
-            <form method="POST" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
-                <button type="submit" class="btn-danger"
-                    onclick="return confirm('Delete {{ project.name }}? This cannot be undone.')">
+            <form method="POST" action="{{ url_for('projects.delete_project', project_id=project.id) }}" id="delete-project-form">
+                <button type="button" class="btn-danger" id="delete-project-btn">
                     Delete Project
                 </button>
             </form>
@@ -47,7 +46,7 @@
     </div>
     {% endif %}
 
-    <div class="detail-grid">
+    <div class="detail-grid" id="section-assignments">
 
         <div class="detail-card">
             <h2 class="detail-card-title">Project Information</h2>
@@ -71,9 +70,8 @@
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
                             <span>{{ a.user.name }}</span>
                             {% if effective_user.role == 'admin' or project.cs_lead_id == effective_user.id %}
-                            <form method="POST"
-                                action="{{ url_for('projects.remove_secondary_cs', project_id=project.id, user_id=a.user_id) }}"
-                                style="display:inline;">
+                            <form method="POST" action="{{ url_for('projects.remove_secondary_cs', project_id=project.id, user_id=a.user_id) }}"
+                                class="secondary-cs-form" style="display:inline;">
                                 <button type="submit" class="btn-danger-sm"
                                     onclick="return confirm('Remove {{ a.user.name }} as secondary CS?')">×</button>
                             </form>
@@ -150,7 +148,7 @@
                 {% set requested_teams = (project.design_teams_requested or '').split(',') | map('trim') | list %}
                 {% if project.project_status == 'briefed' and (
                 effective_user.role == 'admin' or
-                (effective_user.role == 'designer' and effective_user.team in requested_teams)
+                (effective_user.role in ['designer', 'team_lead'] and effective_user.team in requested_teams)
                 ) %}
                 <div class="detail-label">
                     <span class="detail-label"></span>
@@ -270,7 +268,7 @@
     </div>
 
     {% if open_flags %}
-    <div class="detail-card detail-card--full flag-panel">
+    <div class="detail-card detail-card--full flag-panel" id="section-flags">
         <h2 class="detail-card-title">⚑ Open Flags</h2>
         {% for flag in open_flags %}
         <div class="flag-card">
@@ -316,7 +314,7 @@
     {% endif %}
 
     {% if project.brief_type == 'ccm' %}
-    <div class="detail-card detail-card--full">
+    <div class="detail-card detail-card--full" id="section-ccm-brief">
         <h2 class="detail-card-title">C&amp;CM Brief</h2>
 
         {# ── Secondary CS: region notification preferences ── #}
@@ -625,7 +623,7 @@
     {% endif %}
 
     {% if project.brief_type == 'standard' %}
-    <div class="detail-card detail-card--full">
+    <div class="detail-card detail-card--full" id="section-standard-brief">
         <h2 class="detail-card-title">Standard Brief</h2>
 
         <div class="detail-fields">
@@ -846,7 +844,7 @@
     Concept & KV and each Gulf region / UAE customer each have their own independent
     submission pipeline displayed as a pill tab.
     ═══════════════════════════════════════════════════════════════════════════════ #}
-    <div class="detail-card detail-card--full submission-card" style="margin-top: 1.5rem;">
+    <div class="detail-card detail-card--full submission-card" id="section-submission" style="margin-top: 1.5rem;">
         <h2 class="detail-card-title">Submissions</h2>
 
         {# ── Channel pill bar — C&KV first, then POSM channels ── #}
@@ -1263,7 +1261,7 @@
          3. Internal Review    → CS sees Submit to Client + Flag Issue; others see waiting msg
          4. Internal Revision  → designer sees flag message + Reupload; CS sees waiting msg
          5. Submitted to Client → read-only; history shown below                          -->
-    <div class="detail-card detail-card--full submission-card" style="margin-top: 1.5rem;">
+    <div class="detail-card detail-card--full submission-card" id="section-posm-submission" style="margin-top: 1.5rem;">
         <h2 class="detail-card-title">Submission
             {% if project.project_status == 'internal_review' %}
             <span class="submission-badge submission-badge--review">In Review</span>
@@ -1705,7 +1703,7 @@
     {% endif %}{# /posm_channels_data #}
 
     {% if all_flags %}
-    <div class="detail-card detail-card--full" style="margin-top: 1.5rem;">
+    <div class="detail-card detail-card--full" id="section-flag-history" style="margin-top: 1.5rem;">
         <div class="flag-history-header" onclick="toggleFlagHistory()" style="cursor: pointer;">
             <h2 class="detail-card-title" style="margin: 0;">Flag History</h2>
             <span class="flag-history-toggle" id="flag-history-toggle">Show ▾</span>
@@ -2096,20 +2094,43 @@
             .catch(function () { showToast('Something went wrong', 'error'); });
     }
 
+    // Wire up the delete project button — intercept with styled confirm modal,
+    // then submit the form programmatically only if the user confirms.
+    var deleteProjectBtn = document.getElementById('delete-project-btn');
+    if (deleteProjectBtn) {
+        deleteProjectBtn.addEventListener('click', function () {
+            showConfirm('Delete {{ project.name }}? This cannot be undone.', function () {
+                document.getElementById('delete-project-form').submit();
+            });
+        });
+    }
+
+    // Wire up the hold button — same intercept pattern.
+    // Resume has no confirm (it's reversible), so only the hold direction needs this.
+    var holdProjectBtn = document.getElementById('hold-project-btn');
+    if (holdProjectBtn) {
+        holdProjectBtn.addEventListener('click', function () {
+            showConfirm('Put {{ project.name }} on hold?', function () {
+                document.getElementById('hold-project-form').submit();
+            });
+        });
+    }
+
     function deleteStandardDeliverable(projectId, deliverableId) {
-        if (!confirm('Delete this deliverable?')) return;
-        fetch('/projects/' + projectId + '/standard-deliverables/' + deliverableId + '/delete', { method: 'POST' })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    var row = document.getElementById('std-del-row-' + deliverableId);
-                    if (row) row.remove();
-                    showToast('Deliverable deleted', 'success');
-                } else {
-                    showToast(data.error || 'Could not delete', 'error');
-                }
-            })
-            .catch(function () { showToast('Something went wrong', 'error'); });
+        showConfirm('Delete this deliverable?', function () {
+            fetch('/projects/' + projectId + '/standard-deliverables/' + deliverableId + '/delete', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        var row = document.getElementById('std-del-row-' + deliverableId);
+                        if (row) row.remove();
+                        showToast('Deliverable deleted', 'success');
+                    } else {
+                        showToast(data.error || 'Could not delete', 'error');
+                    }
+                })
+                .catch(function () { showToast('Something went wrong', 'error'); });
+        });
     }
 
     // ── Approval confirmation modal ───────────────────────────────────────────

@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+import json
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
@@ -117,7 +118,35 @@ def account():
         flash('Password updated successfully.', 'success')
         return redirect(url_for('auth.account'))
 
-    return render_template('auth/account.html')
+    # Parse current notification prefs to pass to the template (default empty dict = all on)
+    try:
+        current_prefs = json.loads(current_user.notification_prefs or '{}')
+    except (ValueError, TypeError):
+        current_prefs = {}
+
+    return render_template('auth/account.html', notification_prefs=current_prefs)
+
+
+@auth.route('/account/notification-prefs', methods=['POST'])
+@login_required
+def save_notification_prefs():
+    """Save the user's email notification preferences as a JSON blob."""
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({'success': False, 'error': 'Invalid JSON'}), 400
+
+    # Whitelist of valid pref keys — ignore anything unknown
+    valid_keys = {
+        'new_project', 'lead_assigned', 'concept_kv_assigned', 'revision_flag',
+        'flag_reply', 'flag_resolved', 'brief_flag', 'revision_submitted',
+        'project_started', 'lead_changed', 'deliverable_status',
+        'project_submitted_client', 'project_approved'
+    }
+    # Build a clean dict of only known keys with boolean values
+    prefs = {k: bool(v) for k, v in data.items() if k in valid_keys}
+    current_user.notification_prefs = json.dumps(prefs)
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @auth.route('/admin/users')

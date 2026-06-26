@@ -6,11 +6,16 @@
 <div class="page-container">
     <h1>My Account</h1>
 
-    <!-- Top row: Profile + Change Password side by side -->
-    <div style="display: flex; gap: 1.5rem; align-items: flex-start; margin-bottom: 1.5rem;">
+    {# Embed current email prefs as a JS constant — read by the toggle init script below #}
+    <script>
+        const NOTIF_PREFS = {{ notification_prefs | tojson }};
+    </script>
 
-        <!-- Profile Info (read-only) -->
-        <div class="form-card" style="flex: 1; max-width: none;">
+    <!-- 2×2 equal grid — all four cards the same width -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+        <!-- ① Profile -->
+        <div class="form-card" style="max-width: none;">
             <h2>Profile</h2>
             <div class="detail-fields" style="margin-top: 1rem;">
                 <div class="detail-field">
@@ -28,8 +33,8 @@
             </div>
         </div>
 
-        <!-- Change Password -->
-        <div class="form-card" style="flex: 1; max-width: none;">
+        <!-- ② Change Password -->
+        <div class="form-card" style="max-width: none;">
             <h2>Change Password</h2>
             <form method="POST" action="{{ url_for('auth.account') }}" style="margin-top: 1rem;">
                 <div class="form-group">
@@ -48,50 +53,157 @@
             </form>
         </div>
 
-    </div>
+        <!-- ③ Email Notifications -->
+        <div class="form-card" style="max-width: none;">
+            <h2>Email Notifications</h2>
+            <p style="margin: 0.5rem 0 1.25rem; color: var(--grey-dark); font-size: 0.9rem;">
+                Choose which events send you an email. In-app notifications are always on.
+            </p>
 
-    <!-- Notification Preferences (full width below) -->
-    <div class="form-card" style="max-width: none;">
-        <h2>Notification Preferences</h2>
-        <p style="margin: 0.5rem 0 1.25rem; color: var(--grey-dark); font-size: 0.9rem;">
-            These settings are saved in your browser. Enabling desktop notifications will trigger a browser permission prompt.
-        </p>
+            {# 2-column grid — each item is a tight flex row: label left, toggle right #}
+            <div id="email-pref-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.5rem;">
 
-        <div class="detail-fields">
-            <div class="detail-field" style="align-items: center;">
-                <span class="detail-label">Desktop Notifications</span>
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggle-browser-notif">
+                {# Reusable row style: label fills remaining space, toggle stays right #}
+                {% macro pref_row(label, key) %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0; border-bottom: 1px solid var(--sandstone);">
+                    <span style="font-size: 0.85rem; color: var(--black);">{{ label }}</span>
+                    <label class="toggle-switch" style="flex-shrink: 0; margin-left: 0.75rem;">
+                        <input type="checkbox" class="notif-pref-toggle" data-key="{{ key }}">
                         <span class="toggle-slider"></span>
                     </label>
-                    <img id="browser-notif-icon" src="" alt="" style="width: 32px; height: 32px; object-fit: contain;">
-                    <span id="browser-notif-status" style="font-size: 0.85rem; color: var(--grey-dark);">Loading…</span>
-                    <button type="button" class="btn-secondary" id="test-browser-notif-btn" style="font-size:0.8rem;padding:0.3rem 0.75rem;">
-                        Test Notification
-                    </button>
                 </div>
+                {% endmacro %}
+
+                {# Designer / Team Lead #}
+                {% if current_user.role in ['designer', 'team_lead'] %}
+                    {{ pref_row('New project for my team', 'new_project') }}
+                    {{ pref_row('Assigned as lead designer', 'lead_assigned') }}
+                    {{ pref_row('Assigned to Concept / KV', 'concept_kv_assigned') }}
+                    {{ pref_row('Deliverable flagged for revision', 'revision_flag') }}
+                {% endif %}
+
+                {# CS / Management / Admin #}
+                {% if current_user.role in ['cs', 'admin', 'management'] %}
+                    {{ pref_row('Designer raised a flag', 'brief_flag') }}
+                    {{ pref_row('Designer resubmitted for review', 'revision_submitted') }}
+                    {{ pref_row('Project was started', 'project_started') }}
+                    {{ pref_row('Deliverable status changed', 'deliverable_status') }}
+                {% endif %}
+
+                {# All roles #}
+                {{ pref_row('Someone replied to my flag', 'flag_reply') }}
+                {{ pref_row('My flag was resolved', 'flag_resolved') }}
+
+                {% if current_user.role in ['cs', 'admin', 'designer', 'team_lead'] %}
+                    {{ pref_row('Lead designer changed', 'lead_changed') }}
+                {% endif %}
+
+                {% if current_user.role in ['admin', 'management', 'designer', 'team_lead'] %}
+                    {{ pref_row('Project submitted to client', 'project_submitted_client') }}
+                {% endif %}
+
+                {{ pref_row('Project approved', 'project_approved') }}
+
             </div>
-            <div class="detail-field" style="align-items: center;">
-                <span class="detail-label">Notification Sound</span>
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggle-audio-notif">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span id="audio-notif-status" style="font-size: 0.85rem; color: var(--grey-dark);">Loading…</span>
-                    <button type="button" class="btn-secondary" id="test-sound-btn" style="font-size:0.8rem;padding:0.3rem 0.75rem;">
-                        Test Sound
-                    </button>
+
+            <p id="pref-save-status" style="margin-top: 1rem; font-size: 0.85rem; color: var(--pine); display: none;">
+                Preferences saved.
+            </p>
+        </div>
+
+        <!-- ④ Notification Preferences (browser / sound) -->
+        <div class="form-card" style="max-width: none;">
+            <h2>Notification Preferences</h2>
+            <p style="margin: 0.5rem 0 1.25rem; color: var(--grey-dark); font-size: 0.9rem;">
+                These settings are saved in your browser. Enabling desktop notifications will trigger a browser permission prompt.
+            </p>
+
+            <div class="detail-fields">
+                <div class="detail-field" style="align-items: center;">
+                    <span class="detail-label">Desktop Notifications</span>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-browser-notif">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <img id="browser-notif-icon" src="" alt="" style="width: 32px; height: 32px; object-fit: contain;">
+                        <span id="browser-notif-status" style="font-size: 0.85rem; color: var(--grey-dark);">Loading…</span>
+                        <button type="button" class="btn-secondary" id="test-browser-notif-btn" style="font-size:0.8rem;padding:0.3rem 0.75rem;">
+                            Test Notification
+                        </button>
+                    </div>
+                </div>
+                <div class="detail-field" style="align-items: center;">
+                    <span class="detail-label">Notification Sound</span>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-audio-notif">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span id="audio-notif-status" style="font-size: 0.85rem; color: var(--grey-dark);">Loading…</span>
+                        <button type="button" class="btn-secondary" id="test-sound-btn" style="font-size:0.8rem;padding:0.3rem 0.75rem;">
+                            Test Sound
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+
+    </div> <!-- end 2×2 grid -->
 
 </div>
 
 <script>
-// ── Account page: notification preference toggles ──────────────
+// ── Email notification preferences ─────────────────────────────
+// On load: set each toggle to the saved server-side value (default on if absent).
+// On change: auto-save all prefs to /account/notification-prefs via AJAX.
+(function () {
+    var toggles = document.querySelectorAll('.notif-pref-toggle');
+    var saveStatus = document.getElementById('pref-save-status');
+    var saveTimer = null;
+
+    // Initialise each checkbox from the NOTIF_PREFS constant embedded above.
+    // Absent key = true (default on) so new notification types arrive enabled.
+    toggles.forEach(function (toggle) {
+        var key = toggle.dataset.key;
+        toggle.checked = (NOTIF_PREFS[key] !== false);
+    });
+
+    function savePrefs() {
+        // Collect every visible toggle into a plain object
+        var prefs = {};
+        toggles.forEach(function (toggle) {
+            prefs[toggle.dataset.key] = toggle.checked;
+        });
+
+        fetch('/account/notification-prefs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(prefs)
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    // Show "Preferences saved." briefly then fade it out
+                    saveStatus.style.display = 'block';
+                    clearTimeout(saveTimer);
+                    saveTimer = setTimeout(function () {
+                        saveStatus.style.display = 'none';
+                    }, 2500);
+                }
+            })
+            .catch(function () {
+                showToast('Could not save preferences.', 'error');
+            });
+    }
+
+    // Auto-save on any toggle change
+    toggles.forEach(function (toggle) {
+        toggle.addEventListener('change', savePrefs);
+    });
+}());
+
+// ── Account page: browser / sound notification preference toggles ──────────────
 (function () {
     var browserToggle = document.getElementById('toggle-browser-notif');
     var audioToggle   = document.getElementById('toggle-audio-notif');
@@ -167,11 +279,11 @@
 
     testBrowserNotif.addEventListener('click', function () {
         if (!('Notification' in window)) {
-            alert('Desktop notifications are not supported in this browser.');
+            showToast('Desktop notifications are not supported in this browser.', 'warning');
             return;
         }
         if (Notification.permission !== 'granted') {
-            alert('Desktop notifications are not enabled. Toggle them on first.');
+            showToast('Desktop notifications are not enabled. Toggle them on first.', 'warning');
             return;
         }
         // Fire directly — no fetch, no backend, no email, no in-app record

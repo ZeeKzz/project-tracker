@@ -140,6 +140,8 @@ Track how long each project spends in each status stage. Surfaces bottlenecks an
 - **NAS integration** — auto project folder creation on submission, folder naming convention (Client - Project), uploads routed to NAS via SMB mount on Mini-PC. *Physical NAS setup (folders, permissions, file structure) handled separately on 23 June 2026; software integration follows in v1.2.*
 - **Live in-app updates via SSE** — replace 30-second notification polling with Server-Sent Events
 - **Client portal** — read-only external project view for clients to check progress
+- **Server-side user preferences** — store per-user UI preferences (sidebar pinned state, theme, etc.) in a `user_preferences` DB table (JSON column). Syncs across devices. Currently handled via localStorage; migration is a drop-in swap of `localStorage.setItem` for a `/preferences/save` AJAX call in `sidebar.js`.
+- **JS file split / refactor** — `main.js` has grown large; split into logical modules (e.g. `notifications.js`, `modals.js`, `forms.js`). `sidebar.js` already extracted as part of v1.2 sidebar work. Refactor to be done as a standalone task so it can be tested in isolation without risk of introducing bugs mid-feature.
 
 ---
 
