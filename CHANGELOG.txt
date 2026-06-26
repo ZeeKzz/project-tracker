@@ -1,6 +1,28 @@
 ================================================================================
 VITAMIN HELIX — CHANGELOG
 ================================================================================
+v1.2 UI Overhaul and QoL Updates — 26 JUNE 2026
+================================================================================
+New Features:
+
+- Redesigned navigation, Side bar added allowing easier navigation and access to external tools
+- Project Detail page now loads dynamically, rather than refreshing when making changes
+- Scrolling to view project details now applies to all projects, rather than per table
+- Project name remains sticky, for ease of use.
+- Removed grouping on All Projects page, it now defaults to sorting by design deadline date -> closest date first.
+- Filtering options added to all projects page
+- Email Notifications: Active and you can select which notification you want under "My Account"
+
+
+Bug Fixes:
+
+- Fixed deadline time not showing on project detail page
+- Fixed Admin Panel being hidden by the sidebar
+- Fixed start project not showing for some users
+- Fixed notifications for approved projects & submitted to client not firing
+
+
+
 
 ================================================================================
 v1.1 — 25 JUNE 2026

@@ -681,3 +681,36 @@ def dev_wipe_projects():
     # (see generate_job_number in projects.py), so it resets to FOC-001
     # automatically now that the projects table is empty.
     return jsonify({'success': True, 'message': 'All projects wiped. FOC counter reset.'})
+
+
+@admin_bp.route('/admin/api/broadcast-update', methods=['POST'])
+@login_required
+@admin_required
+def broadcast_update():
+    """
+    Fire a one-off update announcement email + in-app notification to every
+    active user. Called from the admin panel.
+
+    Expected JSON body:
+    {
+      "version":     "v1.2",
+      "subject":     "Vitamin-E Helix has been updated — v1.2",
+      "intro":       "Helix v1.2 is now live. ...",
+      "blog_url":    "https://app.vitamin-e.work/blog-post1-v1.2update"
+    }
+    """
+    from app.notifications import broadcast_update_email
+    data = request.get_json(silent=True) or {}
+
+    version  = data.get('version',  'v1.2')
+    subject  = data.get('subject',  f'[Vitamin-E] App Update — {version}')
+    intro    = data.get('intro',    'A new update is live on Vitamin-E Helix.')
+    blog_url = data.get('blog_url', 'https://app.vitamin-e.work/blog-post1-v1.2update')
+
+    sent = broadcast_update_email(
+        version=version,
+        subject_line=subject,
+        intro_line=intro,
+        blog_url=blog_url
+    )
+    return jsonify({'success': True, 'sent': sent})

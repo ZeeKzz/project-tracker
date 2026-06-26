@@ -20,13 +20,32 @@ class User(db.Model, UserMixin):
     is_conditional_reviewer = db.Column(db.Boolean, default=False)
     team = db.Column(db.String(20), nullable=True)
 
+    # JSON string storing per-type email notification opt-outs.
+    # Format: '{"new_project": false, "revision_flag": true}'
+    # Missing key = enabled (default on, so existing users get everything).
+    notification_prefs = db.Column(db.String(2000), nullable=True)
+
     def set_password(self, password):
-     from werkzeug.security import generate_password_hash
-     self.password_hash = generate_password_hash(password)
+        from werkzeug.security import generate_password_hash
+        self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-     from werkzeug.security import check_password_hash
-     return check_password_hash(self.password_hash, password)
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.password_hash, password)
+
+    def wants_notification(self, key):
+        """Return True if this user wants to receive email for the given pref key.
+        Defaults to True when no prefs are saved or the key is absent — so all
+        existing users continue to receive every notification after the migration.
+        """
+        import json
+        if not self.notification_prefs:
+            return True
+        try:
+            prefs = json.loads(self.notification_prefs)
+            return prefs.get(key, True)  # unknown key → enabled by default
+        except (ValueError, TypeError):
+            return True
 
     def __repr__(self):
         return f'<User {self.email}>'
@@ -628,3 +647,19 @@ class ProjectSubmissionDeliverable(db.Model):
 
     def __repr__(self):
         return f'<ProjectSubmissionDeliverable submission={self.submission_id} deliverable={self.deliverable_id}>'
+
+
+class SidebarClick(db.Model):
+    """Analytics table — records every sidebar link click.
+    Used by admin to see which tools and pages are most used.
+    Written to by POST /sidebar/track (fire-and-forget from sidebar.js)."""
+    __tablename__ = 'sidebar_clicks'
+
+    id         = db.Column(db.Integer, primary_key=True)
+    link_name  = db.Column(db.String(100), nullable=False)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    user_role  = db.Column(db.String(50), nullable=True)
+    clicked_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
+
+    def __repr__(self):
+        return f'<SidebarClick {self.link_name} by user {self.user_id}>'

@@ -23,6 +23,12 @@
     font-style: normal;
 }
 
+@font-face {
+    font-family: 'Museo';
+    src: url('../fonts/logo.woff2') format('woff2');
+    font-weight: 900;
+    font-style: normal;
+}
 /* =====================
    VARIABLES
 ===================== */
@@ -45,8 +51,11 @@
     --font-headline: 'Barlow Condensed', sans-serif;
     --font-mono: 'DM Mono', monospace;
     --font-body: 'Public Sans', sans-serif;
+    --font-logo: 'Museo', sans-serif;
 
-    --navbar-height: 64px;
+    --sidebar-min: 90px;
+    --sidebar-max: 340px;
+    --sidebar-transition: 0.25s ease;
     --radius: 6px;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
@@ -200,83 +209,265 @@ textarea {
 }
 
 /* =====================
-   NAVBAR
+   SIDEBAR
 ===================== */
 
-.navbar {
-    height: var(--navbar-height);
-    background-color: var(--white);
-    border-bottom: 2px solid var(--tangerine);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 2rem;
-    position: sticky;
+/* Fixed to the left edge, full height. Always present for authenticated users.
+   Width transitions between minimized and expanded states. */
+.sidebar {
+    position: fixed;
+    left: 0;
     top: 0;
-    z-index: 100;
-    box-shadow: var(--shadow);
-}
-
-.nav-brand a {
+    height: 100vh;
+    width: var(--sidebar-min);
+    background-color: var(--white);
+    border-right: 2px solid var(--tangerine);
+    z-index: 300;
+    overflow: hidden;
+    transition: width var(--sidebar-transition);
     display: flex;
-    align-items: center;
+    flex-direction: column;
 }
 
-.nav-brand img {
-    height: 18px;
-    width: auto;
+/* Expand when toggled (JS adds sidebar--expanded) OR when pinned */
+.sidebar.sidebar--expanded,
+.sidebar.sidebar--pinned {
+    width: var(--sidebar-max);
 }
 
-.nav-links {
-    display: flex;
-    align-items: center;
-    gap: 2rem;
-}
-
-.nav-links a {
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--grey-dark);
-    transition: color 0.2s ease;
-}
-
-.nav-links a:hover {
-    color: var(--tangerine);
-}
-
-.nav-actions {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-}
-
-.nav-actions a {
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--grey-dark);
-    transition: color 0.2s ease;
-}
-
-.nav-actions a:hover {
-    color: var(--tangerine);
-}
-
-.nav-bell {
+/* ── Header (logo + pin button) ── */
+.sidebar-header {
     position: relative;
-    font-size: 1.2rem;
-    color: var(--grey-dark);
-    padding: 0.25rem;
-    transition: color 0.2s ease;
+    padding: 0.75rem 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--grey-light);
+    min-height: 56px;
+    flex-shrink: 0;
 }
 
-.nav-bell:hover {
+/* Actions sit absolutely so they don't affect logo centering */
+.sidebar-header-actions {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+    gap: 0;
+}
+
+/* "V" — always visible in minimized state, hidden when expanded */
+.sidebar-logo-min {
+    font-family: var(--font-logo);
+    font-size: 2.2rem;
+    color: var(--tangerine);
+    line-height: 1;
+    flex-shrink: 0;
+    transition: opacity var(--sidebar-transition);
+}
+
+.sidebar.sidebar--expanded .sidebar-logo-min,
+.sidebar.sidebar--pinned .sidebar-logo-min {
+    display: none;
+}
+
+/* "Vitamin-E" — hidden when minimized, fades in when expanded.
+   max-width: 0 collapses it to zero layout width so it doesn't push the toggle button over the V. */
+.sidebar-logo-max {
+    font-family: var(--font-logo);
+    font-size: 1.6rem;
+    color: var(--tangerine);
+    line-height: 1;
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity var(--sidebar-transition), max-width var(--sidebar-transition);
+    pointer-events: none;
+}
+
+.sidebar.sidebar--expanded .sidebar-logo-max,
+.sidebar.sidebar--pinned .sidebar-logo-max {
+    opacity: 1;
+    max-width: 200px;
+    pointer-events: auto;
+}
+
+/* Pin button — completely removed from layout when minimised (display:none, not opacity:0)
+   so it doesn't consume space and crowd the V logo */
+.sidebar-pin-btn {
+    display: none;
+    color: var(--grey-mid);
+    padding: 0.3rem;
+    border-radius: var(--radius);
+    flex-shrink: 0;
+    transition: color 0.15s ease;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar.sidebar--expanded .sidebar-pin-btn {
+    display: flex;
+}
+
+.sidebar.sidebar--pinned .sidebar-pin-btn {
+    display: flex;
+    color: var(--tangerine);
+    /* Tangerine = active/pinned state */
+}
+
+.sidebar-pin-btn:hover {
     color: var(--tangerine);
 }
 
+/* ── Scrollable nav area ── */
+.sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.5rem 0;
+    scrollbar-width: none;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    display: none;
+}
+
+/* ── Section wrapper ── */
+.sidebar-section {
+    padding: 0.4rem 0;
+}
+
+/* Section label — hidden in minimized, fades in when expanded */
+.sidebar-section-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--grey-mid);
+    padding: 0.25rem 0.85rem 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height var(--sidebar-transition), opacity var(--sidebar-transition);
+}
+
+.sidebar.sidebar--expanded .sidebar-section-label,
+.sidebar.sidebar--pinned .sidebar-section-label {
+    max-height: 2rem;
+    opacity: 1;
+}
+
+/* Tangerine divider line between sections */
+.sidebar-divider {
+    height: 2px;
+    background-color: var(--tangerine);
+    margin: 0.2rem 0.75rem;
+    opacity: 0.25;
+}
+
+/* ── Item grid ──
+   Minimized: single column of centered icons.
+   Expanded: 3-column grid with icons + labels.
+   justify-items: stretch forces <a> grid children to fill the cell
+   the same way <span> children do. */
+.sidebar-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    gap: 0.15rem;
+    padding: 0 0.4rem;
+}
+
+.sidebar.sidebar--expanded .sidebar-grid,
+.sidebar.sidebar--pinned .sidebar-grid {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* ── Individual item ──
+   width: 100% ensures <a> elements fill the grid cell fully,
+   matching the behaviour of <span> elements. */
+.sidebar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.6rem 0.25rem;
+    border-radius: var(--radius);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    color: var(--grey-dark);
+    text-align: center;
+    min-height: 52px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.sidebar-item:hover {
+    background-color: var(--sandstone);
+    color: var(--black);
+}
+
+.sidebar-item svg {
+    flex-shrink: 0;
+}
+
+/* Item text label — hidden in minimized, visible when expanded */
+.sidebar-item-label {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height var(--sidebar-transition), opacity var(--sidebar-transition);
+}
+
+.sidebar.sidebar--expanded .sidebar-item-label,
+.sidebar.sidebar--pinned .sidebar-item-label {
+    max-height: 2.5rem;
+    opacity: 1;
+}
+
+/* Unlinked items — dimmed, no pointer, no hover effect */
+.sidebar-item--unlinked {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.sidebar-item--unlinked:hover {
+    background-color: transparent;
+    color: var(--grey-dark);
+}
+
+/* Active state — highlights the current page's item */
+.sidebar-item--active {
+    background-color: var(--sandstone);
+    color: var(--tangerine);
+}
+
+.sidebar-item--active svg {
+    color: var(--tangerine);
+}
+
+/* Bell badge — reused on the topbar bell button */
 .bell-badge {
     position: absolute;
     top: -4px;
@@ -293,6 +484,109 @@ textarea {
     align-items: center;
     justify-content: center;
     padding: 0 3px;
+}
+
+.sidebar-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Toggle chevron flips direction when expanded */
+.sidebar.sidebar--expanded .sidebar-toggle-btn svg,
+.sidebar.sidebar--pinned .sidebar-toggle-btn svg {
+    transform: rotate(180deg);
+}
+
+/* Hidden in minimized state — sidebar background click handles expansion instead.
+   Only appears when expanded, acting as the collapse button. */
+.sidebar-toggle-btn {
+    display: none;
+    color: var(--grey-mid);
+    padding: 0.3rem;
+    border-radius: var(--radius);
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.sidebar.sidebar--expanded .sidebar-toggle-btn,
+.sidebar.sidebar--pinned .sidebar-toggle-btn {
+    display: flex;
+}
+
+.sidebar-toggle-btn:hover {
+    color: var(--tangerine);
+}
+
+/* Expand tab — protrudes from the right edge of the minimised sidebar.
+   Sits outside the sidebar element so it isn't clipped by overflow:hidden. */
+.sidebar-expand-tab {
+    position: fixed;
+    left: var(--sidebar-min);
+    top: 1.25rem;
+    z-index: 301;
+    background: var(--white);
+    border: 1.5px solid var(--grey-light);
+    border-left: none;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 0.5rem 0.4rem;
+    color: var(--grey-dark);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.07);
+    transition: color 0.15s ease;
+}
+
+.sidebar-expand-tab:hover {
+    color: var(--tangerine);
+}
+
+/* Disappears once sidebar is expanded — collapse lives in the header instead */
+body:has(.sidebar.sidebar--expanded) .sidebar-expand-tab,
+body:has(.sidebar.sidebar--pinned) .sidebar-expand-tab {
+    display: none;
+}
+
+/* =====================
+   TOPBAR RIGHT
+===================== */
+
+/* Floating pill anchored to the top-right of the viewport.
+   Contains admin trigger, notification bell, account menu. */
+.topbar-right {
+    position: fixed;
+    top: 0.75rem;
+    right: 1.25rem;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background-color: var(--white);
+    border: 1.5px solid var(--grey-light);
+    border-radius: 10px;
+    padding: 0.3rem 0.6rem;
+    box-shadow: var(--shadow);
+}
+
+/* Individual button inside the topbar */
+.topbar-btn {
+    position: relative;
+    color: var(--grey-dark);
+    padding: 0.35rem;
+    border-radius: var(--radius);
+    transition: color 0.2s ease, background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.topbar-btn:hover {
+    color: var(--tangerine);
+    background-color: var(--sandstone);
 }
 
 /* =====================
@@ -379,25 +673,39 @@ textarea {
    LAYOUT
 ===================== */
 
+/* Base: no sidebar (login page, unauthenticated) */
 .main-content {
     flex: 1;
     padding: 2rem;
-    max-width: 1400px;
-    width: 100%;
-    margin: 0 auto;
+    transition: opacity 0.15s ease;
+    transition: margin-left var(--sidebar-transition);
 }
 
-.page-container {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
+/* Authenticated: shift right to clear the minimized sidebar */
+body.has-sidebar .main-content {
+    margin-left: var(--sidebar-min);
+    padding-top: 4.5rem;
+    /* clears the topbar-right floating bar */
 }
 
-.page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+/* Sidebar expanded (hover or pinned) — shift further right */
+body.has-sidebar:has(.sidebar.sidebar--expanded) .footer,
+body.has-sidebar:has(.sidebar.sidebar--pinned) .footer {
+    margin-left: var(--sidebar-max);
 }
+
+
+/* Footer mirrors the same margin shifts */
+body.has-sidebar .footer {
+    margin-left: var(--sidebar-min);
+    transition: margin-left var(--sidebar-transition);
+}
+
+body.has-sidebar:has(.sidebar.sidebar--expanded) .main-content,
+body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
+    margin-left: var(--sidebar-max);
+}
+
 
 /* =====================
    FOOTER
@@ -804,6 +1112,49 @@ textarea {
     -webkit-overflow-scrolling: touch;
 }
 
+/* ── Single scroll container ─────────────────────────────────────
+   Wraps multiple table-wrappers in one horizontally scrollable
+   area so all tables share a single scrollbar at the bottom.
+   Individual .table-wrappers inside have overflow-x: visible
+   so they don't clip or create their own scroll tracks. */
+.view-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+}
+
+.view-scroll .table-wrapper {
+    overflow-x: visible;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.view-scroll .table-wrapper:first-child {
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.view-scroll .table-wrapper:last-child {
+    border-radius: 0 0 var(--radius) var(--radius);
+    box-shadow: var(--shadow);
+}
+
+/* ── All Projects filter bar ──────────────────────────────────────
+   Sits above the flat All Projects table. Matches the style of
+   the existing approved-filter-bar. */
+.all-projects-filter-bar {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.all-projects-filter-bar .form-input {
+    flex: 1;
+    min-width: 160px;
+    max-width: 240px;
+}
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -868,6 +1219,49 @@ textarea {
     color: var(--grey-mid);
     font-size: 0.85rem;
 }
+
+/* ── Sticky columns ──────────────────────────────────────────────
+   All .data-table: first column sticks (project name, or chevron).
+   .data-table--with-chevron: second column (project name) also
+   sticks, offset by the chevron column width (2rem).
+   Each state needs an explicit background — transparent cells let
+   scrolling content bleed through the sticky area. */
+
+.data-table th:first-child,
+.data-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+}
+
+/* Header cells sit above body cells during vertical scroll */
+.data-table thead th:first-child { z-index: 3; background-color: var(--sandstone); }
+.data-table tbody td:first-child { background-color: var(--white); }
+.data-table tbody tr.overdue td:first-child { background-color: #F9ECED; }
+.data-table tbody tr:hover td:first-child { background-color: #FBF8F4; }
+.data-table tbody tr.overdue:hover td:first-child { background-color: #F4E0E2; }
+
+/* Shadow on rightmost sticky column — visual separator from scrolling content.
+   For tables without a chevron, that's the first column. */
+.data-table:not(.data-table--with-chevron) th:first-child,
+.data-table:not(.data-table--with-chevron) td:first-child {
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Second column sticky — only on tables that have a chevron first column */
+.data-table--with-chevron th:nth-child(2),
+.data-table--with-chevron td:nth-child(2) {
+    position: sticky;
+    left: 2rem; /* matches .chevron-cell width */
+    z-index: 2;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
+}
+
+.data-table--with-chevron thead th:nth-child(2) { z-index: 3; background-color: var(--sandstone); }
+.data-table--with-chevron tbody td:nth-child(2) { background-color: var(--white); }
+.data-table--with-chevron tbody tr.overdue td:nth-child(2) { background-color: #F9ECED; }
+.data-table--with-chevron tbody tr:hover td:nth-child(2) { background-color: #FBF8F4; }
+.data-table--with-chevron tbody tr.overdue:hover td:nth-child(2) { background-color: #F4E0E2; }
 
 /* =====================
    BADGES & TAGS
@@ -1024,10 +1418,10 @@ textarea {
 
 .notification-panel {
     position: fixed;
-    top: var(--navbar-height);
+    top: 4rem;
     right: 0;
     width: 360px;
-    height: calc(100vh - var(--navbar-height));
+    height: calc(100vh - 4rem);
     background-color: var(--white);
     border-left: 1px solid var(--grey-light);
     box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
@@ -1306,7 +1700,7 @@ textarea {
 }
 
 .dashboard-toggle {
-    85rem display: flex;
+    display: flex;
     align-items: center;
     gap: 0;
     background-color: var(--grey-light);
@@ -1587,7 +1981,7 @@ textarea {
 
 .drafts-subheader {
     position: sticky;
-    top: 60px;
+    top: 0;
     z-index: 90;
     background: var(--sandstone);
     display: flex;
@@ -1807,14 +2201,14 @@ textarea {
 
 .create-subheader {
     position: sticky;
-    top: 60px;
+    top: 0;
     z-index: 90;
     background: var(--sandstone);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 20px;
-    padding: 16px 0;
+    padding: 16px 24px;
     margin-bottom: 40px;
     border-bottom: 2px solid var(--tangerine);
 
@@ -3401,7 +3795,8 @@ textarea {
 .admin-panel {
     position: fixed;
     top: 0;
-    left: 0;
+    left: var(--sidebar-min);
+    /* sits to the right of the minimised sidebar */
     width: 440px;
     height: 100vh;
     background: var(--white);
@@ -3411,7 +3806,13 @@ textarea {
     display: flex;
     flex-direction: column;
     transform: translateX(0);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, left var(--sidebar-transition);
+}
+
+body:has(.sidebar.sidebar--expanded) .admin-panel,
+body:has(.sidebar.sidebar--pinned) .admin-panel {
+    left: var(--sidebar-max);
+    /* shifts right when sidebar is expanded or pinned */
 }
 
 .admin-panel.hidden {
@@ -3421,7 +3822,8 @@ textarea {
 .admin-panel-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    position: relative;
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border-subtle);
     background-color: var(--sandstone);
@@ -3441,6 +3843,8 @@ textarea {
     font-size: 1rem;
     color: var(--grey-mid);
     padding: 0.25rem;
+    position: absolute;
+    right: 1rem;
 }
 
 #close-admin-panel:hover {
@@ -4140,6 +4544,129 @@ textarea {
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
     align-items: start;
+}
+
+/*============================================================
+  SECTION — TOAST NOTIFICATIONS
+  Stacking slide-in alerts that replace browser alert().
+  Rendered into #toast-container, which is created by JS on
+  first use so we don't need any HTML changes.
+============================================================*/
+
+/* Fixed container — sits bottom-right above everything */
+#toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    /* pointer-events: none on the container so it doesn't
+       block clicks on the page behind it */
+    pointer-events: none;
+}
+
+/* Base toast card */
+.toast {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 0.75rem 1rem;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    color: var(--black);
+    /* Left accent bar — overridden per type below */
+    border-left: 4px solid var(--ashen);
+    min-width: 260px;
+    max-width: 360px;
+    /* Re-enable pointer events so the toast itself is clickable */
+    pointer-events: all;
+    cursor: pointer;
+    animation: toast-in 0.25s ease forwards;
+}
+
+/* Type variants — left border colour signals intent */
+.toast--success { border-left-color: var(--pine); }
+.toast--error   { border-left-color: var(--rose); }
+.toast--info    { border-left-color: var(--ashen); }
+.toast--warning { border-left-color: var(--canary); }
+
+/* Dismissal state — JS adds this class before removing the element */
+.toast--out {
+    animation: toast-out 0.25s ease forwards;
+}
+
+/* Slide in from the right */
+@keyframes toast-in {
+    from { opacity: 0; transform: translateX(1rem); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Slide back out to the right */
+@keyframes toast-out {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(1rem); }
+}
+
+/*============================================================
+  SECTION — CONFIRM MODAL
+  Single reusable modal for all "are you sure?" actions.
+  Replaces browser confirm(). Content set dynamically by JS.
+============================================================*/
+
+/* Overlay — same pattern as existing modals in the app */
+#confirm-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9000;
+}
+
+#confirm-modal.hidden {
+    display: none;
+}
+
+/* Inner card */
+#confirm-modal .confirm-modal-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg, 0 8px 32px rgba(0,0,0,0.18));
+    padding: 2rem;
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* Title */
+#confirm-modal .confirm-modal-title {
+    font-family: var(--font-headline);
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--black);
+    margin: 0;
+}
+
+/* Body message */
+#confirm-modal .confirm-modal-body {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--black);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Button row */
+#confirm-modal .confirm-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
 }
 
 @media (max-width: 900px) {

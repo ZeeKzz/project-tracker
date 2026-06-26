@@ -12,7 +12,14 @@ from app.models import (Project, ProjectDesigner, Scope, User, Client,
                         DeliverableTypeDiscipline)
 from app.decorators import role_required
 from datetime import date, datetime
-from app.notifications import notify_team_leads_of_new_project, notify_cs_lead_of_assignment, notify_designers_of_revision_flag, notify_cs_of_revision_submitted, notify_cs_of_brief_flag, notify_flag_reply, notify_cs_of_flag_resolved, notify_designer_of_concept_kv_assignment, notify_cs_of_lead_change, create_notification, notify_cs_of_project_started
+from app.notifications import (
+    notify_team_leads_of_new_project, notify_cs_lead_of_assignment,
+    notify_designers_of_revision_flag, notify_cs_of_revision_submitted,
+    notify_cs_of_brief_flag, notify_flag_reply, notify_cs_of_flag_resolved,
+    notify_designer_of_concept_kv_assignment, notify_cs_of_lead_change,
+    create_notification, notify_cs_of_project_started,
+    notify_of_submission_to_client, notify_of_project_approved
+)
 from app.utils import log_activity
 
 projects = Blueprint('projects', __name__)
@@ -1078,7 +1085,7 @@ def assign_deliverable(project_id, d_id):
         user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id
     )
 
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return jsonify({'success': True, 'designer_name': designer.name})
 
 
 # ── Brief Flag System ────────────────────────────────────────────────────────
@@ -1254,8 +1261,7 @@ def assign_designers(project_id):
         )
         log_activity('designer_assigned', f'{designer.name} assigned to {team} team on "{project.name}"', user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
 
-    flash('Designer assignment updated successfully.', 'success')
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return jsonify({'success': True})
 
 
 @projects.route('/projects/<int:project_id>/assign-lead', methods=['POST'])
@@ -1393,29 +1399,24 @@ def add_secondary_cs(project_id):
 
     user_id = request.form.get('user_id', type=int)
     if not user_id:
-        flash('Please select a CS member.', 'error')
-        return redirect(url_for('projects.detail', project_id=project_id))
+        return jsonify({'success': False, 'error': 'Please select a CS member.'}), 400
 
     if user_id == project.cs_lead_id:
-        flash('The CS lead is already the primary CS on this project.', 'error')
-        return redirect(url_for('projects.detail', project_id=project_id))
+        return jsonify({'success': False, 'error': 'The CS lead is already the primary CS on this project.'}), 400
 
     user = User.query.get_or_404(user_id)
     if user.role != 'cs':
-        flash('Only CS members can be added as secondary CS.', 'error')
-        return redirect(url_for('projects.detail', project_id=project_id))
+        return jsonify({'success': False, 'error': 'Only CS members can be added as secondary CS.'}), 400
 
     if ProjectSecondaryCS.query.filter_by(project_id=project_id, user_id=user_id).first():
-        flash(f'{user.name} is already a secondary CS on this project.', 'error')
-        return redirect(url_for('projects.detail', project_id=project_id))
+        return jsonify({'success': False, 'error': 'Already a secondary CS on this project.'}), 400
 
     db.session.add(ProjectSecondaryCS(project_id=project_id, user_id=user_id, added_by_id=current_user.id))
     db.session.commit()
 
     log_activity('secondary_cs_added', f'{user.name} added as secondary CS on "{project.name}"',
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
-    flash(f'{user.name} added as secondary CS.', 'success')
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return jsonify({'success': True})
 
 
 @projects.route('/projects/<int:project_id>/secondary-cs/<int:user_id>/remove', methods=['POST'])
@@ -1439,8 +1440,7 @@ def remove_secondary_cs(project_id, user_id):
 
     log_activity('secondary_cs_removed', f'{user.name} removed as secondary CS on "{project.name}"',
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
-    flash(f'{user.name} removed as secondary CS.', 'success')
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return jsonify({'success': True})
 
 
 @projects.route('/projects/<int:project_id>/secondary-cs/regions', methods=['POST'])
@@ -1997,7 +1997,7 @@ def assign_standard_deliverable(project_id, d_id):
 
     designer_id = request.form.get('designer_id')
     if not designer_id:
-        return redirect(url_for('projects.detail', project_id=project_id))
+        return jsonify({'success': False, 'error': 'Missing designer'}), 400
 
     designer_id = int(designer_id)
     designer = User.query.get_or_404(designer_id)
@@ -2022,7 +2022,7 @@ def assign_standard_deliverable(project_id, d_id):
     log_activity('deliverable_assigned',
                  f'{designer.name} assigned to "{deliverable.name}" on "{project.name}"',
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return jsonify({'success': True, 'designer_name': designer.name})
 
 import uuid
 
@@ -2617,6 +2617,9 @@ def submit_to_client(project_id):
                  user=current_user, entity_type='project',
                  entity_name=project.name, entity_id=project.id)
 
+    # Notify management, admin, and project designers
+    notify_of_submission_to_client(project, triggered_by=current_user)
+
     # Return the client's email (dormant — will be populated once v1.1 adds client email UI)
     client_email = project.client_brand.contact_email if project.client_brand else None
 
@@ -3024,6 +3027,12 @@ def approve_submission(project_id):
         user=current_user, entity_type='project',
         entity_name=project.name, entity_id=project.id
     )
+
+    # Only fire the approval notification when the project itself is fully approved.
+    # For POSM flows, individual channel approvals may not yet cascade to the project —
+    # so we check project_status after the commit rather than firing unconditionally.
+    if project.project_status == 'approved':
+        notify_of_project_approved(project, triggered_by=current_user)
 
     return jsonify({'success': True})
 

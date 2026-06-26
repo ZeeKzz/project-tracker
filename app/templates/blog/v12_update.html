@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}v1.2 Update — Vitamin Helix{% endblock %}
+
+{% block content %}
+<div class="page-container">
+
+    <div style="text-align: center; margin-bottom: 1.75rem;">
+        <h1 style="margin: 0; font-size: 2.4rem; display: inline; vertical-align: baseline;">What's New</h1>
+        <span style="font-family: var(--font-mono); font-size: 1.8rem; color: var(--tangerine); letter-spacing: 0.06em; margin-left: 0.75rem; vertical-align: baseline;">v1.2 — June 2026</span>
+    </div>
+
+    <!-- Seamless layout: dark nav | tangerine divider | white content -->
+    <div style="display: flex; align-items: stretch; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+
+        <!-- ── Left nav ─────────────────────────────────────────── -->
+        <nav id="blog-nav" style="
+            background: var(--white);
+            width: 220px;
+            flex-shrink: 0;
+            padding: 2rem 0;
+        ">
+            <p style="
+                font-family: var(--font-mono);
+                font-size: 0.65rem;
+                letter-spacing: 0.12em;
+                color: #aaa;
+                padding: 0 1.5rem;
+                margin: 0 0 1.25rem;
+                text-transform: uppercase;
+            ">IN THIS POST</p>
+
+            {% set sections = [
+                ('overview',        '01', 'Overview'),
+                ('nav-ui',          '02', 'Navigation & UI'),
+                ('dynamic-pages',   '03', 'Dynamic Pages'),
+                ('all-projects',    '04', 'All Projects Page'),
+                ('email-notifs',    '05', 'Email Notifications'),
+                ('bug-fixes',       '06', 'Bug Fixes'),
+                ('whats-next',      '07', "What's Next"),
+            ] %}
+
+            {% for anchor, num, label in sections %}
+            <a href="#{{ anchor }}" class="blog-nav-item" data-target="{{ anchor }}">
+                <span class="blog-nav-num">{{ num }}</span>
+                <span class="blog-nav-label">{{ label }}</span>
+                <span class="blog-nav-dot"></span>
+            </a>
+            {% endfor %}
+        </nav>
+
+        <!-- ── Orange divider ──────────────────────────────────── -->
+        <div style="width: 3px; background: var(--tangerine); flex-shrink: 0;"></div>
+
+        <!-- ── Blog content ────────────────────────────────────── -->
+        <article style="
+            flex: 1;
+            background: var(--white);
+            padding: 2.5rem 3.5rem;
+            overflow-y: auto;
+            max-height: 80vh;
+        " id="blog-scroll-area">
+
+            <!-- ① Overview -->
+            <section id="overview" class="blog-section">
+                <h2 class="blog-h2">Overview</h2>
+                <div class="blog-callout" style="border-left-color: var(--pine); margin-top: 0;">
+                    Thank you to everyone who has been reporting issues and sending feedback during the pre-launch. Every item in this update came from something you flagged. 🙏
+                </div>
+                <div class="blog-callout">
+                    No action needed to receive this update — it is live on the server already. If anything looks off, just send me a
+                    message or email. A bug reporting section is being worked on.
+                </div>
+                <p class="blog-body">
+                    Version 1.2 is focused on easier navigation and QoL fixes. The focus has been on two things: making day-to-day workflow faster, and laying the groundwork for future features such as a proper dashboard.
+                </p>
+                
+            </section>
+
+            <hr class="blog-hr">
+
+            <!-- ② Navigation & UI Overhaul -->
+            <section id="nav-ui" class="blog-section">
+                <h2 class="blog-h2">Navigation & UI Overhaul</h2>
+                <p class="blog-body">
+                    You will have noticed a clean new sidebar on the left side of the page, this is now how you navigate the app. You can expand it by clicking on the white space, or the little chevron at the top.
+                </p>
+                <p class="blog-body">
+                    Once extended, you can see all the icon names, which are divided into sections. Click out of the sidebar, or press the chevron again to minimise it. You can also pin it open if you prefer.
+                </p>
+                <p class="blog-body">
+                    All icons are clickable even in the minimal collapsed view. Tools that are greyed out are features currently in development and will be added in future updates.
+                </p>
+                <p class="blog-body">
+                    The top-right corner has also had a small makeover: your account, sign out, and notification access are all in the same place as before, just cleaner.
+                </p>
+            </section>
+
+            <hr class="blog-hr">
+
+            <!-- ③ Dynamic Pages -->
+            <section id="dynamic-pages" class="blog-section">
+                <h2 class="blog-h2">Dynamic Pages</h2>
+                <p class="blog-body">
+                    Pages now dynamically update their information. This means when you assign someone to a project, add submissions, log revisions, and more, the page will no longer do a full refresh.
+                </p>
+                <p class="blog-body">
+                    This change is intended to make your experience smoother and keep you in context while you work.
+                </p>
+            </section>
+
+            <hr class="blog-hr">
+
+            <!-- ④ All Projects Page -->
+            <section id="all-projects" class="blog-section">
+                <h2 class="blog-h2">All Projects Page</h2>
+                <p class="blog-body">
+                    The all projects page has had a small but meaningful update. You can now filter projects (a search function is coming soon), and crucially, the grouping per CS lead has been removed.
+                </p>
+                <p class="blog-body">
+                    All projects are now ordered by Design Deadline, with the closest deadline at the top, making it much easier to see what's urgent at a glance.
+                </p>
+            </section>
+
+            <hr class="blog-hr">
+
+            <!-- ⑤ Email Notifications -->
+            <section id="email-notifs" class="blog-section">
+                <h2 class="blog-h2">Email Notifications</h2>
+                <p class="blog-body">
+                    Email notifications are now live and have undergone a visual overhaul to match the app's style. You can choose exactly which email notifications you want to receive in your <strong>My Account</strong> page. Toggle each event type on or off individually.
+                </p>
+            </section>
+
+            <hr class="blog-hr">
+
+            <!-- ⑥ Bug Fixes -->
+            <section id="bug-fixes" class="blog-section">
+                <h2 class="blog-h2">Bug Fixes</h2>
+                <ul class="blog-list">
+                    <li>Fixed deadline time not showing on the project detail page</li>
+                    <li>Fixed the Admin Panel being hidden behind the sidebar</li>
+                    <li>Fixed Start Project not showing for some users</li>
+                    <li>Fixed notifications for approved projects and submitted to client not firing</li>
+                </ul>
+            </section>
+
+            <hr class="blog-hr">
+
+            <!-- ⑦ What's Next -->
+            <section id="whats-next" class="blog-section">
+                <h2 class="blog-h2">What's Next</h2>
+                <p class="blog-body">Version 1.3 is already underway. The focus will be on the following:</p>
+                <ul class="blog-list">
+                    <li><strong>File storage integration</strong> — Projects auto-creating folders, with links to that folder on the project detail page. Reference documents and submissions will also auto-save in the project folder on our local file storage.</li>
+                    <li><strong>Feature request page</strong> — Vote on features and track what's being worked on.</li>
+                    <li><strong>Bug report page</strong> — Report bugs with tracking on what's been acknowledged and is being worked on.</li>
+                    <li><strong>Dashboard</strong> — An overview of projects and designer load. Thanks for requesting this, Prim! 😁</li>
+                    <li><strong>Update blog</strong> — All future update posts like this one will live in-app, with a notification when a new update goes live.</li>
+                    <li><strong>Birthday Calendar</strong> — A calendar so we never forget anyone's birthday again 🥳. A global notification goes out one week before, and you'll be able to set your own birthday in My Account.</li>
+                </ul>
+            </section>
+
+        </article>
+    </div>
+</div>
+
+<style>
+/* ── Blog nav items ──────────────────────────────────────── */
+.blog-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 1.5rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+}
+.blog-nav-item:hover {
+    background: var(--sandstone);
+}
+.blog-nav-item.active {
+    background: rgba(242,127,85,0.08);
+}
+.blog-nav-num {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: #bbb;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+.blog-nav-label {
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    color: #888;
+    flex: 1;
+    transition: color 0.15s;
+    text-transform: none;
+    letter-spacing: normal;
+}
+.blog-nav-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--tangerine);
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.blog-nav-item.active .blog-nav-num { color: var(--tangerine); }
+.blog-nav-item.active .blog-nav-label { color: var(--black); font-weight: 600; }
+.blog-nav-item.active .blog-nav-dot { opacity: 1; }
+
+/* ── Blog content typography ─────────────────────────────── */
+.blog-section {
+    margin-bottom: 0.5rem;
+}
+.blog-h2 {
+    font-family: var(--font-heading);
+    font-size: 1.4rem;
+    color: var(--tangerine);
+    margin: 0 0 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.blog-h3 {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--tangerine);
+    margin: 1.25rem 0 0.4rem;
+    text-transform: none;
+    letter-spacing: normal;
+}
+.blog-body {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: #444;
+    margin: 0 0 0.75rem;
+}
+.blog-callout {
+    background: var(--sandstone);
+    border-left: 3px solid var(--tangerine);
+    border-radius: 0 6px 6px 0;
+    padding: 0.85rem 1.1rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: #555;
+    margin: 1.25rem 0;
+}
+.blog-list {
+    margin: 0.5rem 0 0.75rem 1.25rem;
+    padding: 0;
+}
+.blog-list li {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: #444;
+    margin-bottom: 0.35rem;
+}
+.blog-hr {
+    border: none;
+    border-top: 1px solid var(--tangerine);
+    margin: 2rem 0;
+    opacity: 0.35;
+}
+</style>
+
+<script>
+// ── Scrollspy: highlight active nav section as user scrolls ──
+(function () {
+    var scrollArea = document.getElementById('blog-scroll-area');
+    var navItems   = document.querySelectorAll('.blog-nav-item');
+    var sections   = document.querySelectorAll('.blog-section');
+
+    function getActive() {
+        // getBoundingClientRect is always relative to the viewport —
+        // avoids the offsetTop/offsetParent mismatch when the scroll
+        // container isn't a positioned ancestor of the sections.
+        var containerTop = scrollArea.getBoundingClientRect().top;
+        var active = sections[0];
+        sections.forEach(function (s) {
+            // How far the section top is from the top of the visible article area
+            var relTop = s.getBoundingClientRect().top - containerTop;
+            if (relTop <= 60) active = s;
+        });
+        return active.id;
+    }
+
+    function updateNav() {
+        var id = getActive();
+        navItems.forEach(function (item) {
+            item.classList.toggle('active', item.dataset.target === id);
+        });
+    }
+
+    scrollArea.addEventListener('scroll', updateNav);
+    updateNav(); // set on load
+
+    // Smooth scroll on nav click — same fix: use getBoundingClientRect
+    // to get the section's position relative to the scroll container.
+    navItems.forEach(function (item) {
+        item.addEventListener('click', function (e) {
+            e.preventDefault();
+            var target = document.getElementById(item.dataset.target);
+            if (target) {
+                var containerTop = scrollArea.getBoundingClientRect().top;
+                var targetTop    = target.getBoundingClientRect().top - containerTop;
+                scrollArea.scrollBy({ top: targetTop - 24, behavior: 'smooth' });
+            }
+        });
+    });
+}());
+</script>
+{% endblock %}

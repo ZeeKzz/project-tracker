@@ -51,6 +51,27 @@ function confirmWipe() {
         });
 }
 
+// Synchronises horizontal scroll across all .table-wrapper elements within a view.
+// Called ocne per view at init - not on every tab switch - to avoid slacking listeners.
+// isSyncing prevents the programmatic scrollLeft assignment from firing as second scroll event.
+function syncTableScroller(viewE1) {
+    var wrappers = Array.from(viewE1.querySelectorAll('.table-wrapper'));
+    if (wrappers.length < 2) return; // single-table views have nothing to sync
+
+    var isSyncing = false;
+    wrappers.forEach(function(wrapper) {
+        wrapper.addEventListener('scroll', function() {
+            if (isSyncing) return;
+            isSyncing = true;
+            var left = this.scrollLeft;
+            wrappers.forEach(function(w) {
+                w.scrollLeft = left; // mirror position to every other wrapper
+            });
+            isSyncing = false;
+        })
+    })
+}
+
 // ── Scroll Position: save before any form submit, restore on load ────────────
 (function () {
     var SCROLL_KEY = 'helix_scroll_' + window.location.pathname;
@@ -460,6 +481,163 @@ if (archivedRemoveBtn) {
     });
 }
 
+function refreshSection(projectId, sectionId) {
+    return fetch('/projects/' + projectId)
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var next = doc.getElementById(sectionId);
+            var curr = document.getElementById(sectionId);
+            if (next && curr) curr.outerHTML = next.outerHTML;
+        });
+}
+
+/* ==========================================================================
+   TOAST NOTIFICATION SYSTEM
+   --------------------------------------------------------------------------
+   showToast(message, type, duration)
+     message  — string to display
+     type     — 'success' | 'error' | 'warning' | 'info'  (default: 'info')
+     duration — ms before auto-dismiss                     (default: 4000)
+
+   Each toast is a <div> injected into #toast-container (base.html).
+   CSS handles the slide-in animation; we add .toast--out to slide it back
+   out, then remove the element once the animation finishes.
+   ========================================================================== */
+function showToast(message, type, duration) {
+    /* Sensible defaults */
+    type     = type     || 'info';
+    duration = duration || 4000;
+
+    /* Find (or create) the container defined in base.html */
+    var container = document.getElementById('toast-container');
+    if (!container) return;  /* bail if base.html didn't load the container */
+
+    /* Build the toast element */
+    var toast = document.createElement('div');
+    toast.className = 'toast toast--' + type;
+    toast.textContent = message;
+
+    /* Clicking the toast dismisses it immediately */
+    toast.addEventListener('click', function () { dismissToast(toast); });
+
+    container.appendChild(toast);
+
+    /* Auto-dismiss after `duration` ms */
+    var timer = setTimeout(function () { dismissToast(toast); }, duration);
+
+    /* If the user clicks before the timer fires, cancel the timer so we
+       don't try to remove a node that's already been removed. */
+    toast.addEventListener('click', function () { clearTimeout(timer); }, { once: true });
+}
+
+/* Animate the toast out, then remove it from the DOM. */
+function dismissToast(toast) {
+    /* Guard: already animating out */
+    if (toast.classList.contains('toast--out')) return;
+
+    toast.classList.add('toast--out');
+
+    /* Remove the element after the CSS animation finishes (0.25s) */
+    toast.addEventListener('animationend', function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, { once: true });
+}
+
+/* ==========================================================================
+   CONFIRM MODAL SYSTEM
+   --------------------------------------------------------------------------
+   showConfirm(message, onConfirm, title)
+     message    — body text asking the user to confirm
+     onConfirm  — function called if the user clicks "Confirm"
+     title      — optional header string (default: 'Are you sure?')
+
+   The modal HTML lives in base.html (#confirm-modal).
+   Clicking "Cancel" or the backdrop closes without calling onConfirm.
+   Only one confirm dialog can be open at a time.
+   ========================================================================== */
+(function () {
+    /* _confirmCallback holds the function to call on "Confirm".
+       It lives inside this IIFE so it's private — only showConfirm can set it. */
+    var _confirmCallback = null;
+
+    /* Public function — attached to window so any other script can call it. */
+    window.showConfirm = function (message, onConfirm, title) {
+        var modal  = document.getElementById('confirm-modal');
+        var body   = document.getElementById('confirm-modal-body');
+        var titleEl = document.getElementById('confirm-modal-title');
+        if (!modal || !body) return;  /* bail if base.html didn't load the modal */
+
+        /* Populate the text */
+        body.textContent    = message;
+        titleEl.textContent = title || 'Are you sure?';
+
+        /* Store the callback for when the user clicks Confirm */
+        _confirmCallback = onConfirm || null;
+
+        /* Show the overlay */
+        modal.classList.remove('hidden');
+    };
+
+    /* Wire up the buttons — runs once when the DOM is ready */
+    document.addEventListener('DOMContentLoaded', function () {
+        var modal     = document.getElementById('confirm-modal');
+        var btnOk     = document.getElementById('confirm-modal-ok');
+        var btnCancel = document.getElementById('confirm-modal-cancel');
+        if (!modal) return;
+
+        /* "Confirm" — save callback, close first, THEN call.
+           (matches the existing approval modal pattern in CLAUDE.md) */
+        btnOk.addEventListener('click', function () {
+            var fn = _confirmCallback;
+            _confirmCallback = null;       /* clear before calling */
+            modal.classList.add('hidden');
+            if (fn) fn();
+        });
+
+        /* "Cancel" — just close */
+        btnCancel.addEventListener('click', function () {
+            _confirmCallback = null;
+            modal.classList.add('hidden');
+        });
+
+        /* Clicking the dark backdrop also cancels */
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) {
+                _confirmCallback = null;
+                modal.classList.add('hidden');
+            }
+        });
+    });
+}());
+
+document.addEventListener('submit', function (e) {
+    var form = e.target.closest('.inline-form, .secondary-cs-form');
+    if (!form) return;
+    e.preventDefault();
+
+    var action = form.getAttribute('action');
+    var projectId = action.split('/')[2];
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+
+    fetch(action, {
+        method: 'POST',
+        body: new FormData(form)
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                refreshSection(projectId, 'section-assignments');
+            } else {
+                showToast(data.error || 'Something went wrong.', 'error');
+                if (btn) btn.disabled = false;
+            }
+        })
+        .catch(function () {
+            if (btn) btn.disabled = false;
+        });
+});
 
 // Archive All (inbox)
 var inboxArchiveAllBtn = document.getElementById('inbox-archive-all-btn');
@@ -645,6 +823,11 @@ function buildApprovedView(containerId, projects) {
         return;
     }
 
+    // Wrap all year groups in a single scroll container for one shared scrollbar
+    var viewScroll = document.createElement('div');
+    viewScroll.className = 'view-scroll';
+    container.appendChild(viewScroll);
+
     // Group into { year: { monthName: { order: N, rows: [...] } } }
     var grouped = {};
     projects.forEach(function (p) {
@@ -740,7 +923,7 @@ function buildApprovedView(containerId, projects) {
             body.appendChild(wrapper);
         });
 
-        container.appendChild(yearEl);
+        viewScroll.appendChild(yearEl);
     });
 }
 
@@ -834,6 +1017,121 @@ function buildApprovedView(containerId, projects) {
         });
     }
 
+// ── All Projects filters ──────────────────────────────────────────────────────
+// Reads data attributes from server-rendered rows to populate dropdowns,
+// then hides/shows rows on change. Called once on page load — table is
+// already in the DOM so no lazy-render needed.
+function initAllProjectsFilters() {
+    var tbody = document.querySelector('#all-projects-view .data-table tbody');
+    var csFilter = document.getElementById('ap-cs-filter');
+    var statusFilter = document.getElementById('ap-status-filter');
+    var designerFilter = document.getElementById('ap-designer-filter');
+    var clearBtn = document.getElementById('ap-clear-filters');
+
+    // Not on this dashboard — bail out
+    if (!tbody || !csFilter) return;
+
+    // Collect unique values from each filterable row (main rows only, not expansion rows)
+    var csLeads = {}, statuses = {}, designers = {};
+    var rows = Array.from(tbody.querySelectorAll('tr[data-status]'));
+
+    rows.forEach(function (row) {
+        var cs = row.getAttribute('data-cs-lead');
+        var status = row.getAttribute('data-status');
+        var designerStr = row.getAttribute('data-designers');
+
+        if (cs) csLeads[cs] = true;
+        if (status) statuses[status] = true;
+        if (designerStr) {
+            designerStr.split(',').forEach(function (d) {
+                var name = d.trim();
+                if (name) designers[name] = true;
+            });
+        }
+    });
+
+    // Populate dropdowns alphabetically
+    Object.keys(csLeads).sort().forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        csFilter.appendChild(opt);
+    });
+
+    Object.keys(statuses).sort().forEach(function (status) {
+        var opt = document.createElement('option');
+        opt.value = status;
+        // Convert snake_case to Title Case for display
+        opt.textContent = status.replace(/_/g, ' ').replace(/\b\w/g, function (l) { return l.toUpperCase(); });
+        statusFilter.appendChild(opt);
+    });
+
+    Object.keys(designers).sort().forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        designerFilter.appendChild(opt);
+    });
+
+    // Apply filters — hide rows that don't match all active filters
+    function applyFilters() {
+        var csVal = csFilter.value;
+        var statusVal = statusFilter.value;
+        var designerVal = designerFilter.value;
+
+        rows.forEach(function (row) {
+            var cs = row.getAttribute('data-cs-lead') || '';
+            var status = row.getAttribute('data-status') || '';
+            var designerNames = (row.getAttribute('data-designers') || '').split(',').map(function (d) { return d.trim(); });
+
+            var match = (!csVal || cs === csVal) &&
+                (!statusVal || status === statusVal) &&
+                (!designerVal || designerNames.indexOf(designerVal) !== -1);
+
+            row.classList.toggle('hidden', !match);
+
+            // If a CCM parent row is hidden, also hide its expansion row
+            var expandId = row.getAttribute('data-expand');
+            if (expandId) {
+                var expansionRow = document.getElementById('expand_' + expandId);
+                if (expansionRow && !match) expansionRow.classList.add('hidden');
+            }
+        });
+    }
+
+    csFilter.addEventListener('change', applyFilters);
+    statusFilter.addEventListener('change', applyFilters);
+    designerFilter.addEventListener('change', applyFilters);
+
+    clearBtn.addEventListener('click', function () {
+        csFilter.value = '';
+        statusFilter.value = '';
+        designerFilter.value = '';
+        applyFilters();
+    });
+}
+
+// Synchronises horizontal scroll across all .table-wrapper elements within a view.
+// Called once per view at init — not on every tab switch — to avoid stacking listeners.
+// isSyncing prevents the programmatic scrollLeft assignment from firing a second scroll event.
+function syncTableScrollers(viewEl) {
+    var wrappers = Array.from(viewEl.querySelectorAll('.table-wrapper'));
+    if (wrappers.length < 2) return; // single-table views have nothing to sync
+
+    var isSyncing = false;
+    wrappers.forEach(function (wrapper) {
+        wrapper.addEventListener('scroll', function () {
+            if (isSyncing) return;
+            isSyncing = true;
+            var left = this.scrollLeft;
+            wrappers.forEach(function (w) {
+                w.scrollLeft = left; // mirror position to every other wrapper
+            });
+            isSyncing = false;
+        });
+    });
+}
+
 
 
     // Shared approved-projects toggle elements — present on all three dashboards
@@ -868,12 +1166,19 @@ function buildApprovedView(containerId, projects) {
                 // Lazy-render on first open so we don't build the DOM unnecessarily
                 if (!approvedProjectsView.dataset.rendered) {
                     buildApprovedView('approved-projects-container', window.approvedProjects || []);
+                    syncTableScrollers(approvedProjectsView); // sync after DOM is built
                     initApprovedFilters();
                     approvedProjectsView.dataset.rendered = '1';
                 }
             });
         }
     }
+
+    // Wire up scroll sync for each view once on page load.
+    // Approved projects is handled separately after buildApprovedView() since its
+    // table-wrappers are built dynamically and don't exist in the DOM yet.
+    if (teamView) syncTableScrollers(teamView);
+    if (personalView) syncTableScrollers(personalView);
 
     // Conditional team dropdown on register page - shows team selector for designer/team_lead roles
     const roleSelect = document.getElementById('role');
@@ -923,12 +1228,18 @@ function buildApprovedView(containerId, projects) {
                 // Lazy-render on first open
                 if (!approvedProjectsView.dataset.rendered) {
                     buildApprovedView('approved-projects-container', window.approvedProjects || []);
+                    syncTableScrollers(approvedProjectsView);
                     initApprovedFilters();
                     approvedProjectsView.dataset.rendered = '1';
                 }
             });
         }
     }
+
+    // Wire up scroll sync for each CS view once on page load.
+    if (myProjectsView) syncTableScrollers(myProjectsView);
+    if (allProjectsView) syncTableScrollers(allProjectsView);
+    initAllProjectsFilters(); // populate and wire up All Projects filter bar
 
     // Account dropdown toggle
     const accountTrigger = document.getElementById('account-trigger');
@@ -1870,11 +2181,11 @@ function buildApprovedView(containerId, projects) {
                             calculateCompletion();
                             scheduleAutosave();
                         } else {
-                            alert(data.error || 'Could not add client.');
+                            showToast(data.error || 'Could not add client.', 'error');
                         }
                     })
                     .catch(function () {
-                        alert('Something went wrong. Please try again.');
+                        showToast('Something went wrong. Please try again.', 'error');
                     });
             });
         }
@@ -1993,7 +2304,7 @@ function buildApprovedView(containerId, projects) {
                             // Reload so the status badge and button update correctly
                             window.location.reload();
                         } else {
-                            alert(data.error || 'Could not start project.');
+                            showToast(data.error || 'Could not start project.', 'error');
                             closeStartProjectModal();
                         }
                     });
@@ -2402,26 +2713,28 @@ function buildApprovedView(containerId, projects) {
             });
 
             function handleCreateFileDelete(e) {
+                /* Capture DOM references before the async confirm dialog opens,
+                   because 'this' won't be available inside the callback. */
                 var fileId = this.dataset.fileId;
                 var item = this.closest('.reference-file-item');
-                if (!confirm('Remove this file?')) return;
-
-                fetch('/projects/files/' + fileId + '/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (!data.success) return;
-                        item.remove();
-                        var list = document.getElementById('create-reference-files-list');
-                        if (list.querySelectorAll('.reference-file-item').length === 0) {
-                            var msg = document.createElement('p');
-                            msg.className = 'no-files-msg';
-                            msg.textContent = 'No reference files uploaded yet.';
-                            list.appendChild(msg);
-                        }
-                    });
+                showConfirm('Remove this file?', function () {
+                    fetch('/projects/files/' + fileId + '/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (!data.success) return;
+                            item.remove();
+                            var list = document.getElementById('create-reference-files-list');
+                            if (list.querySelectorAll('.reference-file-item').length === 0) {
+                                var msg = document.createElement('p');
+                                msg.className = 'no-files-msg';
+                                msg.textContent = 'No reference files uploaded yet.';
+                                list.appendChild(msg);
+                            }
+                        });
+                });
             }
 
             document.querySelectorAll('#create-reference-files-list .reference-file-delete-btn').forEach(function (btn) {
@@ -3098,7 +3411,7 @@ function buildApprovedView(containerId, projects) {
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        alert(data.error || 'Could not start project.');
+                        showToast(data.error || 'Could not start project.', 'error');
                         closeStartProjectModal();
                     }
                 });
@@ -3116,9 +3429,9 @@ function buildApprovedView(containerId, projects) {
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.success) {
-                    window.location.reload();
+                    refreshSection(projectId, 'section-assignments');
                 } else {
-                    alert(data.error || 'Could not assign lead.');
+                    showToast(data.error || 'Could not assign lead.', 'error');
                 }
             });
     }
@@ -3137,7 +3450,7 @@ function buildApprovedView(containerId, projects) {
         var select = document.getElementById('transfer-select-' + teamLower);
         var newDesignerId = select ? select.value : '';
         if (!newDesignerId) {
-            alert('Please select a designer to transfer to.');
+            showToast('Please select a designer to transfer to.', 'warning');
             return;
         }
         fetch('/projects/' + projectId + '/assign-lead', {
@@ -3148,9 +3461,10 @@ function buildApprovedView(containerId, projects) {
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.success) {
-                    window.location.reload();
+                    var pid = window.location.pathname.split('/')[2];
+                    refreshSection(pid, 'section-assignments');
                 } else {
-                    alert(data.error || 'Could not transfer ownership.');
+                    showToast(data.error || 'Could not transfer ownership.', 'error');
                 }
             });
     }
@@ -3185,9 +3499,10 @@ function buildApprovedView(containerId, projects) {
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (data.success) {
-                        window.location.reload();
+                        closeTakeoverModal();
+                        refreshSection(_takeoverProjectId, 'section-assignments');
                     } else {
-                        alert(data.error || 'Could not take over as lead.');
+                        showToast(data.error || 'Could not take over as lead.', 'error');
                         closeTakeoverModal();
                     }
                 });
@@ -3828,7 +4143,7 @@ function buildApprovedView(containerId, projects) {
                             row.innerHTML = renderAccountDisplay(data.user);
                             attachRowActions(row, data.user);
                         } else {
-                            alert(data.error);
+                            showToast(data.error, 'error');
                         }
                     });
             });
@@ -3843,39 +4158,41 @@ function buildApprovedView(containerId, projects) {
 
         if (resetBtn) {
             resetBtn.addEventListener('click', function () {
-                if (!confirm('Reset password for ' + user.name + ' to Vitamin2026!?')) return;
-                fetch('/admin/api/users/' + user.id + '/reset-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            resetBtn.textContent = '✓';
-                            setTimeout(function () { resetBtn.innerHTML = '&#8635;'; }, 2000);
-                        }
-                    });
+                showConfirm('Reset password for ' + user.name + ' to Vitamin2026!?', function () {
+                    fetch('/admin/api/users/' + user.id + '/reset-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                resetBtn.textContent = '✓';
+                                setTimeout(function () { resetBtn.innerHTML = '&#8635;'; }, 2000);
+                            }
+                        });
+                });
             });
         }
 
         if (deleteBtn) {
             deleteBtn.addEventListener('click', function () {
-                if (!confirm('Delete ' + user.name + '? This cannot be undone.')) return;
-                fetch('/admin/api/users/' + user.id, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            row.remove();
-                        } else {
-                            alert('Could not delete user: ' + (data.error || 'Unknown error'));
-                        }
+                showConfirm('Delete ' + user.name + '? This cannot be undone.', function () {
+                    fetch('/admin/api/users/' + user.id, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
                     })
-                    .catch(function () {
-                        alert('Server error while deleting user.');
-                    });
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                row.remove();
+                            } else {
+                                showToast('Could not delete user: ' + (data.error || 'Unknown error'), 'error');
+                            }
+                        })
+                        .catch(function () {
+                            showToast('Server error while deleting user.', 'error');
+                        });
+                });
             });
         }
     }
@@ -3925,7 +4242,7 @@ function buildApprovedView(containerId, projects) {
                         addUserForm.classList.add('hidden');
                         loadAccountsSection();
                     } else {
-                        alert(data.error);
+                        showToast(data.error, 'error');
                     }
                 });
         });
@@ -3979,14 +4296,17 @@ function buildApprovedView(containerId, projects) {
                 }).join('');
                 list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
                     btn.addEventListener('click', function () {
-                        if (!confirm('Delete client "' + this.dataset.name + '"? This cannot be undone.')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/clients/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-client-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete client.'); }
-                            });
+                        /* Capture dataset values before the async modal opens — 'this' won't survive the callback. */
+                        var name = this.dataset.name;
+                        var id   = this.dataset.id;
+                        showConfirm('Delete client "' + name + '"? This cannot be undone.', function () {
+                            fetch('/admin/api/clients/' + id, { method: 'DELETE' })
+                                .then(function (res) { return res.json(); })
+                                .then(function (data) {
+                                    if (data.success) { document.getElementById('pt-client-' + id).remove(); }
+                                    else { showToast(data.error || 'Could not delete client.', 'error'); }
+                                });
+                        });
                     });
                 });
             });
@@ -4018,7 +4338,7 @@ function buildApprovedView(containerId, projects) {
                     ptAddClientForm.classList.add('hidden');
                     document.getElementById('pt-new-client-name').value = '';
                     loadPTClients();
-                } else { alert(data.error || 'Could not create client.'); }
+                } else { showToast(data.error || 'Could not create client.', 'error'); }
             });
     });
 
@@ -4052,14 +4372,16 @@ function buildApprovedView(containerId, projects) {
                 list.innerHTML = html;
                 list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
                     btn.addEventListener('click', function () {
-                        if (!confirm('Delete customer "' + this.dataset.name + '"? This cannot be undone.')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/customers/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-customer-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete customer.'); }
-                            });
+                        var name = this.dataset.name;
+                        var id   = this.dataset.id;
+                        showConfirm('Delete customer "' + name + '"? This cannot be undone.', function () {
+                            fetch('/admin/api/customers/' + id, { method: 'DELETE' })
+                                .then(function (res) { return res.json(); })
+                                .then(function (data) {
+                                    if (data.success) { document.getElementById('pt-customer-' + id).remove(); }
+                                    else { showToast(data.error || 'Could not delete customer.', 'error'); }
+                                });
+                        });
                     });
                 });
             });
@@ -4094,7 +4416,7 @@ function buildApprovedView(containerId, projects) {
                     document.getElementById('pt-new-customer-name').value = '';
                     document.getElementById('pt-new-customer-region').value = '';
                     loadPTCustomers();
-                } else { alert(data.error || 'Could not create customer.'); }
+                } else { showToast(data.error || 'Could not create customer.', 'error'); }
             });
     });
 
@@ -4122,14 +4444,16 @@ function buildApprovedView(containerId, projects) {
                 }).join('');
                 list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
                     btn.addEventListener('click', function () {
-                        if (!confirm('Delete project "' + this.dataset.name + '"? This cannot be undone.')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/projects/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-project-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete project.'); }
-                            });
+                        var name = this.dataset.name;
+                        var id   = this.dataset.id;
+                        showConfirm('Delete project "' + name + '"? This cannot be undone.', function () {
+                            fetch('/admin/api/projects/' + id, { method: 'DELETE' })
+                                .then(function (res) { return res.json(); })
+                                .then(function (data) {
+                                    if (data.success) { document.getElementById('pt-project-' + id).remove(); }
+                                    else { showToast(data.error || 'Could not delete project.', 'error'); }
+                                });
+                        });
                     });
                 });
             });
@@ -4158,14 +4482,16 @@ function buildApprovedView(containerId, projects) {
                 }).join('');
                 list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
                     btn.addEventListener('click', function () {
-                        if (!confirm('Delete draft "' + this.dataset.name + '"?')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/drafts/' + id, { method: 'DELETE' })
-                            .then(function (res) { return res.json(); })
-                            .then(function (data) {
-                                if (data.success) { document.getElementById('pt-draft-' + id).remove(); }
-                                else { alert(data.error || 'Could not delete draft.'); }
-                            });
+                        var name = this.dataset.name;
+                        var id   = this.dataset.id;
+                        showConfirm('Delete draft "' + name + '"?', function () {
+                            fetch('/admin/api/drafts/' + id, { method: 'DELETE' })
+                                .then(function (res) { return res.json(); })
+                                .then(function (data) {
+                                    if (data.success) { document.getElementById('pt-draft-' + id).remove(); }
+                                    else { showToast(data.error || 'Could not delete draft.', 'error'); }
+                                });
+                        });
                     });
                 });
             });
@@ -4241,7 +4567,7 @@ function buildApprovedView(containerId, projects) {
         ).map(function (cb) { return cb.value; });
         var isCustom = document.getElementById('pt-new-del-custom').checked;
         if (!name || !clientId || !customerId) {
-            alert('Name, client, and customer are all required.');
+            showToast('Name, client, and customer are all required.', 'warning');
             return;
         }
         fetch('/admin/api/deliverable-types', {
@@ -4265,7 +4591,7 @@ function buildApprovedView(containerId, projects) {
                     populatePTDelClientFilter(ptAllDeliverableTypes);
                     filterPTDeliverables(); // re-apply current filters instead of showing all rows
                 } else {
-                    alert(data.error || 'Could not create deliverable type.');
+                    showToast(data.error || 'Could not create deliverable type.', 'error');
                 }
             });
     });
@@ -4303,11 +4629,13 @@ function buildApprovedView(containerId, projects) {
                     }).join('');
                 list.querySelectorAll('.pt-dt-delete').forEach(function (btn) {
                     btn.addEventListener('click', function () {
-                        if (!confirm('Delete design type "' + this.dataset.name + '"?')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/design-types/' + id, { method: 'DELETE' })
-                            .then(function (r) { return r.json(); })
-                            .then(function (d) { if (d.success) { document.getElementById('pt-dt-' + id).remove(); } else { alert(d.error); } });
+                        var name = this.dataset.name;
+                        var id   = this.dataset.id;
+                        showConfirm('Delete design type "' + name + '"?', function () {
+                            fetch('/admin/api/design-types/' + id, { method: 'DELETE' })
+                                .then(function (r) { return r.json(); })
+                                .then(function (d) { if (d.success) { document.getElementById('pt-dt-' + id).remove(); } else { showToast(d.error, 'error'); } });
+                        });
                     });
                 });
                 list.querySelectorAll('.pt-dt-edit').forEach(function (btn) {
@@ -4358,7 +4686,7 @@ function buildApprovedView(containerId, projects) {
                 fetch('/admin/api/design-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name, team: team }) })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
-                        if (d.error) { alert(d.error); return; }
+                        if (d.error) { showToast(d.error, 'error'); return; }
                         document.getElementById('pt-new-dt-name').value = '';
                         document.querySelectorAll('#pt-new-dt-teams input').forEach(function (cb) { cb.checked = false; });
                         addDtForm.classList.add('hidden');
@@ -4381,7 +4709,7 @@ function buildApprovedView(containerId, projects) {
                 fetch('/admin/api/design-directions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
-                        if (d.error) { alert(d.error); return; }
+                        if (d.error) { showToast(d.error, 'error'); return; }
                         document.getElementById('pt-new-dd-name').value = '';
                         addDdForm.classList.add('hidden');
                         loadPTDesignDirections();
@@ -4406,11 +4734,13 @@ function buildApprovedView(containerId, projects) {
                     }).join('');
                 list.querySelectorAll('.pt-dd-delete').forEach(function (btn) {
                     btn.addEventListener('click', function () {
-                        if (!confirm('Delete design direction "' + this.dataset.name + '"?')) return;
-                        var id = this.dataset.id;
-                        fetch('/admin/api/design-directions/' + id, { method: 'DELETE' })
-                            .then(function (r) { return r.json(); })
-                            .then(function (d) { if (d.success) { document.getElementById('pt-dd-' + id).remove(); } else { alert(d.error); } });
+                        var name = this.dataset.name;
+                        var id   = this.dataset.id;
+                        showConfirm('Delete design direction "' + name + '"?', function () {
+                            fetch('/admin/api/design-directions/' + id, { method: 'DELETE' })
+                                .then(function (r) { return r.json(); })
+                                .then(function (d) { if (d.success) { document.getElementById('pt-dd-' + id).remove(); } else { showToast(d.error, 'error'); } });
+                        });
                     });
                 });
                 list.querySelectorAll('.pt-dd-edit').forEach(function (btn) {
@@ -4514,16 +4844,18 @@ function buildApprovedView(containerId, projects) {
 
         list.querySelectorAll('.account-delete-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                if (!confirm('Delete "' + this.dataset.name + '"?')) return;
-                var id = this.dataset.id;
-                fetch('/admin/api/deliverable-types/' + id, { method: 'DELETE' })
-                    .then(function (res) { return res.json(); })
-                    .then(function (data) {
-                        if (data.success) {
-                            ptAllDeliverableTypes = ptAllDeliverableTypes.filter(function (t) { return String(t.id) !== String(id); });
-                            document.getElementById('pt-del-' + id).remove();
-                        } else { alert(data.error || 'Could not delete.'); }
-                    });
+                var name = this.dataset.name;
+                var id   = this.dataset.id;
+                showConfirm('Delete "' + name + '"?', function () {
+                    fetch('/admin/api/deliverable-types/' + id, { method: 'DELETE' })
+                        .then(function (res) { return res.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                ptAllDeliverableTypes = ptAllDeliverableTypes.filter(function (t) { return String(t.id) !== String(id); });
+                                document.getElementById('pt-del-' + id).remove();
+                            } else { showToast(data.error || 'Could not delete.', 'error'); }
+                        });
+                });
             });
         });
 
@@ -4554,7 +4886,7 @@ function buildApprovedView(containerId, projects) {
                     var disciplines = Array.from(
                         row.querySelectorAll('.pt-discipline-checks input:checked')
                     ).map(function (cb) { return cb.value; });
-                    if (!name) { alert('Name is required.'); return; }
+                    if (!name) { showToast('Name is required.', 'warning'); return; }
                     fetch('/admin/api/deliverable-types/' + id, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
@@ -4569,7 +4901,7 @@ function buildApprovedView(containerId, projects) {
                                     ptAllDeliverableTypes[idx].disciplines = disciplines;
                                 }
                                 renderPTDeliverableRows(ptAllDeliverableTypes);
-                            } else { alert(data.error || 'Could not save.'); }
+                            } else { showToast(data.error || 'Could not save.', 'error'); }
                         });
                 });
             });
@@ -4650,7 +4982,7 @@ function buildApprovedView(containerId, projects) {
             fetch('/admin/api/activity/export', { method: 'POST' })
                 .then(function (res) {
                     if (!res.ok) {
-                        return res.json().then(function (d) { alert(d.error || 'Export failed.'); });
+                        return res.json().then(function (d) { showToast(d.error || 'Export failed.', 'error'); });
                     }
                     var disposition = res.headers.get('Content-Disposition');
                     var filename = 'activity-log.txt';
@@ -4672,16 +5004,17 @@ function buildApprovedView(containerId, projects) {
         });
 
         document.getElementById('activity-wipe-btn').addEventListener('click', function () {
-            if (!confirm('Wipe the entire activity log? This cannot be undone.')) return;
-            fetch('/admin/api/activity/clear', { method: 'POST' })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        loadActivitySection();
-                    } else {
-                        alert('Could not wipe log.');
-                    }
-                });
+            showConfirm('Wipe the entire activity log? This cannot be undone.', function () {
+                fetch('/admin/api/activity/clear', { method: 'POST' })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            loadActivitySection();
+                        } else {
+                            showToast('Could not wipe log.', 'error');
+                        }
+                    });
+            });
         });
 
     }
@@ -4771,29 +5104,30 @@ function buildApprovedView(containerId, projects) {
 
         // Delete handler — attached to existing buttons on page load and new ones dynamically
         function handleFileDelete(e) {
+            /* Capture before the async modal so 'this' is guaranteed in the callback. */
             var fileId = this.dataset.fileId;
             var item = this.closest('.reference-file-item');
 
-            if (!confirm('Remove this file?')) return;
+            showConfirm('Remove this file?', function () {
+                fetch('/projects/files/' + fileId + '/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data.success) return;
+                        item.remove();
 
-            fetch('/projects/files/' + fileId + '/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (!data.success) return;
-                    item.remove();
-
-                    // Show empty message if no files remain
-                    var list = document.getElementById('reference-files-list');
-                    if (list.querySelectorAll('.reference-file-item').length === 0) {
-                        var msg = document.createElement('p');
-                        msg.className = 'no-files-msg';
-                        msg.textContent = 'No reference files uploaded yet.';
-                        list.appendChild(msg);
-                    }
-                });
+                        // Show empty message if no files remain
+                        var list = document.getElementById('reference-files-list');
+                        if (list.querySelectorAll('.reference-file-item').length === 0) {
+                            var msg = document.createElement('p');
+                            msg.className = 'no-files-msg';
+                            msg.textContent = 'No reference files uploaded yet.';
+                            list.appendChild(msg);
+                        }
+                    });
+            });
         }
 
         // Attach delete handler to all existing delete buttons on page load
