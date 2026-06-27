@@ -1,16 +1,21 @@
-from flask import Blueprint, jsonify, session, url_for
-from flask_login import login_required, current_user
-from app.models import User
-from flask import Blueprint, jsonify, session, url_for, request
-from app.utils import log_activity
+from functools import wraps
 from datetime import timezone, timedelta
+from flask import Blueprint, jsonify, session, url_for, request
+from flask_login import login_required, current_user
+from app import db
+from app.models import (
+    User, Client, Customer, Project, ProjectFile,
+    DeliverableType, DeliverableTypeDiscipline,
+    DesignType, DesignDirection, ActivityLog
+)
+from app.utils import log_activity
+from app.notifications import broadcast_update_email
 
 DUBAI_TZ = timezone(timedelta(hours=4))
 
 admin_bp = Blueprint('admin', __name__)
 
 def admin_required(f):
-    from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
         if not current_user.is_authenticated or current_user.role != 'admin':
@@ -45,7 +50,6 @@ def exit_emulation():
 @login_required
 @admin_required
 def create_user():
-    from werkzeug.security import generate_password_hash
     data = request.get_json()
     name = (data.get('name') or '').strip()
     email = (data.get('email') or '').strip()
@@ -62,7 +66,6 @@ def create_user():
     if role not in ['designer', 'team_lead']:
         team = None
 
-    from app import db
     user = User(
         name=name,
         email=email,
@@ -80,7 +83,6 @@ def create_user():
 @login_required
 @admin_required
 def update_user(user_id):
-    from app import db
     user = User.query.get_or_404(user_id)
     data = request.get_json()
 
@@ -116,7 +118,6 @@ def update_user(user_id):
 @login_required
 @admin_required
 def admin_reset_password(user_id):
-    from app import db
     user = User.query.get_or_404(user_id)
     user.set_password('Vitamin2026!')
     db.session.commit()
@@ -127,7 +128,6 @@ def admin_reset_password(user_id):
 @login_required
 @admin_required
 def delete_user(user_id):
-    from app import db
     from sqlalchemy.exc import IntegrityError
     if user_id == current_user.id:
         return jsonify({'success': False, 'error': 'Cannot delete your own account'}), 400
@@ -146,7 +146,6 @@ def delete_user(user_id):
 @login_required
 @admin_required
 def list_clients():
-    from app.models import Client
     clients = Client.query.order_by(Client.name).all()
     return jsonify([{'id': c.id, 'name': c.name} for c in clients])
 
@@ -154,8 +153,6 @@ def list_clients():
 @login_required
 @admin_required
 def create_client():
-    from app import db
-    from app.models import Client
     data = request.get_json()
     name = (data.get('name') or '').strip()
     if not name:
@@ -172,8 +169,6 @@ def create_client():
 @login_required
 @admin_required
 def delete_client(client_id):
-    from app import db
-    from app.models import Client
     client = Client.query.get_or_404(client_id)
     name = client.name
     db.session.delete(client)
@@ -185,7 +180,6 @@ def delete_client(client_id):
 @login_required
 @admin_required
 def list_customers():
-    from app.models import Customer
     customers = Customer.query.order_by(Customer.region, Customer.name).all()
     return jsonify([{'id': c.id, 'name': c.name, 'region': c.region} for c in customers])
 
@@ -193,8 +187,6 @@ def list_customers():
 @login_required
 @admin_required
 def create_customer():
-    from app import db
-    from app.models import Customer
     data = request.get_json()
     name = (data.get('name') or '').strip()
     region = (data.get('region') or '').strip().lower()
@@ -210,8 +202,6 @@ def create_customer():
 @login_required
 @admin_required
 def delete_customer(customer_id):
-    from app import db
-    from app.models import Customer
     customer = Customer.query.get_or_404(customer_id)
     name = customer.name
     db.session.delete(customer)
@@ -223,7 +213,6 @@ def delete_customer(customer_id):
 @login_required
 @admin_required
 def list_projects():
-    from app.models import Project
     projects = Project.query.filter(Project.project_status != 'draft').order_by(Project.name).all()
     return jsonify([{'id': p.id, 'name': p.name, 'job_number': p.job_number, 'cs_lead': p.cs_lead.name if p.cs_lead else '—', 'status': p.project_status} for p in projects])
 
@@ -233,8 +222,6 @@ def list_projects():
 def delete_project(project_id):
     import os
     from flask import current_app
-    from app import db
-    from app.models import Project, ProjectFile
 
     project = Project.query.get_or_404(project_id)
     name = project.name
@@ -255,7 +242,6 @@ def delete_project(project_id):
 @login_required
 @admin_required
 def list_drafts():
-    from app.models import Project
     drafts = Project.query.filter_by(project_status='draft').order_by(Project.name).all()
     return jsonify([{'id': d.id, 'name': d.name, 'cs_lead': d.cs_lead.name if d.cs_lead else '—'} for d in drafts])
 
@@ -263,8 +249,6 @@ def list_drafts():
 @login_required
 @admin_required
 def delete_draft_admin(draft_id):
-    from app import db
-    from app.models import Project
     draft = Project.query.get_or_404(draft_id)
     name = draft.name
     db.session.delete(draft)
@@ -276,7 +260,6 @@ def delete_draft_admin(draft_id):
 @login_required
 @admin_required
 def list_deliverable_types():
-    from app.models import DeliverableType
     types = DeliverableType.query.order_by(DeliverableType.name).all()
     return jsonify([{
         'id': dt.id,
@@ -293,8 +276,6 @@ def list_deliverable_types():
 @login_required
 @admin_required
 def update_deliverable_type(type_id):
-    from app import db
-    from app.models import DeliverableType, DeliverableTypeDiscipline
     dt = DeliverableType.query.get_or_404(type_id)
     data = request.get_json()
     name = (data.get('name') or '').strip()
@@ -313,8 +294,6 @@ def update_deliverable_type(type_id):
 @login_required
 @admin_required
 def create_deliverable_type():
-    from app import db
-    from app.models import DeliverableType, DeliverableTypeDiscipline
     data = request.get_json()
     name = (data.get('name') or '').strip()
     client_id = data.get('client_id')
@@ -349,8 +328,6 @@ def create_deliverable_type():
 @login_required
 @admin_required
 def delete_deliverable_type(type_id):
-    from app import db
-    from app.models import DeliverableType
     dt = DeliverableType.query.get_or_404(type_id)
     name = dt.name
     db.session.delete(dt)
@@ -363,8 +340,6 @@ def delete_deliverable_type(type_id):
 @login_required
 @admin_required
 def list_activity():
-    from app.models import ActivityLog
-    from app import db
     from datetime import datetime
     query = ActivityLog.query
 
@@ -432,7 +407,6 @@ def list_activity():
 @login_required
 @admin_required
 def export_activity():
-    from app.models import ActivityLog
     from flask import make_response
     from datetime import datetime
     entries = ActivityLog.query.order_by(ActivityLog.created_at.asc()).all()
@@ -450,8 +424,6 @@ def export_activity():
 @login_required
 @admin_required
 def clear_activity():
-    from app import db
-    from app.models import ActivityLog
     ActivityLog.query.delete()
     db.session.commit()
     log_activity('log_cleared', f'Activity log wiped by {current_user.name}', user=current_user)
@@ -461,8 +433,6 @@ def clear_activity():
 @login_required
 @admin_required
 def delete_activity(entry_id):
-    from app import db
-    from app.models import ActivityLog
     entry = ActivityLog.query.get_or_404(entry_id)
     db.session.delete(entry)
     db.session.commit()
@@ -475,7 +445,6 @@ def delete_activity(entry_id):
 @login_required
 @admin_required
 def list_design_types():
-    from app.models import DesignType
     types = DesignType.query.order_by(DesignType.name).all()
     return jsonify([{'id': t.id, 'name': t.name, 'team': t.team} for t in types])
 
@@ -483,8 +452,6 @@ def list_design_types():
 @login_required
 @admin_required
 def create_design_type():
-    from app import db
-    from app.models import DesignType
     data = request.get_json()
     name = (data.get('name') or '').strip()
     team = (data.get('team') or '').strip() or None
@@ -502,8 +469,6 @@ def create_design_type():
 @login_required
 @admin_required
 def update_design_type(type_id):
-    from app import db
-    from app.models import DesignType
     t = DesignType.query.get_or_404(type_id)
     data = request.get_json()
     name = (data.get('name') or '').strip()
@@ -519,8 +484,6 @@ def update_design_type(type_id):
 @login_required
 @admin_required
 def delete_design_type(type_id):
-    from app import db
-    from app.models import DesignType
     t = DesignType.query.get_or_404(type_id)
     name = t.name
     db.session.delete(t)
@@ -535,7 +498,6 @@ def delete_design_type(type_id):
 @login_required
 @admin_required
 def list_design_directions():
-    from app.models import DesignDirection
     dirs = DesignDirection.query.order_by(DesignDirection.name).all()
     return jsonify([{'id': d.id, 'name': d.name} for d in dirs])
 
@@ -543,8 +505,6 @@ def list_design_directions():
 @login_required
 @admin_required
 def create_design_direction():
-    from app import db
-    from app.models import DesignDirection
     data = request.get_json()
     name = (data.get('name') or '').strip()
     if not name:
@@ -561,8 +521,6 @@ def create_design_direction():
 @login_required
 @admin_required
 def update_design_direction(dir_id):
-    from app import db
-    from app.models import DesignDirection
     d = DesignDirection.query.get_or_404(dir_id)
     data = request.get_json()
     name = (data.get('name') or '').strip()
@@ -576,8 +534,6 @@ def update_design_direction(dir_id):
 @login_required
 @admin_required
 def delete_design_direction(dir_id):
-    from app import db
-    from app.models import DesignDirection
     d = DesignDirection.query.get_or_404(dir_id)
     name = d.name
     db.session.delete(d)
@@ -592,8 +548,6 @@ def delete_design_direction(dir_id):
 @login_required
 def quick_add_design_type():
     """CS and admin can quickly add a design type from the brief form."""
-    from app import db
-    from app.models import DesignType
     if current_user.role not in ('admin', 'cs'):
         return jsonify({'error': 'Forbidden'}), 403
     data = request.get_json()
@@ -612,8 +566,6 @@ def quick_add_design_type():
 @login_required
 def quick_add_design_direction():
     """CS and admin can quickly add a design direction from the brief form."""
-    from app import db
-    from app.models import DesignDirection
     if current_user.role not in ('admin', 'cs'):
         return jsonify({'error': 'Forbidden'}), 403
     data = request.get_json()
@@ -657,7 +609,6 @@ def dev_wipe_projects():
     """
     from flask import current_app
     from sqlalchemy import text
-    from app import db
 
     # Guard: refuse entirely if the dev tools flag is off — this is the
     # server-side safety net independent of whether the UI is shown.
@@ -699,7 +650,6 @@ def broadcast_update():
       "blog_url":    "https://app.vitamin-e.work/blog-post1-v1.2update"
     }
     """
-    from app.notifications import broadcast_update_email
     data = request.get_json(silent=True) or {}
 
     version  = data.get('version',  'v1.2')

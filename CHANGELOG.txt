@@ -1,6 +1,24 @@
 ================================================================================
 VITAMIN HELIX — CHANGELOG
 ===============================================================================
+
+================================================================================
+v1.3 Backend Overhaul and New Features
+     Long Term Sustainability — 27 JUNE 2026
+================================================================================
+
+New Features:
+
+
+Adjustments:
+
+- Added ability to remove customers from C&CM if there has been no submission - to guard against accidental additions. If there is a submission active, you can mark the customer as cancelled, saving the submission and revision history.
+
+Bug Fixes:
+
+- Fixed customers on C&CM brief leaving behind "phantom" pills
+- Major redesign to backend structure, more sustainable code structure implemented
+
 ================================================================================
 v1.2.1 Minor Fixes — 27 JUNE 2026
 ================================================================================
@@ -11,7 +29,7 @@ Adjustments:
 - Added notification for when a project is started to other involved designers
 - Added total revision count for C&CM projects - Located in the submissions section. Concept & KV and each POSM channel still have their own revision counters, as do their deliverables.
 - Adjusted back button style on the create project page
-- Made add deliverable easier to see - Thanks Waseem for the feedaback
+- Made add deliverable easier to see - Thanks Waseem for the feedback
 
 Bug Fixes:
 
