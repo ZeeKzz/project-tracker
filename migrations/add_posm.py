@@ -2,6 +2,8 @@
 Migration: add POSM phase tracking columns.
 Run once from the project root:  python add_posm.py
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app, db
 from sqlalchemy import text
 

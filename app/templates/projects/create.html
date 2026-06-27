@@ -18,8 +18,7 @@
     {# ── Sticky Subheader ── #}
     <div class="create-subheader">
         <div class="create-subheader-left">
-            <a href="{{ url_for('projects.detail', project_id=edit_project_id) if edit_mode else (url_for('projects.drafts') if has_other_drafts else url_for('main.index')) }}"
-                class="btn btn--secondary">Back</a>
+            <span class="autosave-status" id="autosaveStatus">—</span>
         </div>
         <div class="create-subheader-center">
             <div class="completion-bar-track">
@@ -28,7 +27,8 @@
             <span class="completion-label" id="completionLabel">0% Complete</span>
         </div>
         <div class="create-subheader-right">
-            <span class="autosave-status" id="autosaveStatus">—</span>
+            <a href="{{ url_for('projects.detail', project_id=edit_project_id) if edit_mode else (url_for('projects.drafts') if has_other_drafts else url_for('main.index')) }}"
+                class="btn-secondary" style="font-size:0.72rem;padding:0.45rem 1rem;">Back</a>
         </div>
     </div>
 
@@ -245,12 +245,10 @@
                             <button type="button" class="team-tag-btn" data-team="Technical">Technical</button>
                         </div>
                     </div>
-                    <button type="button" class="btn btn--primary btn--sm" onclick="addStandardDeliverableToList()"
-                        style="margin-bottom: 1px;">+ Add</button>
                 </div>
-                <div style="margin-top: 0.4rem;">
-                    <button type="button" class="btn btn--tangerine btn--sm" onclick="applyDeadlineToAll()">Apply date
-                        to all</button>
+                <div style="margin-top: 0.6rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <button type="button" class="btn btn--tangerine" onclick="addStandardDeliverableToList()">+ Add Deliverable</button>
+                    <button type="button" class="btn btn--tangerine btn--sm" onclick="applyDeadlineToAll()">Apply date to all</button>
                 </div>
                 <div id="standardDeliverablesList"
                     style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem;"></div>

@@ -194,7 +194,7 @@ function helixShowBrowserNotification(message) {
 document.querySelectorAll('.clickable').forEach(row => {
     row.addEventListener('click', function (e) {
         if (e.target.closest('a, button, select')) return;
-        window.location = this.dataset.href;
+        if (window.navigateTo) { window.navigateTo(this.dataset.href); } else { window.location.href = this.dataset.href; }
     });
 });
 
@@ -913,7 +913,7 @@ function buildApprovedView(containerId, projects) {
 
                 // Make the row clickable (navigate to project detail)
                 tr.addEventListener('click', function () {
-                    window.location.href = this.dataset.href;
+                    if (window.navigateTo) { window.navigateTo(this.dataset.href); } else { window.location.href = this.dataset.href; }
                 });
                 tbody.appendChild(tr);
             });
@@ -1133,7 +1133,7 @@ function syncTableScrollers(viewEl) {
 }
 
 
-
+    function initDashboardTabs() {
     // Shared approved-projects toggle elements — present on all three dashboards
     var btnApprovedProjects = document.getElementById('btn-approved-projects');
     var approvedProjectsView = document.getElementById('approved-projects-view');
@@ -1240,6 +1240,9 @@ function syncTableScrollers(viewEl) {
     if (myProjectsView) syncTableScrollers(myProjectsView);
     if (allProjectsView) syncTableScrollers(allProjectsView);
     initAllProjectsFilters(); // populate and wire up All Projects filter bar
+    }
+    initDashboardTabs();
+    document.addEventListener('helix:navigated', initDashboardTabs);  
 
     // Account dropdown toggle
     const accountTrigger = document.getElementById('account-trigger');
@@ -2313,13 +2316,20 @@ function syncTableScrollers(viewEl) {
 
         // ── Edit Mode: Restore State ─────────────────────────────
         function restoreEditState() {
+            // Snapshot has_concept BEFORE switchBriefType resets it to 'false'.
+            // switchBriefType always clears the flag as part of its reset logic,
+            // so if we read it afterwards the check always fails and C&KV is lost.
+            var hasConceptEl = document.getElementById('has_concept');
+            var savedHasConcept = hasConceptEl ? hasConceptEl.value : 'false';
+
             var briefTypeEl = document.getElementById('brief_type');
             if (briefTypeEl && briefTypeEl.value) {
                 switchBriefType(briefTypeEl.value);
             }
 
-            var hasConceptEl = document.getElementById('has_concept');
-            if (hasConceptEl && hasConceptEl.value === 'true') {
+            // Restore the saved value — switchBriefType just wiped it to 'false'
+            if (hasConceptEl) hasConceptEl.value = savedHasConcept;
+            if (savedHasConcept === 'true') {
                 document.getElementById('sectionConceptKV').classList.remove('hidden');
                 var conceptKVBtn = document.getElementById('btnConceptKVToggle');
                 if (conceptKVBtn) conceptKVBtn.classList.add('active');
@@ -3053,10 +3063,12 @@ function syncTableScrollers(viewEl) {
             submissionSubmitForReviewBtn.disabled = true;
             submissionSubmitForReviewBtn.textContent = 'Submitting...';
 
-            // Collect Gulf POSM region + customer (or flat customer for non-Gulf)
+            // Collect Gulf POSM region + customer.
+            // C&KV submissions (includesConcept/includesKV) bypass this — they have
+            // no POSM country and are routed through the concept_kv phase instead.
             var posmCountry = null;
             var posmCustomerId = null;
-            if (window.posmActive) {
+            if (window.posmActive && !includesConcept && !includesKV) {
                 var posmRegionSel = document.getElementById('posmRegionSelect');
                 var posmCustomerSel = document.getElementById('posmCustomerSelect');
                 posmCountry = posmRegionSel ? (posmRegionSel.value || null) : null;
@@ -3382,14 +3394,161 @@ function syncTableScrollers(viewEl) {
         });
     }
 
+// ── C&KV: Submit to Client ───────────────────────────────────────────────────
+// Shown in internal_review state. Sends deck to client and moves
+// concept_status → submitted_to_client. Offers email draft on success.
+var ckvSubmitToClientBtn = document.getElementById('ckvSubmitToClientBtn');
+if (ckvSubmitToClientBtn) {
+    ckvSubmitToClientBtn.addEventListener('click', function () {
+        ckvSubmitToClientBtn.disabled = true;
+        ckvSubmitToClientBtn.textContent = 'Submitting...';
+
+        fetch('/projects/' + detailProjectId + '/submission/submit-to-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ckv: true })  // tells the route this is C&KV, not a POSM channel
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    showToast(data.error || 'Could not submit.', 'error');
+                    ckvSubmitToClientBtn.disabled = false;
+                    ckvSubmitToClientBtn.textContent = 'Submit to Client';
+                    return;
+                }
+                showToast('C&KV submitted to client.', 'success');
+                // Offer email draft modal — same flow as standard submission
+                var emailModal = document.getElementById('email-draft-modal');
+                var emailYes = document.getElementById('emailDraftYes');
+                var emailNo = document.getElementById('emailDraftNo');
+                if (emailModal && emailYes && emailNo) {
+                    emailModal.classList.remove('hidden');
+                    var subject = encodeURIComponent(data.project_name);
+                    var body = encodeURIComponent('Please find attached the latest Concept & KV deck for ' + data.project_name + '.\n\nBest regards,');
+                    var mailto = 'mailto:' + (data.client_email || '') + '?subject=' + subject + '&body=' + body;
+                    emailYes.onclick = function () { emailModal.classList.add('hidden'); window.open(mailto); window.location.reload(); };
+                    emailNo.onclick = function () { emailModal.classList.add('hidden'); window.location.reload(); };
+                } else {
+                    window.location.reload();
+                }
+            })
+            .catch(function () {
+                showToast('Something went wrong.', 'error');
+                ckvSubmitToClientBtn.disabled = false;
+                ckvSubmitToClientBtn.textContent = 'Submit to Client';
+            });
+    });
+}
+
+// ── C&KV: Send for Revision ──────────────────────────────────────────────────
+// Shown in submitted_to_client state. "Send for Revision" reveals a textarea;
+// "Send Revision" POSTs the message → concept_status moves to revision_in_queue.
+// Simpler than the standard revision — no deliverable picker needed (C&KV has no
+// standard deliverables in the POSM sense).
+(function () {
+    var ckvSendRevisionBtn = document.getElementById('ckvSendRevisionBtn');
+    var ckvRevisionForm = document.getElementById('ckvRevisionForm');
+    var ckvRevisionCancel = document.getElementById('ckvRevisionCancel');
+    var ckvRevisionConfirm = document.getElementById('ckvRevisionConfirm');
+
+    if (!ckvSendRevisionBtn) return;  // not in submitted_to_client state
+
+    ckvSendRevisionBtn.addEventListener('click', function () {
+        // Reveal the form and hide the trigger button
+        ckvRevisionForm.classList.remove('hidden');
+        ckvSendRevisionBtn.classList.add('hidden');
+    });
+
+    if (ckvRevisionCancel) {
+        ckvRevisionCancel.addEventListener('click', function () {
+            // Restore the button and clear the textarea
+            ckvRevisionForm.classList.add('hidden');
+            ckvSendRevisionBtn.classList.remove('hidden');
+            document.getElementById('ckvRevisionMessage').value = '';
+        });
+    }
+
+    if (ckvRevisionConfirm) {
+        ckvRevisionConfirm.addEventListener('click', function () {
+            var message = document.getElementById('ckvRevisionMessage').value.trim();
+            if (!message) {
+                showToast('Please describe the revision required.', 'error');
+                return;
+            }
+            ckvRevisionConfirm.disabled = true;
+            ckvRevisionConfirm.textContent = 'Sending...';
+
+            fetch('/projects/' + detailProjectId + '/submission/send-revision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ckv: true, message: message })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) {
+                        showToast(data.error || 'Could not send revision.', 'error');
+                        ckvRevisionConfirm.disabled = false;
+                        ckvRevisionConfirm.textContent = 'Send Revision';
+                        return;
+                    }
+                    showToast('Revision sent. Designer has been notified.', 'success');
+                    window.location.reload();
+                })
+                .catch(function () {
+                    showToast('Something went wrong.', 'error');
+                    ckvRevisionConfirm.disabled = false;
+                    ckvRevisionConfirm.textContent = 'Send Revision';
+                });
+        });
+    }
+})();
+
+// ── C&KV: Start Revision ─────────────────────────────────────────────────────
+// Shown in revision_in_queue state. Designer clicks to acknowledge the revision
+// and move concept_status → revision_in_progress, signalling work has begun.
+var ckvStartRevisionBtn = document.getElementById('ckvStartRevisionBtn');
+if (ckvStartRevisionBtn) {
+    ckvStartRevisionBtn.addEventListener('click', function () {
+        ckvStartRevisionBtn.disabled = true;
+        ckvStartRevisionBtn.textContent = 'Starting...';
+
+        fetch('/projects/' + detailProjectId + '/submission/start-revision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ckv: true })  // routes the action to the C&KV branch
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) {
+                    showToast(data.error || 'Could not start revision.', 'error');
+                    ckvStartRevisionBtn.disabled = false;
+                    ckvStartRevisionBtn.textContent = 'Start Revision';
+                    return;
+                }
+                showToast('Revision started. CS has been notified.', 'success');
+                window.location.reload();
+            })
+            .catch(function () {
+                showToast('Something went wrong.', 'error');
+                ckvStartRevisionBtn.disabled = false;
+                ckvStartRevisionBtn.textContent = 'Start Revision';
+            });
+    });
+}
     // ── Start Project ─────────────────────────────────────────────────
     // Handles the one-time transition from 'briefed' to 'in_progress'.
     // Stores the project ID when the modal opens, clears it on close.
 
     var _startProjectId = null;
 
-    function openStartProjectModal(projectId) {
+    function openStartProjectModal(projectId, team) {
         _startProjectId = projectId;
+        var msg = document.getElementById('start-project-assign-msg');
+        if (msg) {
+            msg.textContent = team
+                ? 'You will be assigned as the ' + team + ' lead designer on this project.'
+                : '';
+        }
         document.getElementById('start-project-modal').classList.remove('hidden');
     }
 
@@ -3398,25 +3557,8 @@ function syncTableScrollers(viewEl) {
         _startProjectId = null;
     }
 
-    var startProjectConfirmBtn = document.getElementById('start-project-confirm');
-    if (startProjectConfirmBtn) {
-        startProjectConfirmBtn.addEventListener('click', function () {
-            if (!_startProjectId) return;
-            fetch('/projects/' + _startProjectId + '/start-project', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        window.location.reload();
-                    } else {
-                        showToast(data.error || 'Could not start project.', 'error');
-                        closeStartProjectModal();
-                    }
-                });
-        });
-    }
+    // start-project-confirm is wired in detail.html's _wireDetailPage so it
+    // re-attaches correctly after SPA navigation.
 
     // ── Lead Designer Self-Assignment ────────────────────────────────────────────
 
@@ -3487,27 +3629,8 @@ function syncTableScrollers(viewEl) {
         _takeoverProjectId = null;
     }
 
-    var takeoverConfirmBtn = document.getElementById('lead-takeover-confirm');
-    if (takeoverConfirmBtn) {
-        takeoverConfirmBtn.addEventListener('click', function () {
-            if (!_takeoverTeam || !_takeoverProjectId) return;
-            fetch('/projects/' + _takeoverProjectId + '/assign-lead', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ team: _takeoverTeam })
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        closeTakeoverModal();
-                        refreshSection(_takeoverProjectId, 'section-assignments');
-                    } else {
-                        showToast(data.error || 'Could not take over as lead.', 'error');
-                        closeTakeoverModal();
-                    }
-                });
-        });
-    }
+    // lead-takeover-confirm is wired in detail.html's _wireDetailPage so it
+    // re-attaches correctly after SPA navigation.
 
 
     // ── POSM Parallel Channel Submission ─────────────────────────────────────────

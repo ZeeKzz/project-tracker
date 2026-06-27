@@ -18,7 +18,8 @@ from app.notifications import (
     notify_cs_of_brief_flag, notify_flag_reply, notify_cs_of_flag_resolved,
     notify_designer_of_concept_kv_assignment, notify_cs_of_lead_change,
     create_notification, notify_cs_of_project_started,
-    notify_of_submission_to_client, notify_of_project_approved
+    notify_of_submission_to_client, notify_of_project_approved,
+    notify_lead_designers_of_project_started
 )
 from app.utils import log_activity
 
@@ -223,11 +224,10 @@ def update_project(project_id):
             # deadline and teams updated without touching their status or assignments.
             def _norm_del(x):
                 if isinstance(x, str):
-                    return {'name': x.strip(), 'design_deadline': None, 'design_deadline_time': None, 'teams': []}
+                    return {'name': x.strip(), 'design_deadline': None, 'teams': []}
                 return {
                     'name': (x.get('name') or '').strip(),
                     'design_deadline': x.get('design_deadline'),
-                    'design_deadline_time': x.get('design_deadline_time'),
                     'teams': x.get('teams') or [],
                 }
 
@@ -642,6 +642,17 @@ def detail(project_id):
     if is_gulf:
         from app.models import ProjectPosmChannel, ProjectSubmission as _PS, ProjectRevision as _PR
 
+        # Remove orphaned UAE channels — these arise when an edit deletes+recreates
+        # ProjectCustomer records and PostgreSQL's ON DELETE SET NULL fires, leaving
+        # a UAE channel with posm_customer_id=NULL. Delete them now so they get
+        # recreated correctly below with the new ProjectCustomer ID.
+        orphaned = [ch for ch in project.posm_channels
+                    if ch.posm_country == 'uae' and ch.posm_customer_id is None]
+        if orphaned:
+            for ch in orphaned:
+                db.session.delete(ch)
+            db.session.flush()
+
         # Build a set of channel keys that already exist
         existing_channel_keys = set()
         for ch in project.posm_channels:
@@ -739,6 +750,7 @@ def detail(project_id):
         deliverables_json=deliverables_json,
         latest_revision=ProjectRevision.query.filter_by(project_id=project_id)
                         .order_by(ProjectRevision.sent_at.desc()).first(),
+        
         secondary_cs_assignments=secondary_cs_assignments,
         is_secondary_cs=is_secondary_cs,
         my_secondary_regions=my_secondary_regions,
@@ -751,6 +763,25 @@ def detail(project_id):
         gulf_region_names=GULF_REGION_NAMES,
         posm_channels_data=posm_channels_data,
         ckv_submission=ckv_submission,
+        # Latest revision request sent for C&KV specifically.
+        # Filtered to posm_country=None so POSM channel revisions don't bleed in.
+        # Only queried for CCM briefs — None for all others.
+        ckv_latest_revision=(
+            ProjectRevision.query.filter_by(
+                project_id=project_id,
+                posm_country=None,
+                posm_customer_id=None
+            ).order_by(ProjectRevision.sent_at.desc()).first()
+            if project.brief_type == 'ccm' else None
+        ),
+
+        # Total revision count across C&KV + all POSM channels for CCM projects.
+        # We count ProjectRevision rows directly — each revision (C&KV or channel)
+        # gets one row, so the count is always accurate.
+        total_revision_count=(
+            ProjectRevision.query.filter_by(project_id=project_id).count()
+            if project.brief_type == 'ccm' else 0
+        ),
     )
 
 @projects.route('/projects/<int:project_id>/update-status', methods=['POST'])
@@ -850,75 +881,6 @@ def toggle_hold(project_id):
 
     db.session.commit()
     return redirect(url_for('projects.detail', project_id=project_id))
-
-
-@projects.route('/projects/<int:project_id>/begin-posm', methods=['POST'])
-@login_required
-@role_required('admin', 'cs', 'management')
-def begin_posm(project_id):
-    """CS clicks 'Begin POSM' after concept/KV work is done.
-    - Snapshots the current revision_count as concept_kv_revision_count.
-    - Sets posm_started = True and records the timestamp.
-    - Deactivates any active submission so the file history locks as 'Concept & KV'
-      and the submission card resets to the upload state for the POSM phase.
-    - Resets project status to in_progress so designers can upload again.
-    - Per-customer posm_revision_count starts at 0 (already the default)."""
-    from app.utils import log_activity
-    from app.models import ProjectSubmission
-    from datetime import datetime as dt
-
-    project = Project.query.get_or_404(project_id)
-    if project.posm_started:
-        return jsonify({'success': False, 'error': 'POSM has already started'}), 400
-
-    # Lock POSM phase metadata
-    project.posm_started = True
-    project.posm_started_at = dt.utcnow()
-    project.concept_kv_revision_count = project.revision_count or 0
-
-    # Deactivate the current active submission (keeps it in history as Concept & KV)
-    active_submission = ProjectSubmission.query.filter_by(
-        project_id=project_id, is_active=True
-    ).first()
-    if active_submission:
-        active_submission.is_active = False
-
-    # Reset project status so the submission card shows the upload UI
-    project.project_status = 'in_progress'
-
-    # Create parallel POSM channels — one per UAE customer, one per other Gulf country
-    from app.models import ProjectPosmChannel
-    GULF_REGION_KEYS = ['uae', 'kuwait', 'qatar', 'bahrain', 'oman']
-    brief_sections: dict = {}
-    for pc in project.project_customers:
-        rk = (pc.customer.region or '').strip().lower()
-        if rk:
-            brief_sections.setdefault(rk, []).append(pc)
-
-    for region_key in GULF_REGION_KEYS:
-        if region_key not in brief_sections:
-            continue
-        if region_key == 'uae':
-            for pc in brief_sections['uae']:
-                db.session.add(ProjectPosmChannel(
-                    project_id=project_id,
-                    posm_country='uae',
-                    posm_customer_id=pc.id,
-                    status='in_queue',
-                ))
-        else:
-            db.session.add(ProjectPosmChannel(
-                project_id=project_id,
-                posm_country=region_key,
-                posm_customer_id=None,
-                status='in_queue',
-            ))
-
-    db.session.commit()
-    log_activity('posm_started',
-                 f'POSM phase started for "{project.name}" by {current_user.name}',
-                 user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
-    return jsonify({'success': True})
 
 
 @projects.route('/projects/<int:project_id>/customer/<int:pc_id>/set-status', methods=['POST'])
@@ -1359,21 +1321,31 @@ def start_project(project_id):
     emulating_id = session.get('emulating_user_id')
     actor = User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
 
-    # Role guard: must be an admin or a designer whose team is requested on this project
+    # Role guard: must be an admin, designer, or team lead whose team is requested on this project
     requested_teams = [t.strip() for t in (project.design_teams_requested or '').split(',')]
-    if actor.role != 'admin' and not (actor.role == 'designer' and actor.team in requested_teams):
-        return jsonify({'success': False, 'error': 'Project is not in Briefed status.'}), 400
-    
+    if actor.role != 'admin' and not (actor.role in ('designer', 'team_lead') and actor.team in requested_teams):
+        return jsonify({'success': False, 'error': 'You are not assigned to a team requested on this project.'}), 400
+
     # Idempotency guard: only move forward if currently briefed
     if project.project_status != 'briefed':
         return jsonify({'success': False, 'error': 'Project is not in Briefed status.'}), 400
-    
-    # Transition status and persist
+
+    # Transition status
     project.project_status = 'in_progress'
+
+    # Auto-assign the actor as lead for their team
+    if actor.team:
+        existing = ProjectDesigner.query.filter_by(project_id=project.id, team=actor.team).first()
+        if existing:
+            db.session.delete(existing)
+            db.session.flush()
+        db.session.add(ProjectDesigner(project_id=project.id, user_id=actor.id, team=actor.team))
+
     db.session.commit()
 
-    # Notify CS lead and any secondary CS
+    # Notify CS lead, secondary CS, and other assigned lead designers
     notify_cs_of_project_started(project, triggered_by=actor)
+    notify_lead_designers_of_project_started(project, triggered_by=actor)
 
     # Record in activity log
     log_activity('project_started',
@@ -2139,7 +2111,7 @@ def delete_project_file(file_id):
 
 @projects.route('/projects/<int:project_id>/submission/upload', methods=['POST'])
 @login_required
-@role_required('admin', 'cs', 'designer', 'team_lead')
+@role_required('admin', 'designer', 'team_lead')  # CS can view submissions but not upload
 def upload_submission(project_id):
     """Designer uploads a new client deck (PDF or PPTX).
     - Deactivates any previous active submission.
@@ -2164,7 +2136,7 @@ def upload_submission(project_id):
         return jsonify({'success': False, 'error': 'No file selected'}), 400
 
     # Only PDF and PPTX are valid client decks
-    allowed = {'pdf', 'pptx'}
+    allowed = {'pdf', 'pptx', 'docx', 'doc'}
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext not in allowed:
         return jsonify({'success': False, 'error': 'Only PDF and PPTX files are accepted'}), 400
@@ -2229,13 +2201,71 @@ def upload_submission(project_id):
     )
     db.session.add(submission)
 
-    # Reset channel status to in_queue so the UI shows the picker
+    # Auto-name the file with the canonical format at upload time
+    def _sanitize(s):
+        return re.sub(r'[\\/:*?"<>|]', '', s).strip()
+
+    client_name = project.client_brand.name if project.client_brand else 'Client'
+    GULF_REGION_NAMES = {
+        'uae': 'UAE', 'kuwait': 'Kuwait',
+        'qatar': 'Qatar', 'bahrain': 'Bahrain', 'oman': 'Oman'
+    }
+
+    if channel:
+        country = channel.posm_country or ''
+        if country == 'uae' and channel.posm_customer_id:
+            from app.models import ProjectCustomer as _PC
+            pc = _PC.query.get(channel.posm_customer_id)
+            posm_rev = (pc.posm_revision_count or 0) if pc else 0
+            posm_label = 'Initial' if posm_rev == 0 else f'Revision {posm_rev}'
+            customer_name = pc.customer.name if (pc and pc.customer) else 'Customer'
+            submission.original_filename = (
+                f'{_sanitize(client_name)} - {_sanitize(project.name)} - '
+                f'UAE - {_sanitize(customer_name)} - POSM - {posm_label}.{ext}'
+            )
+        elif country:
+            country_display = GULF_REGION_NAMES.get(country, country.title())
+            counts = project.posm_country_revision_counts or {}
+            posm_rev = counts.get(country, 0)
+            posm_label = 'Initial' if posm_rev == 0 else f'Revision {posm_rev}'
+            submission.original_filename = (
+                f'{_sanitize(client_name)} - {_sanitize(project.name)} - '
+                f'{country_display} - POSM - {posm_label}.{ext}'
+            )
+        else:
+            is_revised = (project.revision_count or 0) > 0
+            revision_label = 'Initial' if not is_revised else f'Revision {project.revision_count}'
+            submission.original_filename = (
+                f'{_sanitize(client_name)} - {_sanitize(project.name)} - POSM - {revision_label}.{ext}'
+            )
+    else:
+        # C&CM projects: C&KV submissions get their own revision counter and label
+        if project.brief_type == 'ccm':
+            ckv_rev = project.ckv_revision_count or 0
+            ckv_label = 'Initial' if ckv_rev == 0 else f'Revision {ckv_rev}'
+            submission.original_filename = (
+                f'{_sanitize(client_name)} - {_sanitize(project.name)} - '
+                f'Concept & KV - {ckv_label}.{ext}'
+            )
+        else:
+            # Standard briefs use the global revision_count
+            is_revised = (project.revision_count or 0) > 0
+            revision_label = 'Initial' if not is_revised else f'Revision {project.revision_count}'
+            submission.original_filename = (
+                f'{_sanitize(client_name)} - {_sanitize(project.name)} - {revision_label}.{ext}'
+            )
+
+    # Reset channel/project status after reupload so the picker state renders
     if channel and channel.status in ('internal_revision',):
         channel.status = 'in_queue'
     elif not channel and project.project_status == 'internal_revision':
-        # Non-POSM reupload after CS flag: reset project status so the
-        # template renders State 2 (picker + submit button) not State 4 (flagged)
+        # Standard brief reupload after internal CS flag
         project.project_status = 'in_progress'
+    elif not channel and project.concept_status in ('revision_in_queue', 'revision_in_progress', 'internal_revision'):
+        # C&KV reupload after client revision or internal flag — reset so picker shows
+        project.concept_status = 'in_progress'
+        if project.kv_status in ('revision_in_queue', 'revision_in_progress', 'internal_revision'):
+            project.kv_status = 'in_progress'
 
     db.session.commit()
 
@@ -2513,6 +2543,39 @@ def submit_to_client(project_id):
             return jsonify({'success': False, 'error': 'The current deck is flagged — wait for the designer to reupload'}), 400
         if channel.status != 'internal_review':
             return jsonify({'success': False, 'error': 'Deck must be in Internal Review before submitting to client'}), 400
+
+    elif data.get('ckv'):
+        # ── C&KV submit-to-client ────────────────────────────────────────────
+        # Finds the active concept_kv phase submission and marks it as sent.
+        # concept_status must be internal_review — guards against double-submit.
+        submission = ProjectSubmission.query.filter_by(
+            project_id=project_id, is_active=True, phase='concept_kv'
+        ).first()
+        if not submission:
+            return jsonify({'success': False, 'error': 'Upload a C&KV deck before submitting'}), 400
+        if submission.is_flagged:
+            return jsonify({'success': False, 'error': 'The current deck is flagged — wait for the designer to reupload'}), 400
+        if project.concept_status != 'internal_review':
+            return jsonify({'success': False, 'error': 'C&KV deck must be in Internal Review before submitting to client'}), 400
+
+        # Stamp the submission as officially sent — file is now permanent
+        submission.submitted_to_client_at = dt.utcnow()
+        submission.submitted_by_id = current_user.id
+
+        # Advance concept/KV statuses to submitted_to_client
+        project.concept_status = 'submitted_to_client'
+        if project.has_kv:
+            project.kv_status = 'submitted_to_client'
+
+        db.session.commit()
+        log_activity('submitted_to_client',
+                     f'C&KV for "{project.name}" submitted to client by {current_user.name}',
+                     user=current_user, entity_type='project',
+                     entity_name=project.name, entity_id=project.id)
+        notify_of_submission_to_client(project, triggered_by=current_user)
+        client_email = project.client_brand.contact_email if project.client_brand else None
+        return jsonify({'success': True, 'client_email': client_email or '', 'project_name': project.name})
+
     else:
         submission = ProjectSubmission.query.filter_by(
             project_id=project_id, is_active=True
@@ -2560,55 +2623,6 @@ def submit_to_client(project_id):
             project.concept_status = 'submitted_to_client'
         if project.kv_status:
             project.kv_status = 'submitted_to_client'
-
-    # Rename the download filename to the canonical format:
-    # Concept/KV phase: "Client - Project - Initial" / "Client - Project - Revision N"
-    # POSM phase:       "Client - Project - Customer - POSM - Initial" / "... - POSM - Revision N"
-    def _sanitize(s):
-        # Strip characters that are illegal in filenames on Windows/macOS/Linux
-        return re.sub(r'[\\/:*?"<>|]', '', s).strip()
-
-    client_name = project.client_brand.name if project.client_brand else 'Client'
-
-    GULF_REGION_NAMES = {
-        'uae': 'UAE', 'kuwait': 'Kuwait',
-        'qatar': 'Qatar', 'bahrain': 'Bahrain', 'oman': 'Oman'
-    }
-
-    if submission.phase == 'posm':
-        country = submission.posm_country or ''
-        if country == 'uae' and submission.posm_customer_id:
-            # UAE: per-customer count + customer name in filename
-            from app.models import ProjectCustomer as _PC
-            pc = _PC.query.get(submission.posm_customer_id)
-            posm_rev = (pc.posm_revision_count or 0) if pc else 0
-            posm_label = 'Initial' if posm_rev == 0 else f'Revision {posm_rev}'
-            customer_name = pc.customer.name if (pc and pc.customer) else 'Customer'
-            submission.original_filename = (
-                f'{_sanitize(client_name)} - {_sanitize(project.name)} - '
-                f'UAE - {_sanitize(customer_name)} - POSM - {posm_label}.{submission.file_type}'
-            )
-        elif country:
-            # Kuwait / Qatar / Bahrain / Oman: use stored per-country counter
-            country_display = GULF_REGION_NAMES.get(country, country.title())
-            counts = project.posm_country_revision_counts or {}
-            posm_rev = counts.get(country, 0)
-            posm_label = 'Initial' if posm_rev == 0 else f'Revision {posm_rev}'
-            submission.original_filename = (
-                f'{_sanitize(client_name)} - {_sanitize(project.name)} - '
-                f'{country_display} - POSM - {posm_label}.{submission.file_type}'
-            )
-        else:
-            # Fallback: generic POSM without country
-            revision_label = 'Initial' if not is_revised_submission else f'Revision {project.revision_count}'
-            submission.original_filename = (
-                f'{_sanitize(client_name)} - {_sanitize(project.name)} - POSM - {revision_label}.{submission.file_type}'
-            )
-    else:
-        revision_label = 'Initial' if not is_revised_submission else f'Revision {project.revision_count}'
-        submission.original_filename = (
-            f'{_sanitize(client_name)} - {_sanitize(project.name)} - {revision_label}.{submission.file_type}'
-        )
 
     db.session.commit()
 
@@ -2689,6 +2703,62 @@ def send_revision(project_id):
     if channel:
         if channel.status != 'submitted_to_client':
             return jsonify({'success': False, 'error': 'Channel must be Submitted to Client before sending a revision'}), 400
+    elif data.get('ckv'):
+        # ── C&KV revision ────────────────────────────────────────────────────
+        # Guard: C&KV must have been submitted to client before CS can send a revision.
+        if project.concept_status != 'submitted_to_client':
+            return jsonify({'success': False, 'error': 'C&KV must be Submitted to Client before sending a revision'}), 400
+
+        # Create the revision record — no posm fields since this is the C&KV phase
+        revision = ProjectRevision(
+            project_id=project_id,
+            message=message,
+            sent_by_id=current_user.id,
+            sent_at=dt.utcnow(),
+            includes_concept=bool(project.has_concept),
+            includes_kv=bool(project.has_kv),
+            posm_customer_id=None,
+            posm_country=None
+        )
+        db.session.add(revision)
+
+        # Increment the C&KV-specific revision counter
+        project.ckv_revision_count = (project.ckv_revision_count or 0) + 1
+
+        # Move concept/KV statuses into revision_in_queue
+        project.concept_status = 'revision_in_queue'
+        if project.has_kv:
+            project.kv_status = 'revision_in_queue'
+
+        # Deactivate the C&KV submission so the deck area clears for reupload
+        ckv_sub = ProjectSubmission.query.filter_by(
+            project_id=project_id, is_active=True, phase='concept_kv'
+        ).first()
+        if ckv_sub:
+            ckv_sub.is_active = False
+
+        db.session.commit()
+
+        # Notify C&KV designers
+        concept_designer = project.concept_designer
+        kv_designer = project.kv_designer
+        notified = set()
+        for designer in [concept_designer, kv_designer]:
+            if designer and designer.id not in notified:
+                notified.add(designer.id)
+                create_notification(
+                    recipient=designer,
+                    message=f'C&KV revision #{project.ckv_revision_count} requested on "{project.name}" by {current_user.name}.',
+                    notification_type='revision_requested',
+                    project=project,
+                    triggered_by=current_user
+                )
+
+        log_activity('revision_requested',
+                     f'C&KV Revision #{project.ckv_revision_count} sent for "{project.name}" by {current_user.name}: {message[:100]}',
+                     user=current_user, entity_type='project',
+                     entity_name=project.name, entity_id=project.id)
+        return jsonify({'success': True})
     else:
         if project.project_status != 'submitted_to_client':
             return jsonify({'success': False, 'error': 'Project must be in Submitted to Client status to send a revision'}), 400
@@ -2869,6 +2939,34 @@ def start_revision(project_id):
             for link in revision.revision_deliverables:
                 if link.deliverable:
                     link.deliverable.status = 'revision_in_progress'
+    elif data.get('ckv'):
+        # ── C&KV start revision ───────────────────────────────────────────────
+        # Designer acknowledges the C&KV revision and starts working on it.
+        if project.concept_status != 'revision_in_queue':
+            return jsonify({'success': False, 'error': 'No C&KV revision is pending'}), 400
+
+        # Advance concept/KV into in-progress so the template shows the upload button
+        project.concept_status = 'revision_in_progress'
+        if project.has_kv:
+            project.kv_status = 'revision_in_progress'
+
+        db.session.commit()
+
+        # Notify CS lead that the designer has started
+        if project.cs_lead and project.cs_lead.id != current_user.id:
+            create_notification(
+                recipient=project.cs_lead,
+                message=f'{current_user.name} has started C&KV Revision #{project.ckv_revision_count} on "{project.name}"',
+                notification_type='revision_started',
+                project=project,
+                triggered_by=current_user
+            )
+
+        log_activity('revision_started',
+                     f'C&KV Revision #{project.ckv_revision_count} started on "{project.name}" by {current_user.name}',
+                     user=current_user, entity_type='project',
+                     entity_name=project.name, entity_id=project.id)
+        return jsonify({'success': True})
     else:
         if project.project_status != 'revision_in_queue':
             return jsonify({'success': False, 'error': 'No revision is pending for this project'}), 400

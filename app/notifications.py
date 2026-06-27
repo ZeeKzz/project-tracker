@@ -471,6 +471,25 @@ def notify_cs_of_project_started(project, triggered_by):
                             pref_key='project_started')
 
 
+def notify_lead_designers_of_project_started(project, triggered_by):
+    """Notify other lead designers (ProjectDesigner records) when a project is started.
+    The actor who pressed Start Project is excluded — they already know.
+    CS lead is notified separately via notify_cs_of_project_started."""
+    from app.models import ProjectDesigner
+    message = f'{triggered_by.name} has started work on "{project.name}".'
+    leads = ProjectDesigner.query.filter_by(project_id=project.id).all()
+    for lead in leads:
+        if lead.user_id != triggered_by.id:
+            create_notification(
+                recipient=lead.designer,
+                message=message,
+                notification_type='project_started',
+                project=project,
+                triggered_by=triggered_by,
+                pref_key='project_started'
+            )
+
+
 def notify_of_submission_to_client(project, triggered_by):
     """
     Notify management, admin users, and all designers assigned to the project
@@ -561,7 +580,7 @@ def broadcast_update_email(version, subject_line, intro_line, blog_url):
     app_url = 'https://app.vitamin-e.work'
     sent = 0
 
-    users = User.query.filter_by(active=True).all()
+    users = User.query.all()
 
     for user in users:
         if not user.email:

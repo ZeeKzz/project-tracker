@@ -2,6 +2,8 @@
 Migration: add held_from_status column to projects table
 Run once from the project root:  python add_hold_status.py
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app, db
 from sqlalchemy import text
 
