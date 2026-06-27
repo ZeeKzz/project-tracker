@@ -3197,6 +3197,64 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
     white-space: nowrap;
 }
 
+.customer-cancelled-badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.3rem 0.85rem;
+    border-radius: var(--radius);
+    border: 1.5px solid var(--rose);
+    background-color: #fdf0f1;
+    color: var(--rose);
+    white-space: nowrap;
+}
+
+.brief-customer-block.customer-cancelled {
+    opacity: 0.65;
+    border-left: 3px solid var(--rose);
+    pointer-events: none;
+}
+
+.brief-customer-block.customer-cancelled .customer-cancelled-badge {
+    pointer-events: auto;
+}
+
+.btn-customer-action {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.3rem 0.85rem;
+    border-radius: var(--radius);
+    border: 1.5px solid transparent;
+    cursor:pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+}
+
+.btn-customer-cancel {
+    border-color: var(--canary);
+    background-color: #fdfbec;
+    color: #7a6a00;
+}
+
+.btn-customer-cancel:hover {
+    opacity: 0.8;
+}
+
+.btn-customer-remove {
+    border-color: var(--rose);
+    background-color: #fdf0f1;
+    color: var(--rose);
+}
+
+.btn-customer-remove:hover {
+    opacity: 0.8;
+}
+
 /* ── POSM ────────────────────────────────────────────── */
 .posm-begin-row {
     display: flex;
@@ -3361,6 +3419,16 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
 .posm-channel-pill--active .posm-pill-status--revision_in_queue,
 .posm-channel-pill--active .posm-pill-status--revision_in_progress {
     color: #fff;
+}
+
+.posm-channel-pill--cancelled {
+    border-color: var(--rose);
+    background: #fce8ea;
+    opacity: 0.75;
+}
+
+.posm-channel-pill--cancelled .posm-pill-label {
+    color: var(--rose);
 }
 
 .posm-channel-section {

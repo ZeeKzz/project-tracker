@@ -492,7 +492,7 @@
         <div class="brief-region-block">
             <h3 class="brief-region-heading">{{ region_key | upper }}</h3>
             {% for pc in brief_sections[region_key] %}
-            <div class="brief-customer-block">
+            <div class="brief-customer-block{% if pc.cancelled %} customer-cancelled{% endif %}">
                 <div class="brief-customer-header">
                     <h4 class="brief-customer-name">{{ pc.customer.name }}</h4>
                     <div class="brief-customer-dates">
@@ -531,6 +531,21 @@
                     <button class="btn-approve-customer"
                         data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
                         data-pc-id="{{ pc.id }}" onclick="approveCustomer(this)">✓ Approve</button>
+                    {% endif %}
+                    {% if pc.cancelled %}
+                    <span class="customer-cancelled-badge">✗ Cancelled</span>
+                    {% elif effective_user.role in ['admin', 'cs'] and project.project_status != 'approved' %}
+                    {% if pc.id in pc_ids_with_submissions %}
+                    <button class="btn-customer-action btn-customer-cancel"
+                        onclick="confirmCancelCustomer({{ pc.id }}, '{{ pc.customer.name | e }}')">
+                        Cancel Customer
+                    </button>
+                    {% else %}
+                    <button class="btn-customer-action btn-customer-remove"
+                        onclick="confirmRemoveCustomer({{ pc.id }}, '{{ pc.customer.name | e }}')">
+                        Remove Customer
+                    </button>
+                    {% endif %}
                     {% endif %}
                     {% endif %}
                 </div>
@@ -874,9 +889,9 @@
             {% set _sl = {'in_queue':'Not Started','in_progress':'In Progress','internal_review':'In
             Review','internal_revision':'Needs Revision','submitted_to_client':'Sent','revision_in_queue':'Rev
             Pending','revision_in_progress':'Rev In Progress'} %}
-            <button class="posm-channel-pill"
+            <button class="posm-channel-pill{% if cd.cancelled %} posm-channel-pill--cancelled{% endif %}"
                 data-channel-id="{{ cd.channel.id }}" onclick="selectPosmChannel({{ cd.channel.id }})">
-                <span class="posm-pill-label">{{ cd.label }}</span>
+                <span class="posm-pill-label">{{ cd.label }}{% if cd.cancelled %} · Cancelled{% endif %}</span>
                 <span class="posm-pill-status posm-pill-status--{{ cd.channel.status }}">{{ _sl.get(cd.channel.status,
                     cd.channel.status) }}</span>
             </button>
@@ -1066,8 +1081,17 @@
         {% set ch = cd.channel %}
         {% set ch_sub = cd.active_submission %}
         {% set ch_rev = cd.latest_revision %}
+        {% set ch_cancelled = cd.cancelled %}
+        {% set ch_readonly = ch_cancelled and effective_user.role != 'admin' %}
         <div class="posm-channel-section hidden" id="posm-ch-{{ ch.id }}"
             data-channel-id="{{ ch.id }}">
+
+            {% if ch_cancelled %}
+            <div
+                style="background:var(--rose);color:#fff;padding:0.5rem 0.75rem;border-radius:6px;font-size:0.85rem;margin-bottom:1rem;">
+                ⊘ This customer has been cancelled. View only.
+            </div>
+            {% endif %}
 
             {# State 3: In Internal Review — CS can approve or flag #}
             {% if ch.status == 'internal_review' and ch_sub %}
@@ -1082,7 +1106,7 @@
             </div>
             <div class="submission-status" style="margin-top:0.5rem;">🔍 In Internal Review. Awaiting Client Servicing
                 approval</div>
-            {% if effective_user.role in ['admin', 'cs'] %}
+            {% if effective_user.role in ['admin', 'cs'] and not ch_readonly %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
                 <button type="button" class="btn-primary ch-submit-client-btn" data-channel-id="{{ ch.id }}"
                     data-project-id="{{ project.id }}" data-project-name="{{ project.name }}">Submit to Client</button>
@@ -1116,7 +1140,7 @@
                 ⚑ Flagged by {{ ch_sub.flagged_by.name if ch_sub.flagged_by else 'CS' }}:
                 "{{ ch_sub.flag_message }}"
             </div>
-            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] and not ch_readonly %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" class="hidden ch-file-input" id="ch-file-{{ ch.id }}" data-channel-id="{{ ch.id }}"
                     accept=".pdf,.pptx">
@@ -1144,7 +1168,7 @@
                 ✓ Submitted to client on {{ ch_sub.submitted_to_client_at | dubai_time }} GST
                 by {{ ch_sub.submitted_by.name if ch_sub.submitted_by else '—' }}
             </div>
-            {% if effective_user.role in ['admin', 'cs'] %}
+            {% if effective_user.role in ['admin', 'cs'] and not ch_readonly %}
             <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
                 <button type="button" class="btn-danger btn-sm ch-send-revision-btn" data-channel-id="{{ ch.id }}">↩
                     Send for Revision</button>
@@ -1173,7 +1197,7 @@
                 <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at | dubai_time }} GST</p>
             </div>
             {% endif %}
-            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] and not ch_readonly %}
             <div style="margin-top:1rem;">
                 <button type="button" class="btn-primary ch-start-revision-btn" data-channel-id="{{ ch.id }}"
                     data-project-id="{{ project.id }}">Start Revision</button>
@@ -1192,7 +1216,7 @@
                 <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at | dubai_time }} GST</p>
             </div>
             {% endif %}
-            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] and not ch_readonly %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" class="hidden ch-file-input" id="ch-file-{{ ch.id }}" data-channel-id="{{ ch.id }}"
                     accept=".pdf,.pptx">
@@ -1216,7 +1240,7 @@
                         class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
-            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] and not ch_readonly %}
             <div class="submission-picker" style="margin-top:1rem;">
                 <p class="detail-label" style="margin-bottom:0.5rem;">Which deliverables are included in this deck?</p>
                 {# For UAE channels: posm_customer_id is set — only that customer's deliverables. #}
@@ -1240,7 +1264,7 @@
             {# State 1: No deck yet #}
             {% else %}
             <p class="no-files-msg">No deck uploaded yet for this region.</p>
-            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] and not ch_readonly %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" class="hidden ch-file-input" id="ch-file-{{ ch.id }}" data-channel-id="{{ ch.id }}"
                     accept=".pdf,.pptx">
@@ -1260,19 +1284,25 @@
             {% set ckv_history = submitted_history | selectattr('phase','equalto','concept_kv') | list %}
             {% set posm_history = submitted_history | selectattr('phase','equalto','posm') | list %}
             {% if ckv_history %}
-            <p class="detail-label" style="margin-bottom:0.6rem;">Concept &amp; KV Submissions</p>
-            {% for s in ckv_history %}
-            <div class="reference-file-item" style="opacity:{% if loop.first %}1{% else %}0.65{% endif %};">
-                <span class="reference-file-icon">{% if s.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
-                <span class="reference-file-name">{{ s.original_filename }}</span>
-                <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
-                    s.submitted_by.name if s.submitted_by else '—' }}</span>
-                <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
-                        class="btn-secondary btn-sm">Download</a>
+            <div class="posm-customer-history">
+                <button class="posm-history-toggle" onclick="togglePosmHistory(this)" data-target="ckv-history-panel">
+                    Concept &amp; KV &nbsp;·&nbsp; {{ ckv_history|length }} submission{{ 's' if ckv_history|length != 1 }} ▾
+                </button>
+                <div id="ckv-history-panel" class="posm-history-body hidden">
+                    {% for s in ckv_history %}
+                    <div class="reference-file-item" style="opacity:{% if loop.first %}1{% else %}0.65{% endif %};">
+                        <span class="reference-file-icon">{% if s.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+                        <span class="reference-file-name">{{ s.original_filename }}</span>
+                        <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
+                            s.submitted_by.name if s.submitted_by else '—' }}</span>
+                        <div class="reference-file-actions">
+                            <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                                class="btn-secondary btn-sm">Download</a>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
-            {% endfor %}
             {% endif %}
             {% if posm_history %}
             <p class="detail-label" style="margin-top:1.25rem;margin-bottom:0.6rem;">POSM Submissions</p>
@@ -1968,6 +1998,42 @@
                 btn.textContent = '✓ Approve';
             });
     }
+
+    function confirmRemoveCustomer(pcId, customerName) {
+            if (!confirm('Remove "' + customerName + '"? This cannot be undone.')) return;
+            fetch('/projects/{{ project.id }}/customer/' + pcId + '/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        showToast('"' + customerName + '" removed.', 'success');
+                        setTimeout(function () { location.reload(); }, 800);
+                    } else {
+                        showToast(data.error || 'Something went wrong', 'error');
+                    }
+                })
+                .catch(function () { showToast('Something went wrong', 'error'); });
+        }
+
+        function confirmCancelCustomer(pcId, customerName) {
+            if (!confirm('Mark "' + customerName + '" as cancelled? Submission history will be preserved.')) return;
+            fetch('/projects/{{ project.id }}/customer/' + pcId + '/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        showToast('"' + customerName + '" marked as cancelled.', 'success');
+                        setTimeout(function () { location.reload(); }, 800);
+                    } else {
+                        showToast(data.error || 'Something went wrong', 'error');
+                    }
+                })
+                .catch(function () { showToast('Something went wrong', 'error'); });
+        }
 
     function resolveFlag(flagId, projectId) {
         if (!confirm('Mark this flag as resolved?')) return;

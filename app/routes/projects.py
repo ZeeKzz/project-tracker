@@ -278,36 +278,74 @@ def update_project(project_id):
             for region_name in data.get('regions', []):
                 db.session.add(ProjectRegion(project_id=project.id, region=region_name))
 
-            for pc in ProjectCustomer.query.filter_by(project_id=project.id).all():
-                db.session.delete(pc)
+            # --- Stage 1: Load existing ProjectCustomers by customer_id ---
+            existing_pcs = {
+                pc.customer_id: pc
+                for pc in ProjectCustomer.query.filter_by(project_id=project.id).all()
+            }
+
+            # --- Stage 2:upsert ---
+            customer_dates = data.get('customer_dates', {})
+            submitted_customer_ids = set()
+            for item in data.get ('deliverables', []):
+                submitted_customer_ids.add(int(item['customer_id']))
+
+            # Delete customers no longer in the submitted list
+            for cid, pc in existing_pcs.items():
+                if cid not in submitted_customer_ids:
+                    from app.models import ProjectSubmission
+                    has_submissions = ProjectSubmission.query.filter_by(
+                        posm_customer_id=pc.id
+                    ).first()
+                    if not has_submissions:
+                        db.session.delete(pc)
+                                
             db.session.flush()
 
+            # Update or insert
             customer_map = {}
-            for item in data.get('deliverables', []):
-                customer_id = int(item['customer_id'])
-                if customer_id not in customer_map:
-                    customer_dates = data.get('customer_dates', {})
-                    dates = customer_dates.get(str(customer_id), {})
-                    raw_time = dates.get('design_deadline_time')
+            for customer_id in submitted_customer_ids:
+                dates = customer_dates.get(str(customer_id), {})
+                raw_time = dates.get('design_deadline_time')
+                parsed_time = datetime.strptime(raw_time, '%H:%M').time() if raw_time else None
+
+                if customer_id in existing_pcs:
+                    # Preserve the row and its ID. Update deadline fields
+                    pc = existing_pcs[customer_id]
+                    pc.design_deadline = parse_date(dates.get('design_deadline'))
+                    pc.design_deadline_time = parsed_time
+                    pc.installation_date = parse_date(dates.get('installation_date'))
+                else:
+                    # New customer, insert fresh row
                     pc = ProjectCustomer(
                         project_id=project.id,
                         customer_id=customer_id,
                         design_deadline=parse_date(dates.get('design_deadline')),
-                        design_deadline_time=datetime.strptime(raw_time, '%H:%M').time() if raw_time else None,
+                        design_deadline_time=parsed_time,
                         installation_date=parse_date(dates.get('installation_date')),
                     )
                     db.session.add(pc)
-                    db.session.flush()
-                    customer_map[customer_id] = pc.id
+                
+                db.session.flush()
+                customer_map[customer_id] = pc.id
+            
+            # --- Stage 3: rebuild deliverables for surviving customers ---
+            for pc_id in customer_map.values():
+                Deliverable.query.filter_by(
+                    project_customer_id=pc_id
+                ).delete(synchronize_session=False)
+            db.session.flush()
 
-                db.session.add(Deliverable(
+            for item in data.get('deliverables', []):
+                customer_id = int(item['customer_id'])
+                db.session.add(Deliverable (
                     project_id=project.id,
                     project_customer_id=customer_map[customer_id],
                     deliverable_type_id=int(item['type_id']) if item.get('type_id') and item['type_id'] != 'custom' else None,
                     name=item['name'],
                     created_by=current_user
                 ))
-
+                
         db.session.commit()
 
         log_activity('project_edited', f'Project "{project.name}" was edited by {current_user.name}',
@@ -667,7 +705,10 @@ def detail(project_id):
             if region_key not in brief_sections:
                 continue
             if region_key == 'uae':
+                
                 for pc in brief_sections['uae']:
+                    if pc.cancelled:
+                        continue
                     if ('uae', pc.id) not in existing_channel_keys:
                         db.session.add(ProjectPosmChannel(
                             project_id=project_id,
@@ -728,7 +769,15 @@ def detail(project_id):
                 'label': label,
                 'active_submission': ch_active_sub,
                 'latest_revision': ch_latest_rev,
+                'cancelled': channel.posm_customer.cancelled if channel.posm_customer else False,
             })
+    
+    from app.models import ProjectSubmission
+    pc_ids_with_submissions = {
+        s.posm_customer_id
+        for s in ProjectSubmission.query.filter_by(project_id=project_id).all()
+        if s.posm_customer_id is not None
+    }
 
     return render_template(
         'projects/detail.html',
@@ -763,6 +812,7 @@ def detail(project_id):
         gulf_region_names=GULF_REGION_NAMES,
         posm_channels_data=posm_channels_data,
         ckv_submission=ckv_submission,
+        pc_ids_with_submissions=pc_ids_with_submissions,
         # Latest revision request sent for C&KV specifically.
         # Filtered to posm_country=None so POSM channel revisions don't bleed in.
         # Only queried for CCM briefs — None for all others.
@@ -915,6 +965,103 @@ def set_customer_status(project_id, pc_id):
         user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id
     )
     return jsonify({'success': True, 'approved': new_status == 'approved'})
+
+@projects.route('/projects/<int:project_id>/customer/<int:pc_id>/remove', methods=['POST'])
+@login_required
+@role_required('admin','cs','management')
+def remove_customer(project_id, pc_id):
+    from app.utils import log_activity
+    from app.notifications import create_notification
+    from app.models import ProjectCustomer, ProjectSubmission, DeliverableAssignment, User as UserModel
+    project = Project.query.get_or_404(project_id)
+    pc = ProjectCustomer.query.get_or_404(pc_id)
+
+    if project.project_status == 'approved':
+        return jsonify({'success': False, 'error': 'Project is approved and locked'}), 403
+    
+    # Guard: refuse if submissions exist - we use cancel instead
+    has_submissions = ProjectSubmission.query.filter_by(posm_customer_id=pc.id).first()
+    if has_submissions:
+        return jsonify({'success': False, 'error': 'Customer has submissions. Use cancel instead.'}), 400
+    
+    customer_name = pc.customer.name
+
+    # Collect designers to notify (lead + deliverable assignees), deduplicated
+    notify_ids = set()
+    if project.lead_designer_id:
+        notify_ids.add(project.lead_designer_id)
+    for d in pc.deliverables:
+        for assignment in DeliverableAssignment.query.filter_by(deliverable_id=d.id).all():
+            notify_ids.add(assignment.user_id)
+    
+    db.session.delete(pc)
+    db.session.commit()
+
+    # Notify after commit
+    for uid in notify_ids:
+        recipient = UserModel.query.get(uid)
+        if recipient:
+            create_notification(
+                recipient=recipient,
+                message=f'Customer "{customer_name}" was removed from project "{project.name}".',
+                notification_type='customer_removed',
+                project=project,
+                triggered_by=current_user
+            )
+
+    log_activity(
+        'customer_removed',
+        f'Customer "{customer_name}" removed from "{project.name}" by {current_user.name}',
+        user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id
+
+    )
+    return jsonify ({'success': True})
+
+@projects.route('/projects/<int:project_id>/customer/<int:pc_id>/cancel', methods=['POST'])
+@login_required
+@role_required('admin', 'cs')
+def cancel_customer(project_id, pc_id):
+    from app.utils import log_activity
+    from app.notifications import create_notification
+    from app.models import ProjectCustomer, DeliverableAssignment, User as UserModel
+    project = Project.query.get_or_404(project_id)
+    pc = ProjectCustomer.query.get_or_404(pc_id)
+
+    if project.project_status == 'approved':
+        return jsonify({'success': False, 'error': 'Project is approved and locked'}), 403
+
+    customer_name = pc.customer.name
+    pc.cancelled = True
+
+    # Collect designers to notify (lead + deliverable assignees), deduplicated
+    notify_ids = set()
+    if project.lead_designer_id:
+        notify_ids.add(project.lead_designer_id)
+    for d in pc.deliverables:
+        for assignment in DeliverableAssignment.query.filter_by(deliverable_id=d.id).all():
+            notify_ids.add(assignment.user_id)
+
+    db.session.commit()
+
+    # Notify after commit
+    for uid in notify_ids:
+        recipient = UserModel.query.get(uid)
+        if recipient:
+            create_notification(
+                recipient=recipient,
+                message=f'Customer "{customer_name}" was cancelled on project "{project.name}".',
+                notification_type='customer_cancelled',
+                project=project,
+                triggered_by=current_user
+            )
+
+    log_activity(
+        'customer_cancelled',
+        f'Customer "{customer_name}" cancelled on "{project.name}" by {current_user.name}',
+        user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id
+    )
+    return jsonify({'success': True})
+
 
 @projects.route('/projects/<int:project_id>/deliverable/<int:d_id>/set-status', methods=['POST'])
 @login_required
