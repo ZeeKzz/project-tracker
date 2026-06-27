@@ -350,7 +350,7 @@
                 </svg>
             </button>
             <div id="account-dropdown" class="account-dropdown hidden">
-                <a href="{{ url_for('auth.account') }}" class="account-dropdown-item">My Account</a>
+                <a href="{{ url_for('auth.account') }}" class="account-dropdown-item sidebar-item--nav">My Account</a>
                 <a href="{{ url_for('auth.logout') }}" class="account-dropdown-item logout">Logout</a>
             </div>
         </div>
@@ -685,7 +685,6 @@
 
     {# Main content area — shifts right to make room for sidebar when authenticated #}
     <main class="main-content" id="main-content">
-
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         <div class="flash-messages">

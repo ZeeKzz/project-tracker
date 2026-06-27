@@ -1,5 +1,29 @@
 ================================================================================
 VITAMIN HELIX — CHANGELOG
+===============================================================================
+================================================================================
+v1.2.1 Minor Fixes — 27 JUNE 2026
+================================================================================
+Adjustments:
+
+- Auto file naming now happens when designers upload a file, rather than on the client submission stage
+- Starting a project now assigns the account that started it as the lead designer for their department.
+- Added notification for when a project is started to other involved designers
+- Added total revision count for C&CM projects - Located in the submissions section. Concept & KV and each POSM channel still have their own revision counters, as do their deliverables.
+- Adjusted back button style on the create project page
+- Made add deliverable easier to see - Thanks Waseem for the feedaback
+
+Bug Fixes:
+
+- Fixed popups not working (Approving Project, Putting a project on hold, Starting a project & Deleting Project)
+- Fixed seamless page loading
+- Fixed project page navigation breaking when returning from a project detail page
+- Fixed CS being able to upload submission files, bypassing design submission stage
+- Fixed Concept & KV submission cycle not matching POSM submission cycle
+- Fixed adding UAE lulu as a customer on C&CM, also adding a phantom UAE submission route.
+
+
+
 ================================================================================
 v1.2 UI Overhaul and QoL Updates — 26 JUNE 2026
 ================================================================================

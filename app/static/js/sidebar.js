@@ -147,7 +147,16 @@
          4. Push the new URL into the browser history bar
        If the fetch fails for any reason we fall back to a normal
        page load so navigation never breaks. */
-    function navigateTo(url) {
+
+    function execScripts(container) {
+        container.querySelectorAll('script').forEach(function(old) {
+            var fresh = document.createElement('script');
+            fresh.textContent = old.textContent;
+            old.parentNode.replaceChild(fresh, old);
+        })
+    }
+
+    function navigateTo(url, push) {
         fetch(url, {
             headers: { 'X-Nav-Request': '1' }
         })
@@ -159,8 +168,10 @@
             mainContent.style.opacity = '0';
             setTimeout(function () {
                 mainContent.innerHTML = html;
+                execScripts(mainContent);
+                document.dispatchEvent(new CustomEvent('helix:navigated'));
                 mainContent.style.opacity = '1';
-                history.pushState(null, '', url);
+                if (push !== false) { history.pushState(null, '', url); }
                 setActiveItem(url);
             }, 150); // matches the 0.15s CSS transition on .main-content
         })
@@ -169,18 +180,20 @@
         });
     }
 
-    document.querySelectorAll('.sidebar-item--nav').forEach(function (item) {
-        item.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation(); // prevent sidebar body click from also firing
-            var url = this.getAttribute('href');
-            if (url) navigateTo(url);
-        });
+    window.navigateTo = navigateTo;
+
+    document.addEventListener('click', function (e) {
+        var item = e.target.closest('.sidebar-item--nav');
+        if (!item) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var url = item.getAttribute('href');
+        if (url) navigateTo(url);
     });
 
     // Keep SPA working when the user hits Back/Forward in the browser
     window.addEventListener('popstate', function () {
-        navigateTo(window.location.pathname);
+        navigateTo(window.location.pathname, false);
     });
 
 })();

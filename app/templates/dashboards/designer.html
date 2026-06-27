@@ -102,7 +102,7 @@
                                     replace('_', ' ') | title }}</span>
                             </td>
                             <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                    class="btn btn--secondary">View Details</a></td>
+                                    class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             <tr class="expansion-row hidden" id="expand_team_{{ project.id }}">
                                 <td colspan="7">
@@ -165,7 +165,7 @@
                                         | replace('_', ' ') | title }}</span>
                                 </td>
                                 <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                        class="btn btn--secondary">View Details</a></td>
+                                        class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             {% endif %}
                             {% endfor %}
@@ -245,7 +245,7 @@
                                 {% endfor %}
                             </td>
                             <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                    class="btn btn--secondary">View Brief</a></td>
+                                   class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             <tr class="expansion-row hidden">
                                 <td colspan="8">
@@ -298,7 +298,7 @@
                                     {% endfor %}
                                 </td>
                                 <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
-                                        class="btn btn--secondary">View Brief</a></td>
+                                        class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             {% endif %}
                             {% endfor %}

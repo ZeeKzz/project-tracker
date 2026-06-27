@@ -4,6 +4,8 @@ Stores per-country POSM revision counters for non-UAE Gulf regions
 (mirrors pc.posm_revision_count for UAE customers).
 Run once from the project root:  python add_posm_country_counts.py
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app, db
 from sqlalchemy import text
 

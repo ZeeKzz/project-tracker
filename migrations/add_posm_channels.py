@@ -3,6 +3,8 @@ Migration: create project_posm_channels table.
 Each row is one parallel POSM submission channel (UAE per customer, others per country).
 Run once from the project root:  python add_posm_channels.py
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app, db
 from sqlalchemy import text
 

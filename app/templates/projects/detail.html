@@ -36,7 +36,7 @@
             <button class="btn-brief-flag" data-flag-type="project" data-project-id="{{ project.id }}"
                 data-context="Entire Project" onclick="openFlagModalFromBtn(this)">⚑ Flag Issue</button>
             {% endif %}
-            <a href="{{ url_for('main.index') }}" class="btn-secondary">← Back</a>
+            <a href="{{ url_for('main.index') }}" class="btn-secondary sidebar-item--nav">← Back</a>
         </div>
     </div>
 
@@ -152,7 +152,7 @@
                 ) %}
                 <div class="detail-label">
                     <span class="detail-label"></span>
-                    <button class="btn-primary" onclick="openStartProjectModal({{ project.id }})">
+                    <button class="btn-primary" onclick="openStartProjectModal({{ project.id }}, '{{ effective_user.team or '' }}')">
                         ▶ Start Project
                     </button>
                 </div>
@@ -764,7 +764,7 @@
         {% else %}
         <p class="muted" style="margin-top: 0.75rem;">No deliverables added yet.</p>
         {% endif %}
-
+        
     </div>
     {% endif %}
 
@@ -845,12 +845,24 @@
     submission pipeline displayed as a pill tab.
     ═══════════════════════════════════════════════════════════════════════════════ #}
     <div class="detail-card detail-card--full submission-card" id="section-submission" style="margin-top: 1.5rem;">
-        <h2 class="detail-card-title">Submissions</h2>
+        {# Header row: title left, total revision counter right (CCM only, once a revision has been sent) #}
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+            <h2 class="detail-card-title" style="margin:0;">Submissions</h2>
+            {% if total_revision_count > 0 %}
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+                <span class="detail-label">Total Revisions:</span>
+                <span class="revision-count-badge">{{ total_revision_count }}</span>
+            </div>
+            {% endif %}
+        </div>
 
         {# ── Channel pill bar — C&KV first, then POSM channels ── #}
         <div class="posm-channel-pills" id="posmChannelPills">
             {% if project.has_concept or project.has_kv %}
-            {% set _ckv_sl = {'in_queue':'Not Started','in_progress':'In Progress','internal_review':'In Review','internal_revision':'Needs Revision','approved':'Approved'} %}
+            {# Status labels for the C&KV pill — must match all values concept_status can hold #}
+            {% set _ckv_sl = {'in_queue':'Not Started','in_progress':'In Progress','internal_review':'In
+            Review','internal_revision':'Needs Revision','submitted_to_client':'Sent to Client','revision_in_queue':'Rev
+            Pending','revision_in_progress':'Rev In Progress','approved':'Approved'} %}
             <button class="posm-channel-pill posm-channel-pill--active" id="ckv-pill" onclick="selectCkvChannel()">
                 <span class="posm-pill-label">Concept &amp; KV</span>
                 <span class="posm-pill-status posm-pill-status--{{ project.concept_status or 'in_queue' }}">
@@ -874,10 +886,85 @@
         {# ── Concept & KV section (shown first by default) ── #}
         {% if project.has_concept or project.has_kv %}
         <div class="posm-channel-section" id="ckv-section" data-channel-id="ckv">
+            {# C&KV revision counter — only shown once at least one client revision has been sent #}
+            {% if project.ckv_revision_count and project.ckv_revision_count > 0 %}
+            <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.75rem;">
+                <span class="detail-label">C&amp;KV Revisions:</span>
+                <span class="revision-count-badge">{{ project.ckv_revision_count }}</span>
+            </div>
+            {% endif %}
             {% if project.concept_status == 'approved' %}
             {# Approved #}
             <div class="submission-status submission-status--approved" style="margin-top:0.5rem;">✓ Concept &amp; KV Approved</div>
-
+            {% elif project.concept_status == 'submitted_to_client' %}
+            {# State: Submitted to Client — CS can approve or send a revision request #}
+            {% if ckv_submission %}
+            <div class="reference-file-item">
+                <span class="reference-file-icon">{% if ckv_submission.file_type == 'pdf' %}📄{% else %}📊{% endif %}</span>
+                <span class="reference-file-name">{{ ckv_submission.original_filename }}</span>
+                <span class="reference-file-meta">Uploaded by {{ ckv_submission.uploaded_by.name }}</span>
+                <div class="reference-file-actions">
+                    <a href="{{ url_for('projects.download_submission', submission_id=ckv_submission.id) }}"
+                        class="btn-secondary btn-sm">Download</a>
+                </div>
+            </div>
+            {% endif %}
+            <div class="submission-status" style="margin-top:0.5rem;">📤 Deck sent to client. Awaiting feedback.</div>
+            {% if effective_user.role in ['admin', 'cs'] %}
+            {# CS/admin action row: approve outright or send it back for revision #}
+            <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+                <button type="button" class="btn-primary" onclick="approveCKV({{ project.id }})">✓ Approve Concept &amp; KV</button>
+                <button type="button" class="btn-danger btn-sm" id="ckvSendRevisionBtn" data-project-id="{{ project.id }}">Send for
+                    Revision</button>
+            </div>
+            {# Revision message form — shown/hidden by JS #}
+            <div id="ckvRevisionForm" class="hidden" style="margin-top:1rem;">
+                <textarea id="ckvRevisionMessage" class="form-input" placeholder="Describe the revision requested by the client..."
+                    rows="3" style="width:100%;margin-bottom:0.5rem;"></textarea>
+                <div style="display:flex;gap:0.5rem;">
+                    <button type="button" class="btn-danger btn-sm" id="ckvRevisionConfirm" data-project-id="{{ project.id }}">Send
+                        Revision</button>
+                    <button type="button" class="btn-secondary btn-sm" id="ckvRevisionCancel">Cancel</button>
+                </div>
+            </div>
+            {% else %}
+            <p style="margin-top:0.75rem;color:var(--text-muted);font-size:0.85rem;">Deck submitted to client. Awaiting feedback.
+            </p>
+            {% endif %}
+            {% elif project.concept_status in ('revision_in_queue', 'revision_in_progress') %}
+            {# State: Client sent a revision — designer needs to work then reupload #}
+            {% if ckv_latest_revision %}
+            {# Show the revision message so the designer knows what to fix #}
+            <div class="submission-status submission-status--flagged" style="margin-top:0.5rem;">
+                ↩ Revision requested by {{ ckv_latest_revision.sent_by.name }}: "{{ ckv_latest_revision.message }}"
+            </div>
+            {% endif %}
+            {% if project.concept_status == 'revision_in_queue' %}
+            {# Sub-state: revision sent, waiting for designer to acknowledge and start #}
+            <div class="submission-status" style="margin-top:0.5rem;">Waiting for designer to start revision.</div>
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            <div style="margin-top:1rem;">
+                {# Designer clicks Start to move to revision_in_progress — signals they've seen it #}
+                <button type="button" class="btn-secondary" id="ckvStartRevisionBtn" data-project-id="{{ project.id }}">Start
+                    Revision</button>
+            </div>
+            {% endif %}
+            {% else %}
+            {# Sub-state: revision_in_progress — designer is working; CS watches and waits #}
+            <div class="submission-status" style="margin-top:0.5rem;">Revision in progress.</div>
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+            {# Reupload triggers a fresh submission, resetting concept_status → in_progress #}
+            <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
+                <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
+                <button type="button" class="btn-secondary" id="submissionUploadBtn" data-project-id="{{ project.id }}">Upload
+                    Revised Deck</button>
+                <span class="reference-file-upload-status" id="submissionUploadStatus"></span>
+            </div>
+            {% else %}
+            <p style="margin-top:0.75rem;color:var(--text-muted);font-size:0.85rem;">Waiting for designer to upload the revised
+                deck.</p>
+            {% endif %}
+            {% endif %}
             {% elif project.concept_status == 'internal_review' and ckv_submission %}
             {# State 3: In Internal Review — CS can approve or flag #}
             <div class="reference-file-item">
@@ -898,7 +985,9 @@
             {% endif %}
             {% if effective_user.role in ['admin', 'cs', 'management'] %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
-                <button type="button" class="btn-primary" onclick="approveCKV({{ project.id }})">✓ Approve Concept &amp; KV</button>
+                {# Internal review: CS sends to client first, then approves from submitted_to_client state #}
+                <button type="button" class="btn-primary" id="ckvSubmitToClientBtn" data-project-id="{{ project.id }}">Submit to
+                    Client</button>
                 <button type="button" class="btn-danger btn-sm" id="submissionFlagBtn">Flag Issue</button>
             </div>
             <div id="submissionFlagForm" class="hidden" style="margin-top:1rem;">
@@ -922,7 +1011,7 @@
             <div class="submission-status submission-status--flagged" style="margin-top:0.5rem;">
                 ⚑ Flagged by {{ ckv_submission.flagged_by.name if ckv_submission.flagged_by else 'CS' }}: "{{ ckv_submission.flag_message }}"
             </div>
-            {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
                 <button type="button" class="btn-secondary" id="submissionUploadBtn" data-project-id="{{ project.id }}">Reupload Deck</button>
@@ -961,7 +1050,7 @@
             {% else %}
             {# State 1: No deck yet #}
             <p class="no-files-msg">No Concept &amp; KV deck uploaded yet.</p>
-            {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
                 <button type="button" class="btn-secondary" id="submissionUploadBtn" data-project-id="{{ project.id }}">Upload Concept &amp; KV Deck</button>
@@ -1027,7 +1116,7 @@
                 ⚑ Flagged by {{ ch_sub.flagged_by.name if ch_sub.flagged_by else 'CS' }}:
                 "{{ ch_sub.flag_message }}"
             </div>
-            {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" class="hidden ch-file-input" id="ch-file-{{ ch.id }}" data-channel-id="{{ ch.id }}"
                     accept=".pdf,.pptx">
@@ -1103,7 +1192,7 @@
                 <p class="revision-meta">Sent by {{ ch_rev.sent_by.name }} on {{ ch_rev.sent_at | dubai_time }} GST</p>
             </div>
             {% endif %}
-            {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" class="hidden ch-file-input" id="ch-file-{{ ch.id }}" data-channel-id="{{ ch.id }}"
                     accept=".pdf,.pptx">
@@ -1151,7 +1240,7 @@
             {# State 1: No deck yet #}
             {% else %}
             <p class="no-files-msg">No deck uploaded yet for this region.</p>
-            {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+            {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
                 <input type="file" class="hidden ch-file-input" id="ch-file-{{ ch.id }}" data-channel-id="{{ ch.id }}"
                     accept=".pdf,.pptx">
@@ -1335,7 +1424,7 @@
             ⚑ Flagged by {{ active_submission.flagged_by.name if active_submission.flagged_by else 'CS' }}:
             "{{ active_submission.flag_message }}"
         </div>
-        {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+        {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
         <div style="margin-top: 1rem; display: flex; gap: 0.75rem; align-items: center;">
             <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
             <button type="button" class="btn-secondary" id="submissionUploadBtn"
@@ -1499,7 +1588,7 @@
                 dubai_time }} GST</p>
         </div>
         {% endif %}
-        {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+        {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
         <div style="margin-top: 1rem; display: flex; gap: 0.75rem; align-items: center;">
             <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
             <button type="button" class="btn-secondary" id="submissionUploadBtn" data-project-id="{{ project.id }}">
@@ -1574,7 +1663,7 @@
         {# ── State 1: No deck yet ── #}
         {% else %}
         <p class="no-files-msg" id="submissionEmpty">No client deck uploaded yet.</p>
-        {% if effective_user.role in ['admin', 'cs', 'designer', 'team_lead'] %}
+        {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
         <div style="margin-top: 1rem; display: flex; gap: 0.75rem; align-items: center;">
             <input type="file" id="submissionFileInput" class="hidden" accept=".pdf,.pptx">
             <button type="button" class="btn-secondary" id="submissionUploadBtn"
@@ -1750,9 +1839,10 @@
 <div id="start-project-modal" class="modal-overlay hidden">
     <div class="modal-box">
         <h3 class="modal-title">Start project?</h3>
-        <p style="margin:0.5rem 0 1.25rem;color:var(--grey-dark);font-size:0.9rem;">
+        <p style="margin:0.5rem 0 0.5rem;color:var(--grey-dark);font-size:0.9rem;">
             This will move the project to In Progress. This action cannot be undone.
         </p>
+        <p id="start-project-assign-msg" style="margin:0 0 1.25rem;color:var(--grey-dark);font-size:0.9rem;"></p>
         <div class="modal-actions">
             <button type="button" class="btn-secondary" onclick="closeStartProjectModal()">Cancel</button>
             <button type="button" class="btn-primary" id="start-project-confirm">Start Project</button>
@@ -2144,9 +2234,17 @@
         document.getElementById('approvalModal').classList.remove('hidden');
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
+    // Wired on DOMContentLoaded (normal load — modal HTML is below this script tag,
+    // not yet parsed when the script runs) and on helix:navigated (SPA load — all
+    // innerHTML is already set before the event fires).
+    function _wireDetailPage() {
         // ── Approval modal wiring ──
         var modalEl = document.getElementById('approvalModal');
+        // Guard: if this exact node is already wired (can happen if helix:navigated
+        // fires multiple times due to script re-execution), skip to avoid stacking listeners.
+        if (!modalEl || modalEl._wired) return;
+        modalEl._wired = true;
+
         var cancelBtn = document.getElementById('approvalModalCancel');
         var confirmBtn = document.getElementById('approvalModalConfirm');
 
@@ -2197,8 +2295,51 @@
             });
         }
 
+        // ── Start Project confirm button ──────────────────────────────────────
+        var startProjectConfirmBtn = document.getElementById('start-project-confirm');
+        if (startProjectConfirmBtn) {
+            startProjectConfirmBtn.addEventListener('click', function () {
+                if (!window._startProjectId) return;
+                fetch('/projects/' + window._startProjectId + '/start-project', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            window.location.reload();
+                        } else {
+                            showToast(data.error || 'Could not start project.', 'error');
+                            closeStartProjectModal();
+                        }
+                    });
+            });
+        }
+
+        // ── Takeover confirm button ───────────────────────────────────────────
+        var takeoverConfirmBtn = document.getElementById('lead-takeover-confirm');
+        if (takeoverConfirmBtn) {
+            takeoverConfirmBtn.addEventListener('click', function () {
+                if (!window._takeoverTeam || !window._takeoverProjectId) return;
+                fetch('/projects/' + window._takeoverProjectId + '/assign-lead', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ team: window._takeoverTeam })
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            closeTakeoverModal();
+                            refreshSection(window._takeoverProjectId, 'section-assignments');
+                        } else {
+                            showToast(data.error || 'Could not take over as lead.', 'error');
+                            closeTakeoverModal();
+                        }
+                    });
+            });
+        }
+
         // ── POSM channel Approve buttons (event delegation — buttons are per channel) ──
-        // .ch-approve-btn is rendered inside each channel card that is in submitted_to_client state.
         document.addEventListener('click', function (e) {
             var btn = e.target.closest('.ch-approve-btn');
             if (!btn) return;
@@ -2240,7 +2381,35 @@
                 }
             });
         }
-    });
+    }
+    document.addEventListener('DOMContentLoaded', _wireDetailPage);
+    document.addEventListener('helix:navigated', _wireDetailPage);
+
+    // ── Chip-assign form delegation ────────────────────────────────────────
+    // Intercept .chip-assign-form submits so they go via fetch instead of
+    // navigating to the JSON endpoint. Guard prevents stacking on SPA re-runs.
+    if (!window._chipAssignWired) {
+        window._chipAssignWired = true;
+        document.addEventListener('submit', function (e) {
+            var form = e.target.closest('.chip-assign-form');
+            if (!form) return;
+            e.preventDefault();
+            var m = form.action.match(/\/projects\/(\d+)\//);
+            var projectId = m ? parseInt(m[1]) : null;
+            var section = form.closest('[id^="section-"]');
+            fetch(form.action, { method: 'POST', body: new FormData(form) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.success) {
+                        showToast((d.designer_name || 'Designer') + ' assigned.', 'success');
+                        if (projectId && section) refreshSection(projectId, section.id);
+                    } else {
+                        showToast(d.error || 'Could not assign designer.', 'error');
+                    }
+                })
+                .catch(function () { showToast('Could not assign designer.', 'error'); });
+        });
+    }
 </script>
 
 {# Approval confirmation modal — overlays the page; opened by openApprovalModal() above #}

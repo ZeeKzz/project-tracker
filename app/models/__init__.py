@@ -124,9 +124,7 @@ class Project(db.Model):
     held_from_status = db.Column(db.String(50), nullable=True)  # status saved before put on hold
     concept_status = db.Column(db.String(50), nullable=True)    # tracks concept through the workflow
     kv_status = db.Column(db.String(50), nullable=True)         # tracks KV through the workflow
-    posm_started = db.Column(db.Boolean, default=False, nullable=False)
-    posm_started_at = db.Column(db.DateTime, nullable=True)
-    concept_kv_revision_count = db.Column(db.Integer, nullable=True)  # snapshot of revision_count when POSM begins
+    ckv_revision_count = db.Column(db.Integer, default=0, nullable=True)  # C&KV-specific revision counter (CCM projects only)
     posm_country_revision_counts = db.Column(db.JSON, nullable=True)  # {'kuwait': 2, 'qatar': 1, ...}
     campaign_notes = db.Column(db.Text, nullable=True)
     urgency = db.Column(db.String(50), nullable=True)

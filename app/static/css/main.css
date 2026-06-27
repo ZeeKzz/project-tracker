@@ -677,8 +677,7 @@ body:has(.sidebar.sidebar--pinned) .sidebar-expand-tab {
 .main-content {
     flex: 1;
     padding: 2rem;
-    transition: opacity 0.15s ease;
-    transition: margin-left var(--sidebar-transition);
+    transition: opacity 0.25s ease, margin-left var(--sidebar-transition);;
 }
 
 /* Authenticated: shift right to clear the minimized sidebar */
@@ -2216,6 +2215,9 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
 
 .create-subheader-left {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    min-width: 120px;
 }
 
 .create-subheader-center {
@@ -2228,8 +2230,10 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
 
 .create-subheader-right {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     min-width: 120px;
-    text-align: right;
 }
 
 .completion-bar-track {
@@ -3203,29 +3207,6 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
     margin: 1.25rem 0;
 }
 
-.btn-begin-posm {
-    font-family: var(--font-mono);
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 0.55rem 1.25rem;
-    border-radius: var(--radius);
-    border: 2px solid var(--tangerine);
-    background: transparent;
-    color: var(--tangerine);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-}
-
-.btn-begin-posm:hover {
-    background: var(--tangerine);
-    color: var(--white);
-}
-
-.btn-begin-posm:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
 
 .posm-active-banner {
     display: flex;
@@ -5188,6 +5169,7 @@ select.s-internal_revision {
 @media (max-width: 1200px) {
     .main-content {
         padding: 1.5rem;
+        transition: opacity 0.25s ease;
     }
 
     .navbar {

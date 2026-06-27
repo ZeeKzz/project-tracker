@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, g, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
@@ -111,5 +111,28 @@ def create_app():
     # DEV TOOLS — hardcoded True for now. Switch back to env var check before deploying to prod:
     # app.jinja_env.globals['dev_tools_enabled'] = os.environ.get('DEV_TOOLS_ENABLED', '').lower() == 'true'
     app.jinja_env.globals['dev_tools_enabled'] = True
+
+    @app.before_request
+    def detect_nav_request():
+        # SPA navigation: sidebar.js sends X-Nav-Request: 1 for internal link clicks.
+        # Routes render normally; base.html skips the outer shell when this flag is set,
+        # returning only the content block so JS can swap it into #main-content.
+        g.is_nav_request = request.headers.get('X-Nav-Request') == '1'
+    
+    @app.after_request
+    def spa_strip_response(response):
+        if (g.get('is_nav_request') and 
+            response.content_type.startswith('text/html') and
+            response.status_code == 200):
+          import re
+          html = response.get_data(as_text=True)
+          m = re.search(
+              r'<main[^>]+id=["\']main-content["\'][^>]*>(.*?)</main>',
+              html, re.DOTALL
+          )
+          if m:
+              response.set_data(m.group(1))
+        return response
+
 
     return app
