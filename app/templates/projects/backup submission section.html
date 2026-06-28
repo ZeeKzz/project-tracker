@@ -24,7 +24,7 @@
         <span class="reference-file-name">{{ active_submission.original_filename }}</span>
         <span class="reference-file-meta">Uploaded by {{ active_submission.uploaded_by.name }}</span>
         <div class="reference-file-actions">
-            <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
+            <a href="{{ url_for('submission.download_submission', submission_id=active_submission.id) }}"
                 class="btn-secondary btn-sm">Download</a>
         </div>
     </div>
@@ -67,7 +67,7 @@
         <span class="reference-file-name">{{ active_submission.original_filename }}</span>
         <span class="reference-file-meta">Uploaded by {{ active_submission.uploaded_by.name }}</span>
         <div class="reference-file-actions">
-            <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
+            <a href="{{ url_for('submission.download_submission', submission_id=active_submission.id) }}"
                 class="btn-secondary btn-sm">Download</a>
         </div>
     </div>
@@ -114,7 +114,7 @@
         <span class="reference-file-name">{{ active_submission.original_filename }}</span>
         <span class="reference-file-meta">Uploaded by {{ active_submission.uploaded_by.name }}</span>
         <div class="reference-file-actions">
-            <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
+            <a href="{{ url_for('submission.download_submission', submission_id=active_submission.id) }}"
                 class="btn-secondary btn-sm">Download</a>
         </div>
     </div>

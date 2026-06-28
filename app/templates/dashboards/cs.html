@@ -14,7 +14,7 @@
                 <button type="button" id="btn-all-projects" class="toggle-btn">All Projects</button>
                 <button type="button" id="btn-approved-projects" class="toggle-btn">Approved Projects</button>
             </div>
-            <a href="{{ url_for('projects.drafts') }}" class="btn-primary">Add New Project</a>
+            <a href="{{ url_for('brief.drafts') }}" class="btn-primary">Add New Project</a>
         </div>
     </div>
 
@@ -32,7 +32,7 @@
                             <th></th>
                             <th>Project Name</th>
                             <th>Job Number</th>
-                            <th>Design Deadline</th>
+                            <th>Type</th>
                             <th>Final Deadline</th>
                             <th>Teams</th>
                             <th>Assigned Designers</th>
@@ -49,8 +49,7 @@
                             <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                             <td>{{ project.name }}</td>
                             <td class="mono">{{ project.job_number }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                project.design_needed_by else '—' }}</td>
+                            <td>{{ 'C&CM' if project.brief_type == 'ccm' else 'Standard' }}</td>
                             <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date
                                 else '—' }}</td>
                             <td>
@@ -78,7 +77,7 @@
                                 <span class="status-badge s-{{ project.project_status }}">{{ project.project_status |
                                     replace('_', ' ') | title }}</span>
                             </td>
-                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                            <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                     class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             <tr class="expansion-row hidden" id="expand_{{ project.id }}">
@@ -101,7 +100,7 @@
                                                     pc.installation_date else '—' }}</td>
                                                 <td>
                                                     <select class="status-select"
-                                                        data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
+                                                        data-url="{{ url_for('project_detail.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
                                                         onchange="updateStatus(this)">
                                                         <option value="briefed" {% if pc.status=='briefed' %}selected{%
                                                             endif %}>Briefed</option>
@@ -129,12 +128,11 @@
                             </tr>
                             {% else %}
                             <tr class="clickable {% if is_overdue %}overdue{% endif %}"
-                                data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                                data-href="{{ url_for('project_detail.detail', project_id=project.id) }}">
                                 <td class="chevron-cell"></td>
                                 <td>{{ project.name }}</td>
                                 <td class="mono">{{ project.job_number }}</td>
-                                <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                    project.design_needed_by else '—' }}</td>
+                                <td>{{ 'C&CM' if project.brief_type == 'ccm' else 'Standard' }}</td>
                                 <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if
                                     project.execution_date else '—' }}</td>
                                 <td>
@@ -162,7 +160,7 @@
                                     <span class="status-badge s-{{ project.project_status }}">{{ project.project_status
                                         | replace('_', ' ') | title }}</span>
                                 </td>
-                                <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                         class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             {% endif %}
@@ -203,7 +201,6 @@
                             <th></th>
                             <th>Project Name</th>
                             <th>Job Number</th>
-                            <th>Design Deadline</th>
                             <th>Final Deadline</th>
                             <th>Teams</th>
                             <th>Assigned Designers</th>
@@ -223,8 +220,6 @@
                             <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                             <td>{{ project.name }}</td>
                             <td class="mono">{{ project.job_number }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if project.design_needed_by
-                                else '—' }}</td>
                             <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else
                                 '—' }}</td>
                             <td>
@@ -251,7 +246,7 @@
                                 <span class="status-badge s-{{ project.project_status }}">{{ project.project_status |
                                     replace('_', ' ') | title }}</span>
                             </td>
-                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                            <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                     class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             <tr class="expansion-row hidden" id="expand_{{ project.id }}">
@@ -277,7 +272,7 @@
                                                     pc.installation_date else '—' }}</td>
                                                 <td>
                                                     <select class="status-select"
-                                                        data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
+                                                        data-url="{{ url_for('project_detail.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
                                                         onchange="updateStatus(this)">
                                                         <option value="briefed" {% if pc.status=='briefed' %}selected{%
                                                             endif %}>Briefed</option>
@@ -306,14 +301,12 @@
     
                             {% else %}
                             <tr class="clickable {% if is_overdue %}overdue{% endif %}"
-                                data-href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                data-href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                 data-cs-lead="{{ project.cs_lead.name if project.cs_lead else '' }}"
                                 data-status="{{ project.project_status }}" data-designers="{{ designer_names }}">
                                 <td class="chevron-cell"></td>
                                 <td>{{ project.name }}</td>
                                 <td class="mono">{{ project.job_number }}</td>
-                                <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                    project.design_needed_by else '—' }}</td>
                                 <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date
                                     else '—' }}</td>
                                 <td>
@@ -340,7 +333,7 @@
                                     <span class="status-badge s-{{ project.project_status }}">{{ project.project_status |
                                         replace('_', ' ') | title }}</span>
                                 </td>
-                                <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                        class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             {% endif %}
@@ -379,7 +372,7 @@
 
     {# Serialize approved projects for JS rendering — needed by buildApprovedView() #}
     <script>
-        window.approvedProjects = [
+        window.PAGE = { approvedProjects: [
             {% for p in approved_projects %}
         {
             "id": {{ p.id }},
@@ -391,11 +384,11 @@
             "approved_at": {{ p.approved_at.strftime('%Y-%m-%dT%H:%M:%S') | tojson }},
             "approved_at_display": {{ p.approved_at | dubai_time | tojson }},
             "assigned_designers": [{% for a in p.assigned_designers %}{{ a.designer.name | tojson }}{% if not loop.last %},{% endif %}{% endfor %}],
-            "url": {{ url_for('projects.detail', project_id=p.id) | tojson }}
+            "url": {{ url_for('project_detail.detail', project_id=p.id) | tojson }}
     }{% if not loop.last %},{% endif %}
 
         {% endfor %}
-];
+] };
     </script>
 
     {% endblock %}

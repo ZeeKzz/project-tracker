@@ -82,14 +82,13 @@
         setPin(!isPinned());
     });
 
-    // Clicking anywhere on the sidebar body when minimized → expand.
-    // This means icon clicks also expand first, which is intentional:
-    // icons are still functional in minimized mode (they don't expand first).
-    // The stopPropagation on the nav link listeners below prevents double-fire.
-    sidebar.addEventListener('click', function () {
-        if (!isExpanded() && !isPinned()) {
-            expand();
-        }
+    // Clicking a non-nav area of the sidebar when minimized → expand.
+    // Nav link clicks (icons included) navigate directly without expanding first.
+    sidebar.addEventListener('click', function (e) {
+        if (isExpanded() || isPinned()) return;
+        // If the click target is inside a nav or external link, let it navigate — don't expand.
+        if (e.target.closest('.sidebar-item--nav, .sidebar-item--external')) return;
+        expand();
     });
 
     // Click anywhere outside the sidebar → collapse (unless pinned)

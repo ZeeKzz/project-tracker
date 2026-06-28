@@ -10,7 +10,7 @@
 
     <div class="drafts-container">
         <div class="drafts-new">
-            <a href="{{ url_for('projects.create') }}" class="btn btn--primary">
+            <a href="{{ url_for('brief.create') }}" class="btn btn--primary">
                 + Start New Project
             </a>
         </div>
@@ -43,7 +43,7 @@
                 </div>
 
                 <div class="draft-actions">
-                    <a href="{{ url_for('projects.create') }}?draft_id={{ draft.id }}" class="btn btn--success">
+                    <a href="{{ url_for('brief.create') }}?draft_id={{ draft.id }}" class="btn btn--success">
                         Continue Draft
                     </a>
                     <button class="btn btn--danger draft-delete-btn" data-draft-id="{{ draft.id }}">

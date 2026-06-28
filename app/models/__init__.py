@@ -291,8 +291,6 @@ class ProjectRegion(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     region = db.Column(db.String(50), nullable=False)
 
-    project = db.relationship('Project', backref='regions')
-
     def __repr__(self):
         return f'<ProjectRegion {self.region} for project {self.project_id}>'
 
@@ -307,12 +305,11 @@ class ProjectCustomer(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     design_deadline = db.Column(db.Date, nullable=True)
     design_deadline_time = db.Column(db.Time, nullable=True)
-    cancelled = db.Column(db.Date, nullable=True)
+    cancelled = db.Column(db.Boolean, default=False, nullable=False)
     installation_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(50), default='briefed', nullable=False)
     posm_revision_count = db.Column(db.Integer, default=0, nullable=False)
 
-    project = db.relationship('Project')
     customer = db.relationship('Customer', backref='customer_projects')
     deliverables = db.relationship('Deliverable', backref='project_customer', cascade='all, delete-orphan')
 

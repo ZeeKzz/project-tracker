@@ -11,7 +11,7 @@
         <div style="display: flex; gap: 0.75rem; align-items: center;">
             {% if effective_user.role == 'admin' or project.cs_lead_id == effective_user.id or is_secondary_cs %}
             {% if project.project_status != 'approved' %}
-            <form method="POST" action="{{ url_for('projects.toggle_hold', project_id=project.id) }}" id="hold-project-form">
+            <form method="POST" action="{{ url_for('project_detail.toggle_hold', project_id=project.id) }}" id="hold-project-form">
                 {% if project.project_status == 'on_hold' %}
                 {# Resume has no confirm — it's a safe, reversible action #}
                 <button type="submit" class="btn-resume">▶ Resume Project</button>
@@ -23,10 +23,10 @@
             {% endif %}
             {% if effective_user.role == 'admin' or project.cs_lead_id == effective_user.id %}
             {% if project.project_status != 'approved' %}
-            <a href="{{ url_for('projects.edit_project', project_id=project.id) }}" class="btn-secondary">Edit
+            <a href="{{ url_for('brief.edit_project', project_id=project.id) }}" class="btn-secondary">Edit
                 Project</a>
             {% endif %}
-            <form method="POST" action="{{ url_for('projects.delete_project', project_id=project.id) }}" id="delete-project-form">
+            <form method="POST" action="{{ url_for('brief.delete_project', project_id=project.id) }}" id="delete-project-form">
                 <button type="button" class="btn-danger" id="delete-project-btn">
                     Delete Project
                 </button>
@@ -34,7 +34,7 @@
             {% endif %}
             {% if effective_user.role in ['designer', 'team_lead'] %}
             <button class="btn-brief-flag" data-flag-type="project" data-project-id="{{ project.id }}"
-                data-context="Entire Project" onclick="openFlagModalFromBtn(this)">⚑ Flag Issue</button>
+                data-context="Entire Project" data-action="open-flag-modal">⚑ Flag Issue</button>
             {% endif %}
             <a href="{{ url_for('main.index') }}" class="btn-secondary sidebar-item--nav">← Back</a>
         </div>
@@ -70,10 +70,11 @@
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
                             <span>{{ a.user.name }}</span>
                             {% if effective_user.role == 'admin' or project.cs_lead_id == effective_user.id %}
-                            <form method="POST" action="{{ url_for('projects.remove_secondary_cs', project_id=project.id, user_id=a.user_id) }}"
+                            <form method="POST" action="{{ url_for('project_detail.remove_secondary_cs', project_id=project.id, user_id=a.user_id) }}"
                                 class="secondary-cs-form" style="display:inline;">
                                 <button type="submit" class="btn-danger-sm"
-                                    onclick="return confirm('Remove {{ a.user.name }} as secondary CS?')">×</button>
+                                    data-action="confirm-submit"
+                                    data-confirm-message="{{ 'Remove ' ~ a.user.name ~ ' as secondary CS?' | tojson }}">×</button>
                             </form>
                             {% endif %}
                         </div>
@@ -88,7 +89,7 @@
                 {% if available_cs_users %}
                 <div class="detail-field">
                     <span class="detail-label">Add Secondary CS</span>
-                    <form method="POST" action="{{ url_for('projects.add_secondary_cs', project_id=project.id) }}"
+                    <form method="POST" action="{{ url_for('project_detail.add_secondary_cs', project_id=project.id) }}"
                         class="inline-form">
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <select name="user_id" class="form-select">
@@ -110,8 +111,8 @@
                 <div class="detail-field">
                     <span class="detail-label">Project Status</span>
                     <select class="status-select"
-                        data-url="{{ url_for('projects.set_project_status', project_id=project.id) }}"
-                        onchange="updateStatus(this)">
+                        data-url="{{ url_for('project_detail.set_project_status', project_id=project.id) }}"
+                        data-action="update-status">
                         <option value="briefed" {% if project.project_status=='briefed' %}selected{% endif %}>Briefed
                         </option>
                         <option value="in_queue" {% if project.project_status=='in_queue' %}selected{% endif %}>In Queue
@@ -152,7 +153,10 @@
                 ) %}
                 <div class="detail-label">
                     <span class="detail-label"></span>
-                    <button class="btn-primary" onclick="openStartProjectModal({{ project.id }}, '{{ effective_user.team or '' }}')">
+                    <button class="btn-primary"
+                        data-action="open-start-project-modal"
+                        data-project-id="{{ project.id }}"
+                        data-team="{{ effective_user.team or '' }}">
                         ▶ Start Project
                     </button>
                 </div>
@@ -198,20 +202,23 @@
                             effective_user.team == team_name) %}
                             <td>
                                 <form method="POST"
-                                    action="{{ url_for('projects.assign_designers', project_id=project.id) }}"
-                                    class="inline-form">
-                                    <select name="designer_{{ team_name|lower }}" required>
-                                        <option value="">Select designer</option>
-                                        {% for designer in designers_by_team[team_name] %}
-                                        <option value="{{ designer.id }}" {{ 'selected' if assignment and
-                                            assignment.user_id==designer.id }}>
-                                            {{ designer.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="btn-primary">
-                                        {% if assignment %}Update{% else %}Assign{% endif %}
-                                    </button>
+                                    action="{{ url_for('project_detail.assign_designers', project_id=project.id) }}"
+                                    data-action="assign-designer-form"
+                                    data-project-id="{{ project.id }}">
+                                    <div class="assign-designer-row">
+                                        <select name="designer_{{ team_name|lower }}" required>
+                                            <option value="">Select designer</option>
+                                            {% for designer in designers_by_team[team_name] %}
+                                            <option value="{{ designer.id }}" {{ 'selected' if assignment and
+                                                assignment.user_id==designer.id }}>
+                                                {{ designer.name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn-primary">
+                                            {% if assignment %}Update{% else %}Assign{% endif %}
+                                        </button>
+                                    </div>
                                 </form>
                             </td>
                             {% elif effective_user.role in ['admin', 'team_lead'] %}
@@ -220,13 +227,16 @@
                             <td>
                                 {% if not assignment %}
                                 <button class="btn-secondary btn-sm"
-                                    onclick="assignLeadSelf('{{ team_name }}', {{ project.id }})">
+                                    data-action="assign-lead-self"
+                                    data-team="{{ team_name }}"
+                                    data-project-id="{{ project.id }}">
                                     Assign Me
                                 </button>
                                 {% elif assignment.user_id == effective_user.id %}
                                 <div id="transfer-trigger-{{ team_name|lower }}">
                                     <button class="btn-secondary btn-sm"
-                                        onclick="showTransferForm('{{ team_name|lower }}')">
+                                        data-action="show-transfer-form"
+                                        data-team="{{ team_name|lower }}">
                                         Transfer Ownership
                                     </button>
                                 </div>
@@ -241,18 +251,24 @@
                                     </select>
                                     <div style="display:flex;gap:0.4rem;">
                                         <button class="btn-primary btn-sm"
-                                            onclick="confirmTransfer('{{ team_name }}', {{ project.id }})">
+                                            data-action="confirm-transfer"
+                                            data-team="{{ team_name }}"
+                                            data-project-id="{{ project.id }}">
                                             Confirm
                                         </button>
                                         <button class="btn-secondary btn-sm"
-                                            onclick="cancelTransfer('{{ team_name|lower }}')">
+                                            data-action="cancel-transfer"
+                                            data-team="{{ team_name|lower }}">
                                             Cancel
                                         </button>
                                     </div>
                                 </div>
                                 {% else %}
                                 <button class="btn-secondary btn-sm"
-                                    onclick="openTakeoverModal('{{ team_name }}', '{{ assignment.designer.name }}', {{ project.id }})">
+                                    data-action="open-takeover-modal"
+                                    data-team="{{ team_name }}"
+                                    data-current-owner="{{ assignment.designer.name | tojson }}"
+                                    data-project-id="{{ project.id }}">
                                     Transfer Ownership
                                 </button>
                                 {% endif %}
@@ -284,8 +300,10 @@
                     GST</span></span>
                 {# Flag creator, admin, or management can resolve — management has oversight across all projects #}
                 {% if effective_user.id == flag.created_by_id or effective_user.role in ('admin', 'management') %}
-                <button type="button" class="btn-flag-resolve" onclick="resolveFlag({{ flag.id }}, {{ project.id }})">✓
-                    Mark Resolved</button>
+                <button type="button" class="btn-flag-resolve"
+                    data-action="resolve-flag"
+                    data-flag-id="{{ flag.id }}"
+                    data-project-id="{{ project.id }}">✓ Mark Resolved</button>
                 {% endif %}
             </div>
             <div class="flag-thread">
@@ -299,7 +317,7 @@
                 </div>
                 {% endfor %}
             </div>
-            <form method="POST" action="{{ url_for('projects.reply_flag', project_id=project.id, flag_id=flag.id) }}"
+            <form method="POST" action="{{ url_for('project_detail.reply_flag', project_id=project.id, flag_id=flag.id) }}"
                 class="flag-reply-form">
                 <textarea name="message" class="flag-reply-input" placeholder="Write a response..."></textarea>
                 <div class="flag-reply-actions">
@@ -326,7 +344,7 @@
                 Select which regions you want to be notified about. Leave all unchecked to receive notifications for all
                 regions.
             </p>
-            <form method="POST" action="{{ url_for('projects.update_secondary_cs_regions', project_id=project.id) }}">
+            <form method="POST" action="{{ url_for('project_detail.update_secondary_cs_regions', project_id=project.id) }}">
                 <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
                     {% for region_key in ['uae', 'kuwait', 'qatar', 'bahrain', 'oman'] %}
                     {% if region_key in brief_sections %}
@@ -424,7 +442,7 @@
             </div>
             {% if effective_user.role == 'admin' or (effective_user.role == 'team_lead' and effective_user.team == '2D')
             %}
-            <form method="POST" action="{{ url_for('projects.assign_concept_kv', project_id=project.id) }}"
+            <form method="POST" action="{{ url_for('project_detail.assign_concept_kv', project_id=project.id) }}"
                 class="inline-form" style="margin-top: 1rem;">
                 <div class="detail-fields">
                     <div class="detail-field">
@@ -455,7 +473,7 @@
                 <button type="submit" class="btn-primary" style="margin-top: 0.75rem;">Save Assignments</button>
             </form>
             {% elif effective_user.role == 'designer' %}
-            <form method="POST" action="{{ url_for('projects.assign_concept_kv', project_id=project.id) }}"
+            <form method="POST" action="{{ url_for('project_detail.assign_concept_kv', project_id=project.id) }}"
                 class="inline-form" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <input type="hidden" name="concept_designer_id" value="{{ effective_user.id }}">
                 <input type="hidden" name="kv_designer_id" value="{{ effective_user.id }}">
@@ -479,7 +497,7 @@
             {% if effective_user.role in ['designer', 'team_lead'] %}
             <div class="flag-section-btn-row">
                 <button class="btn-brief-flag" data-flag-type="concept" data-project-id="{{ project.id }}"
-                    data-context="Concept &amp; KV" onclick="openFlagModalFromBtn(this)">⚑ Flag Concept &amp; KV
+                    data-context="Concept &amp; KV" data-action="open-flag-modal">⚑ Flag Concept &amp; KV
                     Issue</button>
             </div>
             {% endif %}
@@ -492,6 +510,12 @@
         <div class="brief-region-block">
             <h3 class="brief-region-heading">{{ region_key | upper }}</h3>
             {% for pc in brief_sections[region_key] %}
+            {# ch_locked: true when this customer's POSM channel has been approved #}
+            {% if region_key == 'uae' %}
+                {% set ch_locked = (region_key, pc.id) in approved_channel_keys %}
+            {% else %}
+                {% set ch_locked = (region_key, none) in approved_channel_keys %}
+            {% endif %}
             <div class="brief-customer-block{% if pc.cancelled %} customer-cancelled{% endif %}">
                 <div class="brief-customer-header">
                     <h4 class="brief-customer-name">{{ pc.customer.name }}</h4>
@@ -527,22 +551,22 @@
                     %}
                     {% if pc.status == 'approved' %}
                     <span class="customer-approved-badge">✓ Approved</span>
-                    {% else %}
-                    <button class="btn-approve-customer"
-                        data-url="{{ url_for('projects.set_customer_status', project_id=project.id, pc_id=pc.id) }}"
-                        data-pc-id="{{ pc.id }}" onclick="approveCustomer(this)">✓ Approve</button>
                     {% endif %}
                     {% if pc.cancelled %}
                     <span class="customer-cancelled-badge">✗ Cancelled</span>
                     {% elif effective_user.role in ['admin', 'cs'] and project.project_status != 'approved' %}
                     {% if pc.id in pc_ids_with_submissions %}
                     <button class="btn-customer-action btn-customer-cancel"
-                        onclick="confirmCancelCustomer({{ pc.id }}, '{{ pc.customer.name | e }}')">
+                        data-action="cancel-customer"
+                        data-customer-id="{{ pc.id }}"
+                        data-customer-name="{{ pc.customer.name | tojson }}">
                         Cancel Customer
                     </button>
                     {% else %}
                     <button class="btn-customer-action btn-customer-remove"
-                        onclick="confirmRemoveCustomer({{ pc.id }}, '{{ pc.customer.name | e }}')">
+                        data-action="remove-customer"
+                        data-customer-id="{{ pc.id }}"
+                        data-customer-name="{{ pc.customer.name | tojson }}">
                         Remove Customer
                     </button>
                     {% endif %}
@@ -567,9 +591,9 @@
                                 <span class="brief-assignment-name {{ 'muted' if not asgn }}">
                                     {{ asgn.designer.name if asgn else 'Pending' }}
                                 </span>
-                                {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
+                                {% if effective_user.role in ['admin', 'designer', 'team_lead'] and (not ch_locked or effective_user.role == 'admin') %}
                                 <form method="POST"
-                                    action="{{ url_for('projects.assign_deliverable', project_id=project.id, d_id=deliverable.id) }}"
+                                    action="{{ url_for('project_detail.assign_deliverable', project_id=project.id, d_id=deliverable.id) }}"
                                     class="chip-assign-form">
                                     <input type="hidden" name="team" value="{{ d.team }}">
                                     <select name="designer_id" class="chip-assign-select">
@@ -588,7 +612,7 @@
                             <span class="muted">Pending</span>
                             {% endif %}
                         </div>
-                        {% if effective_user.role in ['designer', 'team_lead'] %}
+                        {% if effective_user.role in ['designer', 'team_lead'] and not ch_locked %}
                         {% set d_open_flags = open_flags | selectattr('deliverable_id', 'equalto', deliverable.id) |
                         list %}
                         {% if d_open_flags %}
@@ -598,15 +622,15 @@
                         {% endif %}
                         <button class="btn-brief-flag" data-flag-type="deliverable" data-project-id="{{ project.id }}"
                             data-deliverable-id="{{ deliverable.id }}" data-context="{{ deliverable.name }}"
-                            onclick="openFlagModalFromBtn(this)">⚑ Flag Issue</button>
+                            data-action="open-flag-modal">⚑ Flag Issue</button>
                         {% endif %}
-                        {% if project.project_status == 'approved' and effective_user.role != 'admin' %}
+                        {% if effective_user.role != 'admin' %}
                         <span class="status-badge s-{{ deliverable.status }}">{{ deliverable.status | replace('_', ' ')
                             | title }}</span>
                         {% else %}
                         <select class="status-select"
-                            data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=deliverable.id) }}"
-                            onchange="updateStatus(this)">
+                            data-url="{{ url_for('project_detail.set_deliverable_status', project_id=project.id, d_id=deliverable.id) }}"
+                            data-action="update-status">
                             <option value="in_queue" {% if deliverable.status=='in_queue' %}selected{% endif %}>In Queue
                             </option>
                             <option value="in_progress" {% if deliverable.status=='in_progress' %}selected{% endif %}>In
@@ -722,7 +746,7 @@
                         </span>
                         {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
                         <form method="POST"
-                            action="{{ url_for('projects.assign_standard_deliverable', project_id=project.id, d_id=d.id) }}"
+                            action="{{ url_for('project_detail.assign_standard_deliverable', project_id=project.id, d_id=d.id) }}"
                             class="chip-assign-form">
                             <select name="designer_id" class="chip-assign-select">
                                 <option value="">— assign —</option>
@@ -750,11 +774,11 @@
                         {%- else %}—{% endif -%}
                     </span>
                 </div>
-                {% if project.project_status == 'approved' and effective_user.role != 'admin' %}
+                {% if effective_user.role != 'admin' %}
                 <span class="status-badge s-{{ d.status }}">{{ d.status | replace('_', ' ') | title }}</span>
                 {% else %}
                 <select class="status-select"
-                    data-url="{{ url_for('projects.set_deliverable_status', project_id=project.id, d_id=d.id) }}"
+                    data-url="{{ url_for('project_detail.set_deliverable_status', project_id=project.id, d_id=d.id) }}"
                     onchange="updateStatus(this)">
                     <option value="in_queue" {% if d.status=='in_queue' %}selected{% endif %}>In Queue</option>
                     <option value="in_progress" {% if d.status=='in_progress' %}selected{% endif %}>In Progress</option>
@@ -803,7 +827,7 @@
                 <span class="reference-file-name">{{ f.original_filename }}</span>
                 <span class="reference-file-meta">{{ f.uploaded_by.name }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_project_file', file_id=f.id) }}"
+                    <a href="{{ url_for('project_detail.download_project_file', file_id=f.id) }}"
                         class="btn-secondary btn-sm">Download</a>
                     {% if effective_user.role == 'admin' or (effective_user.role == 'cs' and project.project_status !=
                     'approved') %}
@@ -830,26 +854,21 @@
         {% endif %}
     </div>
 
-    <!-- Deliverables JSON for the submission deliverable picker — read by submission JS below -->
+    <!-- Server data for detail page JS — all accessed via window.PAGE -->
     <script>
-        window.projectDeliverables = {{ deliverables_json | safe }};
-        window.projectHasConcept = {{ (project.has_concept and project.brief_type == 'ccm') | tojson }};
-        window.projectHasKV = {{ (project.has_kv and project.brief_type == 'ccm') | tojson }};
-        window.posmActive = {{ posm_active | tojson }};
-        window.isGulf = {{ is_gulf | tojson }};
-        window.gulfRegions = {{ gulf_regions_json | safe }};
-        window.projectCustomers = {{ project_customers_json | safe }};
-        {% if active_submission %}
-        window.previousIncludesConcept = {{ active_submission.includes_concept | tojson }};
-        window.previousIncludesKV = {{ active_submission.includes_kv | tojson }};
-        window.previousPosmCustomerId = {{ active_submission.posm_customer_id | tojson }};
-        window.previousPosmCountry = {{ (active_submission.posm_country or '') | tojson }};
-        {% else %}
-        window.previousIncludesConcept = false;
-        window.previousIncludesKV = false;
-        window.previousPosmCustomerId = null;
-        window.previousPosmCountry = '';
-        {% endif %}
+        window.PAGE = {
+            projectDeliverables:      {{ deliverables_json | safe }},
+            projectHasConcept:        {{ (project.has_concept and project.brief_type == 'ccm') | tojson }},
+            projectHasKV:             {{ (project.has_kv and project.brief_type == 'ccm') | tojson }},
+            posmActive:               {{ posm_active | tojson }},
+            isGulf:                   {{ is_gulf | tojson }},
+            gulfRegions:              {{ gulf_regions_json | safe }},
+            projectCustomers:         {{ project_customers_json | safe }},
+            previousIncludesConcept:  {% if active_submission %}{{ active_submission.includes_concept | tojson }}{% else %}false{% endif %},
+            previousIncludesKV:       {% if active_submission %}{{ active_submission.includes_kv | tojson }}{% else %}false{% endif %},
+            previousPosmCustomerId:   {% if active_submission %}{{ active_submission.posm_customer_id | tojson }}{% else %}null{% endif %},
+            previousPosmCountry:      {% if active_submission %}{{ (active_submission.posm_country or '') | tojson }}{% else %}''{% endif %}
+        };
     </script>
 
     {% if posm_channels_data or (project.brief_type == 'ccm' and (project.has_concept or project.has_kv)) %}
@@ -878,7 +897,7 @@
             {% set _ckv_sl = {'in_queue':'Not Started','in_progress':'In Progress','internal_review':'In
             Review','internal_revision':'Needs Revision','submitted_to_client':'Sent to Client','revision_in_queue':'Rev
             Pending','revision_in_progress':'Rev In Progress','approved':'Approved'} %}
-            <button class="posm-channel-pill posm-channel-pill--active" id="ckv-pill" onclick="selectCkvChannel()">
+            <button class="posm-channel-pill posm-channel-pill--active" id="ckv-pill" data-action="select-ckv-channel">
                 <span class="posm-pill-label">Concept &amp; KV</span>
                 <span class="posm-pill-status posm-pill-status--{{ project.concept_status or 'in_queue' }}">
                     {{ _ckv_sl.get(project.concept_status or 'in_queue', project.concept_status or 'Not Started') }}
@@ -890,7 +909,7 @@
             Review','internal_revision':'Needs Revision','submitted_to_client':'Sent','revision_in_queue':'Rev
             Pending','revision_in_progress':'Rev In Progress'} %}
             <button class="posm-channel-pill{% if cd.cancelled %} posm-channel-pill--cancelled{% endif %}"
-                data-channel-id="{{ cd.channel.id }}" onclick="selectPosmChannel({{ cd.channel.id }})">
+                data-channel-id="{{ cd.channel.id }}" data-action="select-posm-channel">
                 <span class="posm-pill-label">{{ cd.label }}{% if cd.cancelled %} · Cancelled{% endif %}</span>
                 <span class="posm-pill-status posm-pill-status--{{ cd.channel.status }}">{{ _sl.get(cd.channel.status,
                     cd.channel.status) }}</span>
@@ -919,7 +938,7 @@
                 <span class="reference-file-name">{{ ckv_submission.original_filename }}</span>
                 <span class="reference-file-meta">Uploaded by {{ ckv_submission.uploaded_by.name }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=ckv_submission.id) }}"
+                    <a href="{{ url_for('submission.download_submission', submission_id=ckv_submission.id) }}"
                         class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
@@ -928,7 +947,7 @@
             {% if effective_user.role in ['admin', 'cs'] %}
             {# CS/admin action row: approve outright or send it back for revision #}
             <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
-                <button type="button" class="btn-primary" onclick="approveCKV({{ project.id }})">✓ Approve Concept &amp; KV</button>
+                <button type="button" class="btn-primary" data-action="approve-ckv" data-project-id="{{ project.id }}">✓ Approve Concept &amp; KV</button>
                 <button type="button" class="btn-danger btn-sm" id="ckvSendRevisionBtn" data-project-id="{{ project.id }}">Send for
                     Revision</button>
             </div>
@@ -987,7 +1006,7 @@
                 <span class="reference-file-name">{{ ckv_submission.original_filename }}</span>
                 <span class="reference-file-meta">Uploaded by {{ ckv_submission.uploaded_by.name }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=ckv_submission.id) }}" class="btn-secondary btn-sm">Download</a>
+                    <a href="{{ url_for('submission.download_submission', submission_id=ckv_submission.id) }}" class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
             <div class="submission-status" style="margin-top:0.5rem;">🔍 In Internal Review. Awaiting Client Servicing approval</div>
@@ -1043,7 +1062,7 @@
                 <span class="reference-file-name">{{ ckv_submission.original_filename }}</span>
                 <span class="reference-file-meta">Uploaded by {{ ckv_submission.uploaded_by.name }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=ckv_submission.id) }}" class="btn-secondary btn-sm">Download</a>
+                    <a href="{{ url_for('submission.download_submission', submission_id=ckv_submission.id) }}" class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
             {% if effective_user.role in ['admin', 'designer', 'team_lead'] %}
@@ -1100,7 +1119,7 @@
                 <span class="reference-file-name">{{ ch_sub.original_filename }}</span>
                 <span class="reference-file-meta">Uploaded by {{ ch_sub.uploaded_by.name }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=ch_sub.id) }}"
+                    <a href="{{ url_for('submission.download_submission', submission_id=ch_sub.id) }}"
                         class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
@@ -1160,7 +1179,7 @@
                 <span class="reference-file-name">{{ ch_sub.original_filename }}</span>
                 <span class="reference-file-meta">Uploaded by {{ ch_sub.uploaded_by.name }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=ch_sub.id) }}"
+                    <a href="{{ url_for('submission.download_submission', submission_id=ch_sub.id) }}"
                         class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
@@ -1168,12 +1187,34 @@
                 ✓ Submitted to client on {{ ch_sub.submitted_to_client_at | dubai_time }} GST
                 by {{ ch_sub.submitted_by.name if ch_sub.submitted_by else '—' }}
             </div>
+            {% if ch_sub.included_deliverables %}
+            <div style="margin-top:0.75rem;">
+                <p class="detail-label" style="margin-bottom:0.4rem;">Deliverables in this submission:</p>
+                <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                    {% for link in ch_sub.included_deliverables %}{% if link.deliverable %}
+                    <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:pointer;">
+                        <input type="checkbox" class="ch-deliverable-approve-cb"
+                            data-deliverable-id="{{ link.deliverable.id }}"
+                            {% if link.deliverable.status != 'approved' %}checked{% else %}checked disabled{% endif %}>
+                        <span {% if link.deliverable.status == 'approved' %}style="text-decoration:line-through;color:var(--pine);"{% endif %}>
+                            {{ link.deliverable.name }}
+                        </span>
+                        {% if link.deliverable.status == 'approved' %}
+                        <span class="customer-approved-badge" style="margin-left:0.25rem;">✓</span>
+                        {% endif %}
+                    </label>
+                    {% endif %}{% endfor %}
+                </div>
+            </div>
+            {% endif %}
             {% if effective_user.role in ['admin', 'cs'] and not ch_readonly %}
-            <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
+            <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
                 <button type="button" class="btn-danger btn-sm ch-send-revision-btn" data-channel-id="{{ ch.id }}">↩
                     Send for Revision</button>
+                <button type="button" class="btn-secondary btn-sm ch-approve-selected-btn" data-channel-id="{{ ch.id }}"
+                    data-project-id="{{ project.id }}">✓ Approve Selected</button>
                 <button type="button" class="btn-primary btn-sm ch-approve-btn" data-channel-id="{{ ch.id }}"
-                    data-project-id="{{ project.id }}">✓ Approve</button>
+                    data-project-id="{{ project.id }}">✓ Approve All</button>
             </div>
             <div class="ch-send-revision-form hidden" id="ch-rev-form-{{ ch.id }}" style="margin-top:1rem;">
                 <textarea class="form-input ch-revision-message" id="ch-rev-msg-{{ ch.id }}"
@@ -1236,7 +1277,7 @@
                 <span class="reference-file-name">{{ ch_sub.original_filename }}</span>
                 <span class="reference-file-meta">Uploaded by {{ ch_sub.uploaded_by.name }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=ch_sub.id) }}"
+                    <a href="{{ url_for('submission.download_submission', submission_id=ch_sub.id) }}"
                         class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
@@ -1260,6 +1301,10 @@
                 <span class="ch-upload-status" id="ch-upload-status-{{ ch.id }}"></span>
             </div>
             {% endif %}
+
+            {# State 7: Channel approved — no further uploads allowed #}
+            {% elif ch.status == 'approved' %}
+            <div class="submission-status submission-status--approved" style="margin-top:0.5rem;">✓ This channel has been fully approved and is locked.</div>
 
             {# State 1: No deck yet #}
             {% else %}
@@ -1285,7 +1330,7 @@
             {% set posm_history = submitted_history | selectattr('phase','equalto','posm') | list %}
             {% if ckv_history %}
             <div class="posm-customer-history">
-                <button class="posm-history-toggle" onclick="togglePosmHistory(this)" data-target="ckv-history-panel">
+                <button class="posm-history-toggle" data-action="toggle-posm-history" data-target="ckv-history-panel">
                     Concept &amp; KV &nbsp;·&nbsp; {{ ckv_history|length }} submission{{ 's' if ckv_history|length != 1 }} ▾
                 </button>
                 <div id="ckv-history-panel" class="posm-history-body hidden">
@@ -1296,7 +1341,7 @@
                         <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
                             s.submitted_by.name if s.submitted_by else '—' }}</span>
                         <div class="reference-file-actions">
-                            <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                            <a href="{{ url_for('submission.download_submission', submission_id=s.id) }}"
                                 class="btn-secondary btn-sm">Download</a>
                         </div>
                     </div>
@@ -1318,7 +1363,7 @@
             {% set cust_subs = uae_history | selectattr('posm_customer_id','equalto',cust_id) | list %}
             {% set cust_name = cust_subs[0].posm_customer.customer.name if cust_subs[0].posm_customer else 'Customer' %}
             <div class="posm-customer-history">
-                <button class="posm-history-toggle" onclick="togglePosmHistory(this)"
+                <button class="posm-history-toggle" data-action="toggle-posm-history"
                     data-target="posm-uae-ch-{{ cust_id }}">
                     UAE — {{ cust_name }} &nbsp;·&nbsp; {{ cust_subs|length }} submission{{ 's' if cust_subs|length != 1
                     }} ▾
@@ -1331,7 +1376,7 @@
                         <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
                             s.submitted_by.name if s.submitted_by else '—' }}</span>
                         <div class="reference-file-actions">
-                            <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                            <a href="{{ url_for('submission.download_submission', submission_id=s.id) }}"
                                 class="btn-secondary btn-sm">Download</a>
                         </div>
                     </div>
@@ -1344,7 +1389,7 @@
             {% set country_history = posm_history | selectattr('posm_country','equalto',rk) | list %}
             {% if country_history %}
             <div class="posm-customer-history">
-                <button class="posm-history-toggle" onclick="togglePosmHistory(this)"
+                <button class="posm-history-toggle" data-action="toggle-posm-history"
                     data-target="posm-ch-country-{{ rk }}">
                     {{ rlabel }} &nbsp;·&nbsp; {{ country_history|length }} submission{{ 's' if country_history|length
                     != 1 }} ▾
@@ -1357,7 +1402,7 @@
                         <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
                             s.submitted_by.name if s.submitted_by else '—' }}</span>
                         <div class="reference-file-actions">
-                            <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                            <a href="{{ url_for('submission.download_submission', submission_id=s.id) }}"
                                 class="btn-secondary btn-sm">Download</a>
                         </div>
                     </div>
@@ -1401,7 +1446,7 @@
             <span class="reference-file-name">{{ active_submission.original_filename }}</span>
             <span class="reference-file-meta">Uploaded by {{ active_submission.uploaded_by.name }}</span>
             <div class="reference-file-actions">
-                <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
+                <a href="{{ url_for('submission.download_submission', submission_id=active_submission.id) }}"
                     class="btn-secondary btn-sm">Download</a>
             </div>
         </div>
@@ -1474,7 +1519,7 @@
             <span class="reference-file-name">{{ active_submission.original_filename }}</span>
             <span class="reference-file-meta">Uploaded by {{ active_submission.uploaded_by.name }}</span>
             <div class="reference-file-actions">
-                <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
+                <a href="{{ url_for('submission.download_submission', submission_id=active_submission.id) }}"
                     class="btn-secondary btn-sm">Download</a>
             </div>
         </div>
@@ -1483,12 +1528,34 @@
             by {{ active_submission.submitted_by.name if active_submission.submitted_by else '—' }}
             {% if project.revision_count > 0 %} — Revision #{{ project.revision_count }}{% endif %}
         </div>
+        {# Deliverable approval picker #}
+        {% if active_submission.included_deliverables %}
+        <div style="margin-top:0.75rem;">
+            <p class="detail-label" style="margin-bottom:0.4rem;">Deliverables in this submission:</p>
+            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                {% for link in active_submission.included_deliverables %}{% if link.deliverable %}
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:pointer;">
+                    <input type="checkbox" class="std-deliverable-approve-cb"
+                        data-deliverable-id="{{ link.deliverable.id }}"
+                        {% if link.deliverable.status != 'approved' %}checked{% else %}checked disabled{% endif %}>
+                    <span {% if link.deliverable.status == 'approved' %}style="text-decoration:line-through;color:var(--pine);"{% endif %}>
+                        {{ link.deliverable.name }}
+                    </span>
+                    {% if link.deliverable.status == 'approved' %}
+                    <span class="customer-approved-badge" style="margin-left:0.25rem;">✓</span>
+                    {% endif %}
+                </label>
+                {% endif %}{% endfor %}
+            </div>
+        </div>
+        {% endif %}
         {# CS can send a revision request or approve the project #}
         {% if effective_user.role in ['admin', 'cs'] %}
         <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
             <button type="button" class="btn-danger btn-sm" id="sendRevisionBtn">↩ Send for Revision</button>
+            <button type="button" class="btn-secondary btn-sm" id="approveSelectedBtn" data-project-id="{{ project.id }}">✓ Approve Selected</button>
             <button type="button" class="btn-primary btn-sm" id="approveBtn" data-project-id="{{ project.id }}">✓
-                Approve Project</button>
+                Approve All</button>
         </div>
         {# Revision form — hidden until CS clicks the button above #}
         <div id="sendRevisionForm" class="hidden" style="margin-top: 1rem;">
@@ -1504,7 +1571,7 @@
             </div>
             <div id="revisionPickerList"
                 style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem;">
-                {# Populated by JS using window.projectDeliverables when form is shown #}
+                {# Populated by JS using window.PAGE.projectDeliverables when form is shown #}
             </div>
             <div style="display: flex; gap: 0.5rem;">
                 <button type="button" class="btn-danger btn-sm" id="sendRevisionConfirm"
@@ -1647,7 +1714,7 @@
                 on {{ active_submission.submitted_to_client_at.strftime('%d %b %Y') if
                 active_submission.submitted_to_client_at else '' }}</span>
             <div class="reference-file-actions">
-                <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
+                <a href="{{ url_for('submission.download_submission', submission_id=active_submission.id) }}"
                     class="btn-secondary btn-sm">Download</a>
             </div>
         </div>
@@ -1663,7 +1730,7 @@
             <span class="reference-file-name">{{ active_submission.original_filename }}</span>
             <span class="reference-file-meta">Uploaded by {{ active_submission.uploaded_by.name }}</span>
             <div class="reference-file-actions">
-                <a href="{{ url_for('projects.download_submission', submission_id=active_submission.id) }}"
+                <a href="{{ url_for('submission.download_submission', submission_id=active_submission.id) }}"
                     class="btn-secondary btn-sm">Download</a>
             </div>
         </div>
@@ -1676,7 +1743,7 @@
                 <button type="button" class="btn-secondary btn-sm" id="pickerDeselectAll">Deselect All</button>
             </div>
             <div id="pickerList" style="display: flex; flex-direction: column; gap: 0.4rem;">
-                {# Populated by submission JS using window.projectDeliverables #}
+                {# Populated by submission JS using window.PAGE.projectDeliverables #}
             </div>
         </div>
         <div style="margin-top: 1rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
@@ -1725,7 +1792,7 @@
                     by {{ s.submitted_by.name if s.submitted_by else '—' }}
                 </span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                    <a href="{{ url_for('submission.download_submission', submission_id=s.id) }}"
                         class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
@@ -1749,7 +1816,7 @@
             {% set cust_subs = uae_history | selectattr('posm_customer_id', 'equalto', cust_id) | list %}
             {% set cust_name = cust_subs[0].posm_customer.customer.name if cust_subs[0].posm_customer else 'Customer' %}
             <div class="posm-customer-history">
-                <button class="posm-history-toggle" onclick="togglePosmHistory(this)"
+                <button class="posm-history-toggle" data-action="toggle-posm-history"
                     data-target="posm-uae-{{ cust_id }}">
                     UAE — {{ cust_name }} &nbsp;·&nbsp; {{ cust_subs | length }} submission{{ 's' if cust_subs | length
                     != 1 }} ▾
@@ -1762,7 +1829,7 @@
                         <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
                             s.submitted_by.name if s.submitted_by else '—' }}</span>
                         <div class="reference-file-actions">
-                            <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                            <a href="{{ url_for('submission.download_submission', submission_id=s.id) }}"
                                 class="btn-secondary btn-sm">Download</a>
                         </div>
                     </div>
@@ -1777,7 +1844,7 @@
             {% set country_history = posm_history | selectattr('posm_country', 'equalto', rk) | list %}
             {% if country_history %}
             <div class="posm-customer-history">
-                <button class="posm-history-toggle" onclick="togglePosmHistory(this)"
+                <button class="posm-history-toggle" data-action="toggle-posm-history"
                     data-target="posm-country-{{ rk }}">
                     {{ rlabel }} &nbsp;·&nbsp; {{ country_history | length }} submission{{ 's' if country_history |
                     length != 1 }} ▾
@@ -1790,7 +1857,7 @@
                         <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
                             s.submitted_by.name if s.submitted_by else '—' }}</span>
                         <div class="reference-file-actions">
-                            <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                            <a href="{{ url_for('submission.download_submission', submission_id=s.id) }}"
                                 class="btn-secondary btn-sm">Download</a>
                         </div>
                     </div>
@@ -1808,7 +1875,7 @@
                 <span class="reference-file-meta">Sent {{ s.submitted_to_client_at.strftime('%d %b %Y') }} by {{
                     s.submitted_by.name if s.submitted_by else '—' }}</span>
                 <div class="reference-file-actions">
-                    <a href="{{ url_for('projects.download_submission', submission_id=s.id) }}"
+                    <a href="{{ url_for('submission.download_submission', submission_id=s.id) }}"
                         class="btn-secondary btn-sm">Download</a>
                 </div>
             </div>
@@ -1823,7 +1890,7 @@
 
     {% if all_flags %}
     <div class="detail-card detail-card--full" id="section-flag-history" style="margin-top: 1.5rem;">
-        <div class="flag-history-header" onclick="toggleFlagHistory()" style="cursor: pointer;">
+        <div class="flag-history-header" data-action="toggle-flag-history" style="cursor: pointer;">
             <h2 class="detail-card-title" style="margin: 0;">Flag History</h2>
             <span class="flag-history-toggle" id="flag-history-toggle">Show ▾</span>
         </div>
@@ -1874,7 +1941,7 @@
         </p>
         <p id="start-project-assign-msg" style="margin:0 0 1.25rem;color:var(--grey-dark);font-size:0.9rem;"></p>
         <div class="modal-actions">
-            <button type="button" class="btn-secondary" onclick="closeStartProjectModal()">Cancel</button>
+            <button type="button" class="btn-secondary" data-action="close-start-project-modal">Cancel</button>
             <button type="button" class="btn-primary" id="start-project-confirm">Start Project</button>
         </div>
     </div>
@@ -1886,7 +1953,7 @@
         <h3 class="modal-title">Take over as lead?</h3>
         <p id="lead-takeover-body" style="margin:0.5rem 0 1.25rem;color:var(--grey-dark);font-size:0.9rem;"></p>
         <div class="modal-actions">
-            <button type="button" class="btn-secondary" onclick="closeTakeoverModal()">Cancel</button>
+            <button type="button" class="btn-secondary" data-action="close-takeover-modal">Cancel</button>
             <button type="button" class="btn-primary" id="lead-takeover-confirm">Confirm</button>
         </div>
     </div>
@@ -1906,15 +1973,15 @@
 </div>
 
 <!-- Flag creation modal -->
-<div id="flag-create-modal" class="modal-overlay hidden" onclick="if(event.target===this) closeFlagModal()">
+<div id="flag-create-modal" class="modal-overlay hidden" data-action="close-flag-modal-overlay">
     <div class="modal-box">
         <h3 class="modal-title">Flag an Issue</h3>
         <p class="flag-modal-context" id="flag-context-text"></p>
         <textarea id="flag-message-input" class="flag-create-textarea"
             placeholder="Describe the issue clearly..."></textarea>
         <div class="modal-actions">
-            <button type="button" class="btn-secondary" onclick="closeFlagModal()">Cancel</button>
-            <button type="button" class="btn-brief-flag-submit" onclick="submitFlag()">Submit Flag</button>
+            <button type="button" class="btn-secondary" data-action="close-flag-modal">Cancel</button>
+            <button type="button" class="btn-brief-flag-submit" data-action="submit-flag">Submit Flag</button>
         </div>
     </div>
 </div>
@@ -2000,39 +2067,41 @@
     }
 
     function confirmRemoveCustomer(pcId, customerName) {
-            if (!confirm('Remove "' + customerName + '"? This cannot be undone.')) return;
-            fetch('/projects/{{ project.id }}/customer/' + pcId + '/remove', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        showToast('"' + customerName + '" removed.', 'success');
-                        setTimeout(function () { location.reload(); }, 800);
-                    } else {
-                        showToast(data.error || 'Something went wrong', 'error');
-                    }
+            showConfirm('Remove "' + customerName + '"? This cannot be undone.', function () {
+                fetch('/projects/{{ project.id }}/customer/' + pcId + '/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 })
-                .catch(function () { showToast('Something went wrong', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            showToast('"' + customerName + '" removed.', 'success');
+                            setTimeout(function () { location.reload(); }, 800);
+                        } else {
+                            showToast(data.error || 'Something went wrong', 'error');
+                        }
+                    })
+                    .catch(function () { showToast('Something went wrong', 'error'); });
+            }, 'Remove Customer');
         }
 
         function confirmCancelCustomer(pcId, customerName) {
-            if (!confirm('Mark "' + customerName + '" as cancelled? Submission history will be preserved.')) return;
-            fetch('/projects/{{ project.id }}/customer/' + pcId + '/cancel', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        showToast('"' + customerName + '" marked as cancelled.', 'success');
-                        setTimeout(function () { location.reload(); }, 800);
-                    } else {
-                        showToast(data.error || 'Something went wrong', 'error');
-                    }
+            showConfirm('Mark "' + customerName + '" as cancelled? Submission history will be preserved.', function () {
+                fetch('/projects/{{ project.id }}/customer/' + pcId + '/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
                 })
-                .catch(function () { showToast('Something went wrong', 'error'); });
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            showToast('"' + customerName + '" marked as cancelled.', 'success');
+                            setTimeout(function () { location.reload(); }, 800);
+                        } else {
+                            showToast(data.error || 'Something went wrong', 'error');
+                        }
+                    })
+                    .catch(function () { showToast('Something went wrong', 'error'); });
+            }, 'Cancel Customer');
         }
 
     function resolveFlag(flagId, projectId) {
@@ -2110,7 +2179,7 @@
     // Step 2b others: select one customer from that region's customers
     // For UAE, file history tracks per-customer; for others, per-country.
     function buildGulfPosmPicker(prefix, defaultCountry, defaultCustomerId) {
-        if (!window.posmActive || !window.isGulf || !window.gulfRegions || !window.gulfRegions.length) return null;
+        if (!window.PAGE.posmActive || !window.PAGE.isGulf || !window.PAGE.gulfRegions || !window.PAGE.gulfRegions.length) return null;
 
         var wrap = document.createElement('div');
         wrap.className = 'posm-customer-select-wrap';
@@ -2130,7 +2199,7 @@
         placeholder.textContent = '— Region —';
         regionSel.appendChild(placeholder);
 
-        window.gulfRegions.forEach(function (r) {
+        window.PAGE.gulfRegions.forEach(function (r) {
             var opt = document.createElement('option');
             opt.value = r.key;
             opt.textContent = r.name;
@@ -2156,7 +2225,7 @@
 
         function populateCustomers(regionKey) {
             custSel.innerHTML = '';
-            var region = window.gulfRegions.find(function (r) { return r.key === regionKey; });
+            var region = window.PAGE.gulfRegions.find(function (r) { return r.key === regionKey; });
             if (!region || !region.customers.length) { custRow.style.display = 'none'; return; }
             region.customers.forEach(function (c) {
                 var opt = document.createElement('option');
@@ -2179,7 +2248,7 @@
 
     // Non-Gulf fallback (single flat customer list — kept for non-Gulf C&CM)
     function buildFlatCustomerSelect(prefix, defaultVal) {
-        if (!window.posmActive || !window.projectCustomers || !window.projectCustomers.length) return null;
+        if (!window.PAGE.posmActive || !window.PAGE.projectCustomers || !window.PAGE.projectCustomers.length) return null;
         var wrap = document.createElement('div');
         wrap.className = 'posm-customer-select-wrap';
         var lbl = document.createElement('label');
@@ -2189,7 +2258,7 @@
         var sel = document.createElement('select');
         sel.id = prefix + 'CustomerSelect';
         sel.className = 'form-select';
-        window.projectCustomers.forEach(function (c) {
+        window.PAGE.projectCustomers.forEach(function (c) {
             var opt = document.createElement('option');
             opt.value = c.id;
             opt.textContent = c.name;
@@ -2202,7 +2271,7 @@
     }
 
     function buildPosmPicker(prefix, defaultCountry, defaultCustomerId) {
-        return window.isGulf
+        return window.PAGE.isGulf
             ? buildGulfPosmPicker(prefix, defaultCountry, defaultCustomerId)
             : buildFlatCustomerSelect(prefix, defaultCustomerId);
     }
@@ -2210,14 +2279,14 @@
     // Inject POSM country picker into submission picker — but NOT into the C&KV section picker
     // (C&KV submissions never have a POSM country; data-ckv="true" marks the C&KV picker)
     var pickerList = document.getElementById('pickerList');
-    if (pickerList && window.posmActive && !pickerList.dataset.ckv) {
-        var submPicker = buildPosmPicker('posm', window.previousPosmCountry, window.previousPosmCustomerId);
+    if (pickerList && window.PAGE.posmActive && !pickerList.dataset.ckv) {
+        var submPicker = buildPosmPicker('posm', window.PAGE.previousPosmCountry, window.PAGE.previousPosmCustomerId);
         if (submPicker) pickerList.parentElement.insertBefore(submPicker, pickerList);
     }
 
     // Inject into revision form when it first opens (lazy)
     var sendRevisionBtnEl = document.getElementById('sendRevisionBtn');
-    if (sendRevisionBtnEl && window.posmActive) {
+    if (sendRevisionBtnEl && window.PAGE.posmActive) {
         sendRevisionBtnEl.addEventListener('click', function injectRevisionPicker() {
             if (!document.getElementById('revPosmRegionSelect') && !document.getElementById('revPosmCustomerSelect')) {
                 var revPicker = buildPosmPicker('revPosm', '', null);
@@ -2360,6 +2429,72 @@
                 );
             });
         }
+
+        // ── Standard brief: Approve Selected deliverables ────────────────────
+        var approveSelectedBtn = document.getElementById('approveSelectedBtn');
+        if (approveSelectedBtn) {
+            approveSelectedBtn.addEventListener('click', function () {
+                var projectId = this.dataset.projectId;
+                var checked = document.querySelectorAll('.std-deliverable-approve-cb:checked:not(:disabled)');
+                var ids = Array.from(checked).map(function (cb) { return parseInt(cb.dataset.deliverableId); });
+                if (!ids.length) { showToast('No deliverables selected', 'error'); return; }
+                openApprovalModal(
+                    'Approve Selected Deliverables?',
+                    'The selected deliverables will be marked as approved. If all deliverables are approved the project will lock.',
+                    function () {
+                        fetch('/projects/' + projectId + '/submission/approve', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ deliverable_ids: ids })
+                        })
+                            .then(function (r) { return r.json(); })
+                            .then(function (data) {
+                                if (data.success) {
+                                    showToast(data.all_approved ? 'Project approved' : 'Deliverables approved', 'success');
+                                    setTimeout(function () { location.reload(); }, 800);
+                                } else {
+                                    showToast(data.error || 'Something went wrong', 'error');
+                                }
+                            })
+                            .catch(function () { showToast('Something went wrong', 'error'); });
+                    }
+                );
+            });
+        }
+
+        // ── POSM channel: Approve Selected deliverables ───────────────────────
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('.ch-approve-selected-btn');
+            if (!btn) return;
+            var channelId = btn.dataset.channelId;
+            var projectId = btn.dataset.projectId;
+            var section = document.getElementById('posm-ch-' + channelId);
+            if (!section) return;
+            var checked = section.querySelectorAll('.ch-deliverable-approve-cb:checked:not(:disabled)');
+            var ids = Array.from(checked).map(function (cb) { return parseInt(cb.dataset.deliverableId); });
+            if (!ids.length) { showToast('No deliverables selected', 'error'); return; }
+            openApprovalModal(
+                'Approve Selected Deliverables?',
+                'The selected deliverables will be marked as approved. If all deliverables in this submission are approved the channel will lock.',
+                function () {
+                    fetch('/projects/' + projectId + '/submission/approve', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ posm_channel_id: parseInt(channelId), deliverable_ids: ids })
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.success) {
+                                showToast(data.all_approved ? 'Channel approved' : 'Deliverables approved', 'success');
+                                setTimeout(function () { location.reload(); }, 800);
+                            } else {
+                                showToast(data.error || 'Something went wrong', 'error');
+                            }
+                        })
+                        .catch(function () { showToast('Something went wrong', 'error'); });
+                }
+            );
+        });
 
         // ── Start Project confirm button ──────────────────────────────────────
         var startProjectConfirmBtn = document.getElementById('start-project-confirm');

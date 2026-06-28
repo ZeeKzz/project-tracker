@@ -1,7 +1,7 @@
 ================================================================================
 VITAMIN HELIX — CHANGELOG
 ===============================================================================
-
+For Server - add_custmer_cancelled.py, drop_deprecated_posm_columns.py
 ================================================================================
 v1.3 Backend Overhaul and New Features
      Long Term Sustainability — 27 JUNE 2026
@@ -9,15 +9,27 @@ v1.3 Backend Overhaul and New Features
 
 New Features:
 
+- If there is a submission active on POSM, you can mark the customer as cancelled, saving the submission and revision history.
+- Added a visual indicator when carrying out actions, so you know that action is being processed by the system.
 
 Adjustments:
 
-- Added ability to remove customers from C&CM if there has been no submission - to guard against accidental additions. If there is a submission active, you can mark the customer as cancelled, saving the submission and revision history.
+- Added ability to remove customers from C&CM if there has been no submission - to guard against accidental additions. 
+- Moved deliverable approval to the submission flow. You can now approve deliverables separately.
+- Admin Activity log is now more detailed.
+- Styled all input forms to be consistent with the app branding.
 
 Bug Fixes:
 
 - Fixed customers on C&CM brief leaving behind "phantom" pills
 - Major redesign to backend structure, more sustainable code structure implemented
+- Cancelling customer has the correctly styled popup now
+- Designers can no longer adjust or submit new files once a project or C&CM customer channel is approved
+- Fixed the sidebar maximizing when clicking on icons, in the minimized sidebar.
+- Brief type cannot be changed when editing a project
+- Assigning a designer to a project now updates instantly, rather than requiring a page refresh
+- Fixed duplicate designers being assigned to projects
+- 
 
 ================================================================================
 v1.2.1 Minor Fixes — 27 JUNE 2026

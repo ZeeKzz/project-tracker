@@ -141,7 +141,12 @@ Revision picker shows ONE "Concept & KV" row when both flags are true. JS collec
 ---
 
 ## Submission System
-8 states: in_queue → in_progress → submitted → awaiting_review → revision_requested → re_submitted → cs_approved → approved
+**project_status / deliverable.status state machine:**
+`in_queue` → `in_progress` → `submitted` → `internal_revision` → `revision_in_queue` → `revision_in_progress` → `approved`
+
+**POSM channel.status:** same states; cascades to project `approved` when all channels done.
+
+**concept_status / kv_status:** same state strings as above.
 
 - Standard brief: project-level approval via `approve_submission` route
 - POSM: per-channel per-customer approval; cascades to project `approved` when all channels done

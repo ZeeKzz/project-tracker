@@ -27,7 +27,7 @@
             <span class="completion-label" id="completionLabel">0% Complete</span>
         </div>
         <div class="create-subheader-right">
-            <a href="{{ url_for('projects.detail', project_id=edit_project_id) if edit_mode else (url_for('projects.drafts') if has_other_drafts else url_for('main.index')) }}"
+            <a href="{{ url_for('project_detail.detail', project_id=edit_project_id) if edit_mode else (url_for('brief.drafts') if has_other_drafts else url_for('main.index')) }}"
                 class="btn-secondary" style="font-size:0.72rem;padding:0.45rem 1rem;">Back</a>
         </div>
     </div>
@@ -146,11 +146,11 @@
 
         </div>
         {# ── Section 2: Brief Type Selector ── #}
-        <div class="create-section" id="sectionBriefType">
+        {# Hidden in edit mode — brief type is locked once a project is created. #}
+        <div class="create-section{% if edit_mode %} hidden{% endif %}" id="sectionBriefType">
             <h3 class="create-section-heading">Brief Type</h3>
             <p class="create-section-hint">
-                Select the type of brief for this project.
-                You can switch between types at any time — your inputs will be remembered.
+                Select the type of brief for this project. This cannot be changed after the project is created.
             </p>
 
             <div class="brief-type-selector">
@@ -184,8 +184,7 @@
                                 {% endfor %}
                             </select>
                             {% if effective_user.role in ['admin', 'cs'] %}
-                            <button type="button" class="btn-add-inline-sm" onclick="openQuickAdd('design-type')">+ Add
-                                New Type</button>
+                            <button type="button" class="btn btn--tangerine btn--sm" onclick="openQuickAdd('design-type')">+ Add New Type</button>
                             {% endif %}
                         </div>
                     </div>
@@ -386,7 +385,7 @@
                     <span class="reference-file-name">{{ f.original_filename }}</span>
                     <span class="reference-file-meta">{{ f.uploaded_by.name }}</span>
                     <div class="reference-file-actions">
-                        <a href="{{ url_for('projects.download_project_file', file_id=f.id) }}"
+                        <a href="{{ url_for('project_detail.download_project_file', file_id=f.id) }}"
                             class="btn btn--secondary btn--sm">Download</a>
                         <button class="btn btn--danger btn--sm reference-file-delete-btn"
                             data-file-id="{{ f.id }}">Remove</button>

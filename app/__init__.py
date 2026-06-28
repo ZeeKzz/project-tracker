@@ -25,17 +25,22 @@ def create_app():
     from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection, ProjectFile, ProjectSubmission, ProjectSubmissionDeliverable, ProjectRevision, ProjectRevisionDeliverable)
     from app.routes import main
     from app.routes.auth import auth
-    from app.routes.projects import projects
+    from app.routes.projects_brief import brief_bp
+    from app.routes.projects_detail import detail_bp
+    from app.routes.projects_submission import submission_bp
+    from app.routes.projects_approval import approval_bp
     from app.routes.notifications import notifications_bp
     from app.models import Notification
     from flask_login import current_user
     from app.routes.admin import admin_bp
-    
-    app.register_blueprint(notifications_bp)
 
+    app.register_blueprint(notifications_bp)
     app.register_blueprint(main)
     app.register_blueprint(auth)
-    app.register_blueprint(projects)
+    app.register_blueprint(brief_bp)
+    app.register_blueprint(detail_bp)
+    app.register_blueprint(submission_bp)
+    app.register_blueprint(approval_bp)
     app.register_blueprint(admin_bp)
 
     from app.utils import calculate_project_hours

@@ -57,7 +57,8 @@
                         <tr>
                             <th></th>
                             <th>Project Name</th>
-                            <th>Deadline</th>
+                            <th>First Output Deadline</th>
+                            <th>Final Deadline</th>
                             <th>CS Lead</th>
                             <th>Assigned Designers</th>
                             <th>Status</th>
@@ -72,8 +73,8 @@
                             data-expand="team_{{ project.id }}">
                             <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                             <td>{{ project.name }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                project.design_needed_by else '—' }}</td>
+                            <td class="mono">{{ project.first_output_deadline.strftime('%d %b %Y') if project.first_output_deadline else '—' }}</td>
+                            <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
                             <td>
                                 {{ project.cs_lead.name if project.cs_lead else '—' }}
                                 {% if project.secondary_cs_assignments %}
@@ -101,11 +102,11 @@
                                 <span class="status-badge s-{{ project.project_status }}">{{ project.project_status |
                                     replace('_', ' ') | title }}</span>
                             </td>
-                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                            <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                     class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             <tr class="expansion-row hidden" id="expand_team_{{ project.id }}">
-                                <td colspan="7">
+                                <td colspan="8">
                                     <table class="customer-sub-table">
                                         <thead>
                                             <tr>
@@ -132,11 +133,11 @@
                             </tr>
                             {% else %}
                             <tr class="clickable {% if is_overdue %}overdue{% endif %}"
-                                data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                                data-href="{{ url_for('project_detail.detail', project_id=project.id) }}">
                                 <td class="chevron-cell"></td>
                                 <td>{{ project.name }}</td>
-                                <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                    project.design_needed_by else '—' }}</td>
+                                <td class="mono">{{ project.first_output_deadline.strftime('%d %b %Y') if project.first_output_deadline else '—' }}</td>
+                                <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
                                 <td>
                                     {{ project.cs_lead.name if project.cs_lead else '—' }}
                                     {% if project.secondary_cs_assignments %}
@@ -164,7 +165,7 @@
                                     <span class="status-badge s-{{ project.project_status }}">{{ project.project_status
                                         | replace('_', ' ') | title }}</span>
                                 </td>
-                                <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                         class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             {% endif %}
@@ -210,7 +211,8 @@
                             <th></th>
                             <th>Project Name</th>
                             <th>Job Number</th>
-                            <th>Deadline</th>
+                            <th>First Output Deadline</th>
+                            <th>Final Deadline</th>
                             <th>Status</th>
                             <th>CS Lead</th>
                             <th>Team</th>
@@ -225,8 +227,8 @@
                             <td class="chevron-cell"><span class="chevron-icon">▶</span></td>
                             <td>{{ project.name }}</td>
                             <td class="mono">{{ project.job_number }}</td>
-                            <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                project.design_needed_by else '—' }}</td>
+                            <td class="mono">{{ project.first_output_deadline.strftime('%d %b %Y') if project.first_output_deadline else '—' }}</td>
+                            <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
                             <td><span class="status-badge">{{ project.status }}</span></td>
                             <td>
                                 {{ project.cs_lead.name if project.cs_lead else '—' }}
@@ -244,11 +246,11 @@
                                 {% endif %}
                                 {% endfor %}
                             </td>
-                            <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                            <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                    class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             <tr class="expansion-row hidden">
-                                <td colspan="8">
+                                <td colspan="9">
                                     <table class="customer-sub-table">
                                         <thead>
                                             <tr>
@@ -274,12 +276,12 @@
                             </tr>
                             {% else %}
                             <tr class="clickable {% if is_overdue %}overdue{% endif %}"
-                                data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+                                data-href="{{ url_for('project_detail.detail', project_id=project.id) }}">
                                 <td class="chevron-cell"></td>
                                 <td>{{ project.name }}</td>
                                 <td class="mono">{{ project.job_number }}</td>
-                                <td class="mono">{{ project.design_needed_by.strftime('%d %b %Y') if
-                                    project.design_needed_by else '—' }}</td>
+                                <td class="mono">{{ project.first_output_deadline.strftime('%d %b %Y') if project.first_output_deadline else '—' }}</td>
+                                <td class="mono">{{ project.execution_date.strftime('%d %b %Y') if project.execution_date else '—' }}</td>
                                 <td><span class="status-badge">{{ project.status }}</span></td>
                                 <td>
                                     {{ project.cs_lead.name if project.cs_lead else '—' }}
@@ -297,7 +299,7 @@
                                     {% endif %}
                                     {% endfor %}
                                 </td>
-                                <td><a href="{{ url_for('projects.detail', project_id=project.id) }}"
+                                <td><a href="{{ url_for('project_detail.detail', project_id=project.id) }}"
                                         class="btn btn--secondary sidebar-item--nav">View Details</a></td>
                             </tr>
                             {% endif %}
@@ -335,7 +337,7 @@
 
     {# Serialize approved projects for JS rendering — needed by buildApprovedView() #}
     <script>
-        window.approvedProjects = [
+        window.PAGE = { approvedProjects: [
             {% for p in approved_projects %}
         {
             "id": {{ p.id }},
@@ -347,11 +349,11 @@
             "approved_at": {{ p.approved_at.strftime('%Y-%m-%dT%H:%M:%S') | tojson }},
             "approved_at_display": {{ p.approved_at | dubai_time | tojson }},
             "assigned_designers": [{% for a in p.assigned_designers %}{{ a.designer.name | tojson }}{% if not loop.last %},{% endif %}{% endfor %}],
-            "url": {{ url_for('projects.detail', project_id=p.id) | tojson }}
+            "url": {{ url_for('project_detail.detail', project_id=p.id) | tojson }}
     }{% if not loop.last %},{% endif %}
 
         {% endfor %}
-];
+] };
     </script>
 
     {% endblock %}

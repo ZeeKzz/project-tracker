@@ -414,6 +414,10 @@ textarea {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
 }
 
 .sidebar-item:hover {
@@ -857,6 +861,22 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
     color: var(--white);
 }
 
+/* Button loading spinner */
+.btn-spinner {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.9rem;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: btn-spin 0.6s linear infinite;
+    vertical-align: middle;
+}
+
+@keyframes btn-spin {
+    to { transform: rotate(360deg); }
+}
+
 /* =====================
    FORMS
 ===================== */
@@ -942,6 +962,9 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
     color: var(--grey-dark);
 }
 
+/* ── Shared input base — applies to .form-input standalone elements
+   AND all inputs/selects/textareas inside .form-group ───────────────── */
+.form-input,
 .form-group input,
 .form-group select,
 .form-group textarea {
@@ -952,15 +975,50 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
     font-size: 0.95rem;
     color: var(--black);
     background-color: var(--white);
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     width: 100%;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
+.form-input:focus,
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
     outline: none;
     border-color: var(--tangerine);
+    box-shadow: 0 0 0 3px rgba(242, 127, 85, 0.12);
+}
+
+.form-input::placeholder,
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: var(--grey-mid);
+    opacity: 1;
+}
+
+/* Custom arrow for select elements */
+select.form-input,
+.form-group select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.25rem;
+    cursor: pointer;
+}
+
+/* Date input — normalise calendar icon colour on Webkit */
+input[type="date"].form-input,
+.form-group input[type="date"] {
+    cursor: pointer;
+}
+
+input[type="date"].form-input::-webkit-calendar-picker-indicator,
+.form-group input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.5;
+    cursor: pointer;
+    filter: invert(0.3);
 }
 
 .form-group textarea {
@@ -1326,6 +1384,8 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
     padding: 0.2rem 0.55rem;
     border-radius: var(--radius);
     white-space: nowrap;
+    margin-bottom:0.25rem;
+    
 }
 
 .team-3d {
@@ -2755,6 +2815,17 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
     margin-left: auto;
 }
 
+.assign-designer-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.assign-designer-row select {
+    width: auto;
+    min-width: 120px;
+}
+
 .chip-assign-select {
     font-family: var(--font-body);
     font-size: 0.72rem;
@@ -3917,27 +3988,19 @@ body:has(.sidebar.sidebar--pinned) .admin-panel {
     border: 2px solid transparent;
     border-radius: var(--radius);
     cursor: pointer;
-    padding: 0.35rem;
-    transition: border-color 0.15s;
+    padding: 0.6rem 0.35rem;
+    transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+    color: var(--grey-mid);
+}
+
+.admin-nav-btn:hover {
+    background-color: var(--sandstone);
+    color: var(--black);
 }
 
 .admin-nav-btn.active {
     border-color: var(--tangerine);
-}
-
-.admin-nav-img-wrap {
-    width: 100%;
-    aspect-ratio: 1;
-    border-radius: calc(var(--radius) - 2px);
-    overflow: hidden;
-    background-color: var(--grey-light);
-}
-
-.admin-nav-img-wrap img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+    color: var(--black);
 }
 
 .admin-nav-btn span {
@@ -3945,7 +4008,6 @@ body:has(.sidebar.sidebar--pinned) .admin-panel {
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--grey-mid);
     text-align: center;
 }
 

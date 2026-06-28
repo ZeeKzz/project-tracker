@@ -29,7 +29,7 @@ def mark_read(notification_id):
 
     # Build the URL to redirect the user to
     if notification.project_id:
-        redirect_url = url_for('projects.detail', project_id=notification.project_id)
+        redirect_url = url_for('project_detail.detail', project_id=notification.project_id)
     else:
         redirect_url = url_for('main.index')
 

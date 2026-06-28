@@ -90,7 +90,7 @@ def create():
         )
 
         flash(f'Project "{name}" created successfully.', 'success')
-        return redirect(url_for('projects.index'))
+        return redirect(url_for('main.index'))
 
     return render_template('projects/create.html',
                            scopes=scopes, cs_users=cs_users)

@@ -351,7 +351,7 @@ def update_project(project_id):
         log_activity('project_edited', f'Project "{project.name}" was edited by {current_user.name}',
                      user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
 
-        return jsonify({'success': True, 'redirect_url': url_for('projects.detail', project_id=project.id)})
+        return jsonify({'success': True, 'redirect_url': url_for('project_detail.detail', project_id=project.id)})
 
     except Exception as e:
         db.session.rollback()
@@ -861,7 +861,7 @@ def update_status(project_id):
     db.session.commit()
 
     flash(f'Project status updated to "{new_status}".', 'success')
-    return redirect(url_for('projects.detail', project_id=project.id))
+    return redirect(url_for('project_detail.detail', project_id=project.id))
 
 @projects.route('/projects/<int:project_id>/set-status', methods=['POST'])
 @login_required
@@ -930,7 +930,7 @@ def toggle_hold(project_id):
         flash('Project put on hold.', 'success')
 
     db.session.commit()
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return redirect(url_for('project_detail.detail', project_id=project_id))
 
 
 @projects.route('/projects/<int:project_id>/customer/<int:pc_id>/set-status', methods=['POST'])
@@ -1162,7 +1162,7 @@ def assign_deliverable(project_id, d_id):
     team = request.form.get('team')
 
     if not designer_id or not team:
-        return redirect(url_for('projects.detail', project_id=project_id))
+        return redirect(url_for('project_detail.detail', project_id=project_id))
 
     designer_id = int(designer_id)
     designer = User.query.get_or_404(designer_id)
@@ -1254,7 +1254,7 @@ def reply_flag(project_id, flag_id):
 
     message_text = (request.form.get('message') or '').strip()
     if not message_text:
-        return redirect(url_for('projects.detail', project_id=project_id))
+        return redirect(url_for('project_detail.detail', project_id=project_id))
 
     emulating_id = session.get('emulating_user_id')
     actor = UserModel.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
@@ -1274,7 +1274,7 @@ def reply_flag(project_id, flag_id):
         user=actor, entity_type='project', entity_name=project.name, entity_id=project.id
     )
 
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return redirect(url_for('project_detail.detail', project_id=project_id))
 
 
 @projects.route('/projects/<int:project_id>/flags/<int:flag_id>/resolve', methods=['POST'])
@@ -1590,7 +1590,7 @@ def update_secondary_cs_regions(project_id):
 
     db.session.commit()
     flash('Region notification preferences updated.', 'success')
-    return redirect(url_for('projects.detail', project_id=project_id))
+    return redirect(url_for('project_detail.detail', project_id=project_id))
 
 
 @projects.route('/projects/<int:project_id>/assign-concept-kv', methods=['POST'])
@@ -1625,7 +1625,7 @@ def assign_concept_kv(project_id):
         if kv_designer:
             notify_designer_of_concept_kv_assignment(project, kv_designer, 'Key Visual', triggered_by=current_user)
             log_activity('designer_assigned', f'{kv_designer.name} assigned as KV designer on "{project.name}"', user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
-    return redirect(url_for('projects.detail', project_id=project.id))
+    return redirect(url_for('project_detail.detail', project_id=project.id))
 
 @projects.route('/projects/<int:project_id>/download-brief')
 @login_required
@@ -1649,7 +1649,7 @@ def delete_project(project_id):
 
     if effective_user.role != 'admin' and project.cs_lead_id != effective_user.id:
         flash('You do not have permission to delete this project.', 'error')
-        return redirect(url_for('projects.detail', project_id=project.id))
+        return redirect(url_for('project_detail.detail', project_id=project.id))
 
     # Remove any uploaded reference files from disk before deleting the project row.
     # The SQLAlchemy cascade handles the DB records; this handles the physical files.
@@ -1676,7 +1676,7 @@ def drafts():
     ).order_by(Project.last_autosaved_at.desc()).all()
 
     if not user_drafts:
-        return redirect(url_for('projects.create'))
+        return redirect(url_for('brief.create'))
 
     return render_template('projects/drafts.html', drafts=user_drafts)
 

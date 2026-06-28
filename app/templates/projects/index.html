@@ -11,7 +11,7 @@
             <p>{{ projects|length }} project{{ 's' if projects|length != 1 else '' }} found</p>
         </div>
         {% if current_user.role in ['admin', 'cs'] %}
-        <a href="{{ url_for('projects.create') }}" class="btn btn-project">+ New Project</a>
+        <a href="{{ url_for('brief.create') }}" class="btn btn-project">+ New Project</a>
         {% endif %}
     </div>
 </div>
@@ -32,7 +32,7 @@
     </thead>
     <tbody>
         {% for project in projects %}
-        <tr class="clickable-row" data-href="{{ url_for('projects.detail', project_id=project.id) }}">
+        <tr class="clickable-row" data-href="{{ url_for('project_detail.detail', project_id=project.id) }}">
             <td class="job-number">{{ project.job_number }}</td>
             <td><strong>{{ project.name }}</strong></td>
             <td>{{ project.client_brand }}</td>
@@ -61,7 +61,7 @@
 <div class="empty-state">
     <p>No projects yet.</p>
     {% if current_user.role in ['admin', 'cs'] %}
-    <a href="{{ url_for('projects.create') }}" class="btn btn-primary">Create your first project</a>
+    <a href="{{ url_for('brief.create') }}" class="btn btn-primary">Create your first project</a>
     {% endif %}
 </div>
 {% endif %}

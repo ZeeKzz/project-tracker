@@ -93,6 +93,20 @@
                                 <span class="sidebar-item-label">File Storage</span>
                             </a>
 
+                            {# Admin Panel — admin only, opens the slide-out panel #}
+                            {% if current_user.role == 'admin' %}
+                            <button type="button" class="sidebar-item" data-link="admin" title="Admin Panel"
+                                onclick="document.getElementById('admin-panel-trigger').click()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <circle cx="12" cy="8" r="4" />
+                                    <path d="M20 21a8 8 0 1 0-16 0" />
+                                </svg>
+                                <span class="sidebar-item-label">Admin Panel</span>
+                            </button>
+                            {% endif %}
+
                 </div>
             </div>
 
@@ -443,27 +457,43 @@
         </div>
         <div class="admin-nav-grid">
             <button type="button" class="admin-nav-btn active" data-section="emulate">
-                <div class="admin-nav-img-wrap">
-                    <img src="{{ url_for('static', filename='images/admin/emulate.png') }}" alt="">
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M20 21a8 8 0 1 0-16 0" />
+                    <path d="M17 16l2 2 2-2" />
+                    <path d="M19 18V13" />
+                </svg>
                 <span>Emulate User</span>
             </button>
             <button type="button" class="admin-nav-btn" data-section="projects">
-                <div class="admin-nav-img-wrap">
-                    <img src="{{ url_for('static', filename='images/admin/projects.png') }}" alt="">
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    <line x1="12" y1="11" x2="12" y2="17" />
+                    <line x1="9" y1="14" x2="15" y2="14" />
+                </svg>
                 <span>Project Tools</span>
             </button>
             <button type="button" class="admin-nav-btn" data-section="accounts">
-                <div class="admin-nav-img-wrap">
-                    <img src="{{ url_for('static', filename='images/admin/accounts.png') }}" alt="">
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
                 <span>Account Tools</span>
             </button>
             <button type="button" class="admin-nav-btn" data-section="activity">
-                <div class="admin-nav-img-wrap">
-                    <img src="{{ url_for('static', filename='images/admin/activity.png') }}" alt="">
-                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                </svg>
                 <span>Activity Log</span>
             </button>
         </div>
@@ -514,7 +544,7 @@
                     <div id="pt-customers-list" class="accounts-user-list"></div>
                 </div>
                 <div class="pt-panel hidden" id="pt-panel-projects">
-                    <a href="{{ url_for('projects.drafts') }}" class="accounts-add-btn pt-add-link">+ Add Project</a>
+                    <a href="{{ url_for('brief.drafts') }}" class="accounts-add-btn pt-add-link">+ Add Project</a>
                     <div id="pt-projects-list" class="accounts-user-list"></div>
                 </div>
                 <div class="pt-panel hidden" id="pt-panel-drafts">
@@ -725,6 +755,9 @@
     <div id="toast-container" aria-live="polite"></div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/detail.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
     <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
 
 </body>
