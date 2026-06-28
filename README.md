@@ -4,7 +4,7 @@ Internal operations platform for Vitamin Dubai — replaces Monday.com for manag
 
 Built and maintained by Ezekiel Burton — Digital Systems Pilot Lead.
 
-**Current version: v1.0** (shipped 22 June 2026)
+**Current version: v1.3** (shipped 28 June 2026)
 
 ---
 
