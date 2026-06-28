@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.models import FeatureRequest, FeatureRequestUpvote, FeatureRequestComment, BugReport, BugReportComment
-from app.utils import get_actor
+from app.utils import get_actor, log_activity
 
 feedback_bp = Blueprint('feedback', __name__)
 
@@ -69,13 +69,26 @@ def submit_feature():
     db.session.add(feature)
     db.session.commit()
 
-    from app.notifications import notify_admin_of_new_feedback
+    from app.notifications import notify_admin_of_new_feedback, create_notification
+    from app.models import User as UserModel
     notify_admin_of_new_feedback(
         item_type='Feature Request',
         title=feature.title,
         submitted_by=actor,
         url_path=f'/feature-requests#fr-{feature.id}'
     )
+
+    admin_user = UserModel.query.filter_by(role='admin').first()
+    if admin_user and admin_user.id != actor.id:
+        create_notification(
+            recipient=admin_user,
+            message=f'{actor.name} submitted a feature request: "{feature.title}"',
+            notification_type='feature_request',
+            triggered_by=actor
+        )
+
+    log_activity('feature_request_submitted', f'Feature request "{feature.title}" submitted by {actor.name}',
+                 user=actor, entity_type='feature_request', entity_name=feature.title, entity_id=feature.id)
 
     return jsonify({'success': True, 'feature': _feature_dict(feature)})
 
@@ -158,8 +171,13 @@ def update_fr_status(feature_id):
     new_status = data.get('status')
     if new_status not in VALID_STATUSES:
         return jsonify({'success': False, 'error': 'Invalid status'}), 400
+    old_status     = feature.status
     feature.status = new_status
     db.session.commit()
+
+    log_activity('feature_request_status_changed',
+                 f'Feature request "{feature.title}" status changed from {old_status} to {new_status}',
+                 user=current_user, entity_type='feature_request', entity_name=feature.title, entity_id=feature.id)
 
     # Notify the creator on meaningful status changes
     if new_status in ('in_progress', 'implemented') and feature.submitter:
@@ -186,8 +204,11 @@ def delete_feature(feature_id):
     actor   = get_actor()
     if current_user.role != 'admin' and actor.id != feature.submitted_by_id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    title = feature.title
     db.session.delete(feature)
     db.session.commit()
+    log_activity('feature_request_deleted', f'Feature request "{title}" deleted by {actor.name}',
+                 user=actor, entity_type='feature_request', entity_name=title)
     return jsonify({'success': True})
 
 
@@ -252,13 +273,26 @@ def submit_bug():
     db.session.add(bug)
     db.session.commit()
 
-    from app.notifications import notify_admin_of_new_feedback
+    from app.notifications import notify_admin_of_new_feedback, create_notification
+    from app.models import User as UserModel
     notify_admin_of_new_feedback(
         item_type='Bug Report',
         title=bug.title,
         submitted_by=actor,
         url_path=f'/bug-reports#br-{bug.id}'
     )
+
+    admin_user = UserModel.query.filter_by(role='admin').first()
+    if admin_user and admin_user.id != actor.id:
+        create_notification(
+            recipient=admin_user,
+            message=f'{actor.name} reported a bug: "{bug.title}"',
+            notification_type='bug_report',
+            triggered_by=actor
+        )
+
+    log_activity('bug_report_submitted', f'Bug report "{bug.title}" submitted by {actor.name}',
+                 user=actor, entity_type='bug_report', entity_name=bug.title, entity_id=bug.id)
 
     return jsonify({'success': True, 'bug': _bug_dict(bug)})
 
@@ -274,8 +308,13 @@ def update_bug_status(bug_id):
     new_status = data.get('status')
     if new_status not in BUG_VALID_STATUSES:
         return jsonify({'success': False, 'error': 'Invalid status'}), 400
+    old_status = bug.status
     bug.status = new_status
     db.session.commit()
+
+    log_activity('bug_report_status_changed',
+                 f'Bug report "{bug.title}" status changed from {old_status} to {new_status}',
+                 user=current_user, entity_type='bug_report', entity_name=bug.title, entity_id=bug.id)
 
     # Notify creator on meaningful status changes
     if new_status in ('fix_in_progress', 'resolved') and bug.submitter:
@@ -346,6 +385,9 @@ def delete_bug(bug_id):
     actor = get_actor()
     if current_user.role != 'admin' and actor.id != bug.submitted_by_id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    title = bug.title
     db.session.delete(bug)
     db.session.commit()
+    log_activity('bug_report_deleted', f'Bug report "{title}" deleted by {actor.name}',
+                 user=actor, entity_type='bug_report', entity_name=title)
     return jsonify({'success': True})

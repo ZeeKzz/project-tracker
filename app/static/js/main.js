@@ -1,11 +1,11 @@
-// main.js — Vitamin Helix v1.03
+// main.js — Vitamin-E v1.3
 // Shared utilities (toast, confirm, refreshSection), dev tools, scroll position,
 // dashboard (approved-projects view, filters, tab switching), account dropdown,
 // drafts page, create/edit brief page (sectionBasics).
 // main.js must be loaded first; notifications.js, detail.js, admin.js depend on it.
 
-// main.js - Vitamin Helix
-console.log("Vitamin Helix loaded.");
+// main.js - Vitamin-E
+console.log("Vitamin-E loaded.");
 
 // ── Dev Tools: Wipe Projects ─────────────────────────────────────────────────
 // These functions only do anything if the wipe modal exists in the DOM, which

@@ -81,9 +81,12 @@ def login():
 
         login_user(user)
         flash(f'Welcome back, {user.name}.', 'success')
+        next_page = request.form.get('next') or ''
+        if next_page and next_page.startswith('/'):
+            return redirect(next_page)
         return redirect(url_for('main.index'))
 
-    return render_template('auth/login.html')
+    return render_template('auth/login.html', next=request.args.get('next', ''))
 
 
 @auth.route('/logout')

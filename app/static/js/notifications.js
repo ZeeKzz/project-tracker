@@ -1,4 +1,4 @@
-// notifications.js — Vitamin Helix
+// notifications.js — Vitamin-E
 // Notification sound, polling, inbox/archived DOM handlers, archive-all, delete-all.
 // Depends on: showToast(), buildArchivedItem(), buildInboxItem() — all defined here.
 // Loaded after main.js.
@@ -138,11 +138,10 @@ document.addEventListener('click', function (event) {
     }
 });
 
-// Click a notification - mark as read, then navigate
-// Click a notification to mark as read and navigate
+// Click a notification body — mark as read, then navigate
 document.querySelectorAll('.notification-item:not(.notification-item--archived)').forEach(function (item) {
     item.addEventListener('click', function (e) {
-        if (e.target.closest('.notification-archive-btn')) return;
+        if (e.target.closest('.notification-mark-read-btn')) return;
         var notificationId = this.dataset.id;
         fetch('/notifications/' + notificationId + '/read', {
             method: 'POST',
@@ -193,74 +192,45 @@ function buildInboxItem(id, message, time) {
             <p class="notification-message">${message}</p>
             <span class="notification-time">${time}</span>
         </div>
-        <button type="button" class="notification-archive-btn" data-id="${id}" title="Archive">×</button>
+        <button type="button" class="notification-mark-read-btn" data-id="${id}" title="Mark as read">✓</button>
     `;
 
-    // Attach the archive listener to the new button immediately
-    div.querySelector('.notification-archive-btn').addEventListener('click', handleArchive);
+    // Attach the mark-read listener to the new button immediately
+    div.querySelector('.notification-mark-read-btn').addEventListener('click', handleMarkRead);
 
     return div;
 }
 
-// Archive a notification
-function handleArchive(e) {
+// Mark a notification as read without navigating
+function handleMarkRead(e) {
     e.stopPropagation();
 
     var notificationId = this.dataset.id;
     var item = this.closest('.notification-item');
 
-    // Read the message and time text before removing the item from DOM
-    var message = item.querySelector('.notification-message').textContent;
-    var time = item.querySelector('.notification-time').textContent;
-
-    fetch('/notifications/' + notificationId + '/archive', {
+    fetch('/notifications/' + notificationId + '/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
     })
-
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (!data.success) return;
 
-            // Update the unread badge count if this was an unread notification
-            var badge = document.querySelector('.bell-badge');
-            if (badge && item.classList.contains('unread')) {
-                var count = parseInt(badge.textContent) - 1;
-                if (count <= 0) { badge.remove(); } else { badge.textContent = count; }
-            }
-
-            //Remove from inbox
-            item.remove();
-
-            //Remove inbox empty state if present, the nadd the item to archived tab
-            var archivedView = document.getElementById('notif-archived-view');
-            var emptyMsg = archivedView.querySelector('.no-notifications');
-            if (emptyMsg) emptyMsg.remove();
-
-            // Insert new archived item at the top of the archived list (after toolbar)
-            var toolbar = archivedView.querySelector('.archived-toolbar');
-            var newItem = buildArchivedItem(notificationId, message, time);
-
-            if (toolbar) {
-                toolbar.insertAdjacentElement('afterend', newItem);
-            } else {
-                archivedView.prepend(newItem);
-            }
-
-            // Show inbox empty state if nothing left in inbox
-            var inboxView = document.getElementById('notif-inbox-view');
-            if (inboxView && inboxView.querySelectorAll('.notification-item').length === 0) {
-                var empty = document.createElement('p');
-                empty.className = 'no-notifications';
-                empty.textContent = 'No notifications';
-                inboxView.appendChild(empty);
+            // Decrement the unread badge if this was unread
+            if (item.classList.contains('unread')) {
+                var badge = document.querySelector('.bell-badge');
+                if (badge) {
+                    var count = parseInt(badge.textContent) - 1;
+                    if (count <= 0) { badge.remove(); } else { badge.textContent = count; }
+                }
+                item.classList.remove('unread');
             }
         });
 }
 
-// Attach to all existing archive buttons on page load
-document.querySelectorAll('.notification-archive-btn').forEach(function (btn) {
-    btn.addEventListener('click', handleArchive);
+// Attach to all existing mark-read buttons on page load
+document.querySelectorAll('.notification-mark-read-btn').forEach(function (btn) {
+    btn.addEventListener('click', handleMarkRead);
 })
 
 // Named function so dynamically created restore buttons can reuse the same logic

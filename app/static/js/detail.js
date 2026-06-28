@@ -1,4 +1,4 @@
-// detail.js — Vitamin Helix
+// detail.js — Vitamin-E
 // Project detail page: post-redirect toast, expandable rows, status dropdowns,
 // submission flow, C&KV, POSM channels, start project, lead designer, channel uploads.
 // Depends on: showToast(), showConfirm() — defined in main.js.

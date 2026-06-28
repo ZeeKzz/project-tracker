@@ -1,10 +1,10 @@
-# Vitamin Helix
+# Vitamin-E
 
 Internal operations platform for Vitamin Dubai — replaces Monday.com for managing creative project briefs, deliverables, designer assignments, revision workflows, and project approvals across the 2D, 3D, and Technical design teams.
 
 Built and maintained by Ezekiel Burton — Digital Systems Pilot Lead.
 
-**Current version: v1.0** (shipped 22 June 2026)
+**Current version: v1.3** (shipped 28 June 2026)
 
 ---
 
@@ -19,6 +19,13 @@ Built and maintained by Ezekiel Burton — Digital Systems Pilot Lead.
 **Project types:**
 - **C&CM** (Concept & Campaign Material) — concept/KV phase followed by POSM channel deliverables across UAE and Gulf regions
 - **Standard** — flat list of deliverables without regional breakdown
+
+**Platform features (v1.3):**
+- App Updates blog — admin-authored posts with section-based editor, comments, URL hash navigation
+- Feature Requests — staff can submit, upvote, and track feature ideas; admin manages status
+- Bug Reports — staff can report bugs; admin tracks through to resolution
+- In-app notifications for status changes + admin email alerts on new submissions
+- Admin emulation mode — act as any user to reproduce issues or review their view
 
 ---
 
@@ -36,21 +43,28 @@ Built and maintained by Ezekiel Burton — Digital Systems Pilot Lead.
 ```
 project-tracker/
 ├── app/
-│   ├── models/          # SQLAlchemy models
-│   ├── routes/          # Flask blueprints (projects, admin, notifications, etc.)
-│   ├── templates/       # Jinja2 HTML templates
-│   │   └── projects/    # create, detail, edit views
+│   ├── models/          # SQLAlchemy models (all in __init__.py)
+│   ├── routes/          # Flask blueprints
+│   │   ├── projects.py  # Core project CRUD, brief creation, submission flow
+│   │   ├── admin.py     # User management, emulation, broadcast emails
+│   │   ├── blog.py      # App Updates blog (posts, comments, editor)
+│   │   ├── feedback.py  # Feature Requests + Bug Reports
+│   │   └── notifications.py  # Notification read/archive/poll routes
+│   ├── templates/
+│   │   ├── projects/    # create, detail, edit views
+│   │   ├── blog/        # index, _post_content, editor, version update pages
+│   │   └── feedback/    # feature_requests, _feature_content, bug_reports, _bug_content
 │   ├── static/
-│   │   ├── css/main.css
-│   │   └── js/main.js
-│   ├── notifications.py # Notification helper functions
-│   └── utils.py         # log_activity() and shared utilities
+│   │   ├── css/         # main.css, blog.css, feedback.css
+│   │   └── js/          # main.js, detail.js, admin.js, sidebar.js,
+│   │                    # notifications.js, blog.js, feedback.js, bug_reports.js
+│   ├── notifications.py # create_notification(), notify_admin_of_new_feedback()
+│   └── utils.py         # get_actor() emulation resolver, log_activity()
 ├── add_*.py             # One-off DB migration scripts (run manually, once)
 ├── migrate_*.py         # Larger migration scripts
 ├── create_tables.py     # Creates any new tables via db.create_all()
 ├── run.py               # App entry point
 ├── CLAUDE.md            # Dev reference (patterns, gotchas, branding tokens)
-├── CHANGELOG.txt        # Per-release change log
 └── Vitamin_Helix_Infrastructure.pdf  # Deployment & infrastructure reference
 ```
 
@@ -111,6 +125,8 @@ python add_gulf_posm.py
 python add_posm_country_counts.py
 python add_posm_channels.py
 python migrate_approval.py
+python add_blog_tables.py
+python add_bug_report_tables.py
 ```
 
 ---
@@ -150,8 +166,17 @@ cd project-tracker && git pull && sudo systemctl restart helix
 | `X.Y` (e.g. `1.1`, `1.2`) | Feature update within the current major scope |
 | `X.0` (e.g. `2.0`, `3.0`) | New major era / large scope shift |
 
-**1.x era** = project management (briefs, deliverables, submissions, POSM, approval).  
-**Planned:** 1.1 = NAS integration; 1.2 = live in-app updates via SSE (candidate); 1.3 = client portal (candidate).
+**1.x era** = project management (briefs, deliverables, submissions, POSM, approval, feedback).
+
+| Version | Date | Scope |
+|---------|------|-------|
+| 1.0 | 22 Jun 2026 | Initial launch |
+| 1.01 | 25 Jun 2026 | Real-time assignment DOM updates · C&CM reference images · GMT+4 timestamps · Approved projects filters |
+| 1.02 | 26 Jun 2026 | Bug fixes from pilot feedback |
+| 1.2.1 | 27 Jun 2026 | Visual loading indicators · Admin panel moved to sidebar · Form input styling · 2s autosave debounce |
+| 1.3 | 28 Jun 2026 | App Updates blog · Feature Requests · Bug Reports · In-app + email notifications · Admin emulation awareness |
+
+**2.x era** = infrastructure + NAS + dashboard + client portal (starting 29 June 2026).
 
 ---
 
@@ -159,10 +184,11 @@ cd project-tracker && git pull && sudo systemctl restart helix
 
 See `CLAUDE.md` for patterns, gotchas, branding tokens, and architectural decisions. Key things to know:
 
-- Always resolve the **effective user** (not `current_user`) in routes that record actions — the app supports admin emulation mode
+- Always resolve the **effective user** via `get_actor()` (not `current_user`) in routes that record actions — the app supports admin emulation mode
 - `project.project_status == 'approved'` is the global lock sentinel — check it at the top of any mutating route
 - JSON data in templates must go in `<script>` block constants, never in HTML `value=""` attributes
 - `log_activity()` imports db inside the function to avoid circular imports
 - Notifications must be created **after** `db.session.commit()`
 - Dubai timezone uses a fixed `+4` offset — `ZoneInfo` is not reliable on Windows without `tzdata`
 - `--surface` CSS variable is not defined — use `--white` for solid white backgrounds
+- `blog.css` and `feedback.css` are loaded in `base.html <head>` (not per-page) to prevent flash on SPA navigation

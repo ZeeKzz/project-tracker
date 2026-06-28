@@ -1,4 +1,4 @@
-// admin.js — Vitamin Helix
+// admin.js — Vitamin-E
 // Admin panel trigger/emulation badge (global, header) + all admin panel section
 // functions: accounts, clients, customers, projects, deliverable/design types,
 // activity log, reference file uploads.

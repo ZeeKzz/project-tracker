@@ -1,4 +1,4 @@
-/* sidebar.js — Vitamin Helix v1.2
+/* sidebar.js — Vitamin-E v1.3
    All sidebar behaviour: expand/collapse, pin, active state,
    click tracking, and SPA navigation for internal links.
    Loaded in base.html after main.js. No external dependencies. */

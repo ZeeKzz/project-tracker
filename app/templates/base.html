@@ -420,8 +420,8 @@
                     <p class="notification-message">{{ notification.message }}</p>
                     <span class="notification-time">{{ notification.created_at | dubai_time }}</span>
                 </div>
-                <button type="button" class="notification-archive-btn" data-id="{{ notification.id }}"
-                    title="Archive">×</button>
+                <button type="button" class="notification-mark-read-btn" data-id="{{ notification.id }}"
+                    title="Mark as read">✓</button>
             </div>
             {% endfor %}
             {% else %}

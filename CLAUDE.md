@@ -1,4 +1,4 @@
-# Vitamin Helix — Project Reference
+# Vitamin-E — Project Reference
 
 ## Stack
 - Python 3.14.5 · Flask 3.1.3 · PostgreSQL 18.4 (`project_tracker` DB) · Flask-SQLAlchemy · Flask-Login
@@ -195,15 +195,24 @@ See `Vitamin_Helix_Infrastructure.pdf` in this folder for full deployment refere
 | `X.YY` | Bug fix / QoL patch | `1.01`, `1.02`, `1.03` |
 | `X.0` | New major era | `2.0`, `3.0` |
 
-**Current:** v1.2.1 (shipped 27 June 2026)  
-**1.x era:** project management (briefs, submissions, deliverables, POSM, approval)
+**Current:** v1.3 (shipped 28 June 2026)  
+**1.x era:** project management (briefs, submissions, deliverables, POSM, approval)  
+**2.x era:** infrastructure + NAS integration + dashboard + client portal (starting 29 June 2026)
 
 | Version | Scope |
 |---------|-------|
 | 1.01 | Real-time assignment DOM updates · C&CM reference images · GMT+4 timestamps · Approved projects filters |
 | 1.02 | Bug fixes (populated from pilot feedback) |
 | 1.2.1 | Visual loading indicators · Admin panel to sidebar · Form input styling · 2s autosave debounce · Assign designer bug fixes |
-| 1.3 (in dev) | Blog system · Feature requests · Bug reports · Dashboard |
+| 1.3 | App Updates blog · Feature Requests · Bug Reports (emulation-aware, status notifications, admin email alerts, styled confirm modals, instant card updates) |
+
+**v2.0 roadmap (next era):**
+- Gunicorn switch (production server)
+- Dashboard — wireframes from team, then build (Admin/Management view)
+- NAS integration — file storage for projects, reference files, submissions
+- Project progress bar — per-project visual at a glance; shareable client link for live tracking
+- In-app file preview — reference files and submission PDFs
+- C&CM deliverable reference images — per-deliverable image display in app
 
 See `ROADMAP.md` for full specs.
 
@@ -238,6 +247,45 @@ Admin-only: create/edit/delete posts, delete comments. All users can comment (no
 
 ---
 
+## Feature Requests & Bug Reports
+Routes in `app/routes/feedback.py` (blueprint: `feedback_bp`):
+
+**Feature Requests**
+- `GET /feature-requests` — two-panel index; embeds `FEATURES_DATA` JSON for client-side rendering
+- `GET /feature-requests/<id>` — AJAX: returns `_feature_content.html` partial
+- `POST /feature-requests/submit` — create feature request
+- `POST /feature-requests/<id>/upvote` — toggle upvote
+- `POST /feature-requests/<id>/status` — update status (admin only)
+- `POST /feature-requests/<id>/comments` — add comment/reply
+- `DELETE /feature-requests/comments/<id>` — delete comment (admin only)
+- `DELETE /feature-requests/<id>` — delete feature (admin or creator)
+
+Statuses: `in_queue → in_progress → implemented`  
+Notifications: creator notified on `in_progress` and `implemented`  
+Upvotes: stored in `feature_request_upvotes` association table
+
+**Bug Reports**
+- `GET /bug-reports` — two-panel index; embeds `BUGS_DATA` JSON
+- `GET /bug-reports/<id>` — AJAX: returns `_bug_content.html` partial
+- `POST /bug-reports/submit` — create bug report
+- `POST /bug-reports/<id>/status` — update status (admin only)
+- `POST /bug-reports/<id>/comments` — add comment/reply
+- `DELETE /bug-reports/comments/<id>` — delete comment (admin only)
+- `DELETE /bug-reports/<id>` — delete bug (admin or creator)
+
+Statuses: `in_queue → fix_in_progress → testing → resolved`  
+Notifications: creator notified on `fix_in_progress` and `resolved`  
+No upvotes on bug reports.
+
+**Shared patterns:**
+- Both pages use IIFE in JS with `window._render*Cards`, `window._remove*`, `window._*Confirm` exposed for cross-function access
+- Status cards update instantly client-side (no page refresh) — local array copy drives renders
+- Admin email sent to `ezekiel@vitamin.works` on every new submission via `notify_admin_of_new_feedback()` in `app/notifications.py`
+- Both are emulation-aware: `{% set is_admin = actor.role == 'admin' %}` / `{% set is_creator = actor.id == item.submitted_by_id %}`
+- Styled delete confirm modal (`.del-overlay` / `.del-modal`) in `feedback.css`
+
+---
+
 ## Migration Scripts at Root
 | Script | Purpose |
 |--------|---------|
@@ -255,3 +303,4 @@ Admin-only: create/edit/delete posts, delete comments. All users can comment (no
 | `migrate_approval.py` | `approved_at`, `approved_by_id` on Project + ProjectSubmission |
 | `create_tables.py` | db.create_all for new tables (ActivityLog, BriefFlag, etc.) |
 | `add_blog_tables.py` | `blog_posts` + `blog_comments` tables |
+| `add_bug_report_tables.py` | `bug_reports` + `bug_report_comments` tables |

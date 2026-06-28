@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Login — Vitamin Helix{% endblock %}
+{% block title %}Login — Vitamin-E{% endblock %}
 
 {% block content %}
 
@@ -26,6 +26,7 @@
         <p class="auth-subtitle">Sign in to your account</p>
 
         <form method="POST" action="{{ url_for('auth.login') }}">
+            <input type="hidden" name="next" value="{{ next }}">
             <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" required>

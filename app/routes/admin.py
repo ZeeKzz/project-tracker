@@ -645,8 +645,8 @@ def broadcast_update():
     Expected JSON body:
     {
       "version":     "v1.2",
-      "subject":     "Vitamin-E Helix has been updated — v1.2",
-      "intro":       "Helix v1.2 is now live. ...",
+      "subject":     "Vitamin-E has been updated — v1.3",
+      "intro":       "Vitamin-E v1.3 is now live. ...",
       "blog_url":    "https://app.vitamin-e.work/blog-post1-v1.2update"
     }
     """
@@ -654,7 +654,7 @@ def broadcast_update():
 
     version  = data.get('version',  'v1.2')
     subject  = data.get('subject',  f'[Vitamin-E] App Update — {version}')
-    intro    = data.get('intro',    'A new update is live on Vitamin-E Helix.')
+    intro    = data.get('intro',    'A new update is live on Vitamin-E.')
     blog_url = data.get('blog_url', 'https://app.vitamin-e.work/blog-post1-v1.2update')
 
     sent = broadcast_update_email(
