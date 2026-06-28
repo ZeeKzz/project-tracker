@@ -1,0 +1,108 @@
+<div class="blog-inner">
+
+    <!-- ── Section nav (left) ── -->
+    <nav class="blog-section-nav" id="blog-section-nav">
+        <p class="blog-list-label">IN THIS POST</p>
+        {% for section in post.sections() %}
+        <a href="#s-{{ section.anchor }}" class="blog-nav-item" data-target="s-{{ section.anchor }}">
+            <span class="blog-nav-num">{{ section.number }}</span>
+            <span class="blog-nav-label">{{ section.title }}</span>
+            <span class="blog-nav-dot"></span>
+        </a>
+        {% endfor %}
+
+        {% if current_user.role == 'admin' %}
+        <div class="blog-admin-actions">
+            <a href="{{ url_for('blog.editor_edit', post_id=post.id) }}" class="blog-admin-btn">Edit Post</a>
+            <button class="blog-admin-btn blog-publish-btn" data-post-id="{{ post.id }}"
+                data-published="{{ post.is_published | tojson }}">
+                {{ 'Unpublish' if post.is_published else 'Publish' }}
+            </button>
+            <button class="blog-admin-btn blog-delete-post-btn" data-post-id="{{ post.id }}">
+                Delete Post
+            </button>
+        </div>
+        {% endif %}
+    </nav>
+
+    <!-- ── Divider ── -->
+    <div class="blog-divider"></div>
+
+    <!-- ── Article ── -->
+    <article class="blog-article" id="blog-scroll-area">
+
+        <div class="blog-post-header">
+            <h1 class="blog-post-title">{{ post.title }}</h1>
+            {% if post.version_tag %}
+            <span class="blog-version-tag">{{ post.version_tag }}</span>
+            {% endif %}
+            <p class="blog-post-meta">
+                By {{ post.author.name }}
+                {% if post.published_at %}
+                · {{ post.published_at.strftime('%d %b %Y') }}
+                {% endif %}
+                {% if not post.is_published %}
+                · <span style="color: var(--rose);">Draft</span>
+                {% endif %}
+            </p>
+        </div>
+
+        {% for section in post.sections() %}
+        <section id="s-{{ section.anchor }}" class="blog-section">
+            <h2 class="blog-h2">{{ section.title }}</h2>
+
+            {% for block in section.blocks %}
+            {% if block.type == 'body' %}
+            <p class="blog-body">{{ block.text }}</p>
+
+            {% elif block.type == 'callout' %}
+            <div class="blog-callout {% if block.color == 'pine' %}blog-callout--pine{% endif %}">
+                {{ block.text }}
+            </div>
+
+            {% elif block.type == 'h3' %}
+            <h3 class="blog-h3">{{ block.text }}</h3>
+
+            {% elif block.type == 'list' %}
+            <ul class="blog-list">
+                {% for item in block.items %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% endfor %}
+        </section>
+        <hr class="blog-hr">
+        {% endfor %}
+
+        <!-- ── Comments ── -->
+        <section class="blog-comments" id="blog-comments">
+            <h3 class="blog-comments-title">Comments</h3>
+
+            <div id="comments-list">
+                {% for comment in comments %}
+                <div class="blog-comment" id="comment-{{ comment.id }}">
+                    <div class="blog-comment-meta">
+                        <strong>{{ comment.author.name }}</strong>
+                        <span>{{ comment.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                        {% if current_user.role == 'admin' %}
+                        <button class="blog-comment-delete" data-comment-id="{{ comment.id }}">Delete</button>
+                        {% endif %}
+                    </div>
+                    <p class="blog-comment-body">{{ comment.body }}</p>
+                </div>
+                {% endfor %}
+
+                {% if not comments %}
+                <p class="blog-no-comments">No comments yet. Be the first!</p>
+                {% endif %}
+            </div>
+
+            <form class="blog-comment-form" id="comment-form" data-post-id="{{ post.id }}">
+                <textarea name="body" placeholder="Write a comment..." rows="3" required></textarea>
+                <button type="submit" class="btn btn-primary">Post Comment</button>
+            </form>
+        </section>
+
+    </article>
+</div>

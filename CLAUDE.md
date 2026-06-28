@@ -195,17 +195,46 @@ See `Vitamin_Helix_Infrastructure.pdf` in this folder for full deployment refere
 | `X.YY` | Bug fix / QoL patch | `1.01`, `1.02`, `1.03` |
 | `X.0` | New major era | `2.0`, `3.0` |
 
-**Current:** v1.0 (shipped 22 June 2026)  
+**Current:** v1.2.1 (shipped 27 June 2026)  
 **1.x era:** project management (briefs, submissions, deliverables, POSM, approval)
 
 | Version | Scope |
 |---------|-------|
 | 1.01 | Real-time assignment DOM updates · C&CM reference images · GMT+4 timestamps · Approved projects filters |
 | 1.02 | Bug fixes (populated from pilot feedback) |
-| 1.1 | Bug report system · Feature request system · Project time tracking dashboard |
-| 1.2+ | NAS integration · Live SSE updates · Client portal (candidates) |
+| 1.2.1 | Visual loading indicators · Admin panel to sidebar · Form input styling · 2s autosave debounce · Assign designer bug fixes |
+| 1.3 (in dev) | Blog system · Feature requests · Bug reports · Dashboard |
 
 See `ROADMAP.md` for full specs.
+
+---
+
+## Blog System
+Routes in `app/routes/blog.py` (blueprint: `blog_bp`):
+- `GET /blog` — two-panel index (post list left, content right)
+- `GET /blog/post/<id>` — AJAX: returns `_post_content.html` partial
+- `GET /blog/editor` / `GET /blog/editor/<id>` — admin post editor
+- `POST /blog/posts` — create post (JSON body)
+- `PUT /blog/posts/<id>` — update post (JSON body)
+- `POST /blog/posts/<id>/publish` — toggle published state
+- `DELETE /blog/posts/<id>` — delete post (admin only)
+- `POST /blog/post/<id>/comments` — add comment (form data)
+- `DELETE /blog/comments/<id>` — delete comment (admin only)
+
+**Post data structure** — `sections_json` TEXT column stores JSON array:
+```json
+[{"anchor":"overview","number":"01","title":"Overview","blocks":[
+  {"type":"body","text":"..."},
+  {"type":"callout","text":"...","color":"pine"},
+  {"type":"h3","text":"Sub heading"},
+  {"type":"list","items":["item 1","item 2"]}
+]}]
+```
+Block types: `body`, `callout` (optional `color: "pine"`), `h3`, `list`.
+
+URL hash navigation: `#post-{id}` — blog.js auto-loads post on page load from hash.
+
+Admin-only: create/edit/delete posts, delete comments. All users can comment (no moderation).
 
 ---
 
@@ -225,3 +254,4 @@ See `ROADMAP.md` for full specs.
 | `add_posm_channels.py` | ProjectPosmChannel table |
 | `migrate_approval.py` | `approved_at`, `approved_by_id` on Project + ProjectSubmission |
 | `create_tables.py` | db.create_all for new tables (ActivityLog, BriefFlag, etc.) |
+| `add_blog_tables.py` | `blog_posts` + `blog_comments` tables |

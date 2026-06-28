@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}App Updates — Vitamin Helix{% endblock %}
+
+{% block content %}
+<div class="page-container">
+
+    <div style="text-align: center; margin-bottom: 1.75rem;">
+        <h1 style="margin: 0; font-size: 2.4rem; display: inline; vertical-align: baseline;">App Updates</h1>
+        {% if current_user.role == 'admin' %}
+        <a href="{{ url_for('blog.editor') }}" class="btn btn-primary"
+            style="margin-left: 1.25rem; vertical-align: baseline;">
+            + New Post
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="blog-outer">
+
+        <!-- ── Left: post list ── -->
+        <nav class="blog-post-list" id="blog-post-list">
+            <p class="blog-list-label">POSTS</p>
+
+            {% if not posts %}
+            <p style="padding: 0 1.5rem; font-size: 0.85rem; color: #aaa;">No posts yet.</p>
+            {% endif %}
+
+            {% for post in posts %}
+            <a href="#post-{{ post.id }}"
+                class="blog-post-item {% if not post.is_published %}blog-post-item--draft{% endif %}"
+                data-post-id="{{ post.id }}">
+                <span class="blog-post-item-title">{{ post.title }}</span>
+                {% if post.version_tag %}
+                <span class="blog-post-item-tag">{{ post.version_tag }}</span>
+                {% endif %}
+                <span class="blog-post-item-date">
+                    {% if post.is_published %}
+                    {{ post.published_at.strftime('%d %b %Y') }}
+                    {% else %}
+                    <em>Draft</em>
+                    {% endif %}
+                </span>
+            </a>
+            {% endfor %}
+        </nav>
+
+        <!-- ── Divider ── -->
+        <div class="blog-divider"></div>
+
+        <!-- ── Right: post content ── -->
+        <div class="blog-content-area" id="blog-content-area">
+            <div class="blog-placeholder" id="blog-placeholder">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                    style="color: #ccc; margin-bottom: 1rem;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                <p style="color: #bbb; font-size: 0.9rem;">Select a post to read</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+<script src="{{ url_for('static', filename='js/blog.js') }}"></script>
+{% endblock %}

@@ -22,7 +22,7 @@ def create_app():
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection, ProjectFile, ProjectSubmission, ProjectSubmissionDeliverable, ProjectRevision, ProjectRevisionDeliverable)
+    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection, ProjectFile, ProjectSubmission, ProjectSubmissionDeliverable, ProjectRevision, ProjectRevisionDeliverable, BlogPost, BlogComment)
     from app.routes import main
     from app.routes.auth import auth
     from app.routes.projects_brief import brief_bp
@@ -33,6 +33,7 @@ def create_app():
     from app.models import Notification
     from flask_login import current_user
     from app.routes.admin import admin_bp
+    from app.routes.blog import blog_bp
 
     app.register_blueprint(notifications_bp)
     app.register_blueprint(main)
@@ -42,6 +43,7 @@ def create_app():
     app.register_blueprint(submission_bp)
     app.register_blueprint(approval_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(blog_bp)
 
     from app.utils import calculate_project_hours
     

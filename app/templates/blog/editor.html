@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Edit Post' if post else 'New Post' }} — Vitamin Helix{% endblock %}
+
+{% block content %}
+<div class="page-container">
+
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.75rem;">
+        <a href="{{ url_for('blog.index') }}" class="btn btn-secondary">← Back</a>
+        <h1 style="margin: 0; font-size: 1.8rem;">{{ 'Edit Post' if post else 'New Post' }}</h1>
+    </div>
+
+    <div class="blog-editor">
+
+        <!-- ── Post metadata ── -->
+        <div class="blog-editor-meta">
+            <div class="form-group">
+                <label>Post Title</label>
+                <input type="text" id="post-title" class="form-input" placeholder="e.g. What's New"
+                    value="{{ post.title if post else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Version Tag <span style="color:#aaa; font-weight:400;">(optional)</span></label>
+                <input type="text" id="post-version-tag" class="form-input" placeholder="e.g. v1.2 — June 2026"
+                    value="{{ post.version_tag if post else '' }}">
+            </div>
+        </div>
+
+        <!-- ── Section builder ── -->
+        <div class="blog-editor-sections">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                <h2
+                    style="margin: 0; font-size: 1.1rem; text-transform: none; letter-spacing: normal; font-family: var(--font-body);">
+                    Sections</h2>
+                <button type="button" class="btn btn-secondary" id="add-section-btn">+ Add Section</button>
+            </div>
+            <div id="sections-container">
+                <!-- Sections injected by JS -->
+            </div>
+        </div>
+
+        <!-- ── Save actions ── -->
+        <div class="blog-editor-actions">
+            <button type="button" class="btn btn-secondary" id="save-draft-btn">Save Draft</button>
+            <button type="button" class="btn btn-primary" id="save-publish-btn">
+                {{ 'Update & Publish' if (post and post.is_published) else 'Save & Publish' }}
+            </button>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Block type picker template -->
+<div id="block-type-menu" class="block-type-menu" style="display:none;">
+    <button data-type="body">Paragraph</button>
+    <button data-type="callout">Callout</button>
+    <button data-type="callout-pine">Callout (green)</button>
+    <button data-type="h3">Sub-heading</button>
+    <button data-type="list">List</button>
+</div>
+
+<script>
+    const EDIT_POST_ID = {{ post.id | tojson if post else 'null' }};
+    const EDIT_POST_DATA = {{ post.sections_json | tojson if post else '[]' }};
+</script>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+<script src="{{ url_for('static', filename='js/blog.js') }}"></script>
+{% endblock %}
