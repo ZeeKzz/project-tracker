@@ -1,0 +1,126 @@
+<article class="blog-article" id="fr-scroll-area">
+
+    <!-- ── Feature header ── -->
+    <div class="fr-detail-header">
+        <div class="fr-detail-title-row">
+            <h1 class="fr-detail-title">{{ feature.title }}</h1>
+            <span class="fr-status-pill fr-status-pill--{{ feature.status }}" id="fr-status-display">
+                {{ {'requested': 'Requested', 'in_progress': 'In Progress',
+                    'testing': 'Testing', 'implemented': 'Implemented'}[feature.status] }}
+            </span>
+        </div>
+        <p class="fr-detail-meta">
+            Submitted by {{ feature.submitter.name }} · {{ feature.created_at.strftime('%d %b %Y') }}
+        </p>
+    </div>
+
+    <!-- ── Description ── -->
+    <div class="fr-detail-description">
+        {% for para in feature.description.split('\n\n') %}
+        {% if para.strip() %}<p class="blog-body">{{ para.strip() }}</p>{% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- ── Upvote ── -->
+    <div class="fr-upvote-row">
+        <button class="fr-upvote-btn {% if user_upvoted %}fr-upvote-btn--voted{% endif %}"
+            id="fr-upvote-btn" data-feature-id="{{ feature.id }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                fill="{% if user_upvoted %}currentColor{% else %}none{% endif %}"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+            <span id="fr-upvote-count">{{ upvote_count }}</span>
+            <span id="fr-upvote-label">{{ 'Upvoted' if user_upvoted else 'Upvote' }}</span>
+        </button>
+    </div>
+
+    <!-- ── Admin / creator actions ── -->
+    {% set is_admin = actor.role == 'admin' %}
+    {% set is_creator = actor.id == feature.submitted_by_id %}
+    {% if is_admin or is_creator %}
+    <div class="fr-admin-bar">
+        {% if is_admin %}
+        <select class="form-input fr-status-select" id="fr-status-select" data-feature-id="{{ feature.id }}">
+            <option value="requested"    {% if feature.status == 'requested'    %}selected{% endif %}>Requested</option>
+            <option value="in_progress"  {% if feature.status == 'in_progress'  %}selected{% endif %}>In Progress</option>
+            <option value="testing"      {% if feature.status == 'testing'      %}selected{% endif %}>Testing</option>
+            <option value="implemented"  {% if feature.status == 'implemented'  %}selected{% endif %}>Implemented</option>
+        </select>
+        {% endif %}
+        <button class="btn btn-secondary fr-delete-btn" id="fr-delete-btn" data-feature-id="{{ feature.id }}">
+            Delete
+        </button>
+    </div>
+    {% endif %}
+
+    <hr class="blog-hr">
+
+    <!-- ── Comments ── -->
+    <section class="blog-comments" id="fr-comments">
+        <h3 class="blog-comments-title">Comments</h3>
+
+        <div id="fr-comments-list">
+            {% for comment in comments %}
+            <div class="blog-comment" id="fr-comment-{{ comment.id }}">
+                <div class="blog-comment-meta">
+                    <div class="blog-comment-avatar">{{ comment.author.name[0].upper() }}</div>
+                    <div class="blog-comment-author-info">
+                        <span class="blog-comment-author-name">{{ comment.author.name }}</span>
+                        <span class="blog-comment-date">{{ comment.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                    </div>
+                    {% if current_user.role == 'admin' %}
+                    <button class="blog-comment-delete fr-comment-delete" data-comment-id="{{ comment.id }}">Delete</button>
+                    {% endif %}
+                </div>
+                <p class="blog-comment-body">{{ comment.body }}</p>
+                <button class="blog-reply-btn fr-reply-btn" data-comment-id="{{ comment.id }}">Reply</button>
+                <form class="blog-reply-form fr-reply-form" id="fr-reply-form-{{ comment.id }}" style="display:none;">
+                    <div class="form-group">
+                        <textarea name="body" class="form-input" rows="2" placeholder="Write a reply..."></textarea>
+                    </div>
+                    <div class="blog-reply-actions">
+                        <button type="submit" class="btn btn-primary btn-sm">Post Reply</button>
+                        <button type="button" class="btn btn-secondary btn-sm fr-reply-cancel">Cancel</button>
+                    </div>
+                </form>
+
+                {% if comment.replies %}
+                <div class="blog-replies" id="fr-replies-{{ comment.id }}">
+                    {% for reply in comment.replies %}
+                    <div class="blog-comment blog-comment--reply" id="fr-comment-{{ reply.id }}">
+                        <div class="blog-comment-meta">
+                            <div class="blog-comment-avatar">{{ reply.author.name[0].upper() }}</div>
+                            <div class="blog-comment-author-info">
+                                <span class="blog-comment-author-name">{{ reply.author.name }}</span>
+                                <span class="blog-comment-date">{{ reply.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                            </div>
+                            {% if current_user.role == 'admin' %}
+                            <button class="blog-comment-delete fr-comment-delete" data-comment-id="{{ reply.id }}">Delete</button>
+                            {% endif %}
+                        </div>
+                        <p class="blog-comment-body">{{ reply.body }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="blog-replies" id="fr-replies-{{ comment.id }}"></div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            {% if not comments %}
+            <p class="blog-no-comments">No comments yet. Be the first!</p>
+            {% endif %}
+        </div>
+
+        <form class="blog-comment-form" id="fr-comment-form">
+            <div class="form-group">
+                <label>Leave a comment</label>
+                <textarea name="body" class="form-input" rows="3" placeholder="Write a comment..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Post Comment</button>
+        </form>
+    </section>
+
+</article>

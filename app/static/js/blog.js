@@ -1,17 +1,51 @@
-/* ── Blog JS ─────────────────────────────────────────────── */
+/* ── Blog JS ─────────────────────────────────────────── */
 
-// ── Post list: load post on click / hash on load ──────────
+// ── Post list: load post on click / hash on load ──────
 (function () {
     var contentArea = document.getElementById('blog-content-area');
-    if (!contentArea) return; // not on blog index page
+    if (!contentArea) return;
 
+    var listPanel = document.getElementById('blog-post-list');
+    var _savedList = null;   // stores original post-list HTML before first swap
+
+    // ── Restore post list, clear content ────────────────
+    function goBack() {
+        history.replaceState(null, '', '/blog');
+
+        listPanel.classList.add('fading');
+        contentArea.classList.add('fading');
+
+        setTimeout(function () {
+            listPanel.innerHTML = _savedList;
+            listPanel.classList.remove('fading');
+
+            contentArea.innerHTML =
+                '<div class="blog-placeholder" id="blog-placeholder">' +
+                '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"' +
+                ' stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"' +
+                ' style="color:#ccc;margin-bottom:1rem;">' +
+                '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
+                '<polyline points="14 2 14 8 20 8"/>' +
+                '<line x1="16" y1="13" x2="8" y2="13"/>' +
+                '<line x1="16" y1="17" x2="8" y2="17"/>' +
+                '</svg><p style="color:#bbb;font-size:0.9rem;">Select a post to read</p></div>';
+            contentArea.classList.remove('fading');
+        }, 180);
+    }
+
+    // ── Load a post ──────────────────────────────────────
     function loadPost(postId, updateHash) {
         if (updateHash !== false) {
-            window.location.hash = 'post-' + postId;
+            history.replaceState(null, '', '/blog#post-' + postId);
         }
 
-        // Mark active in list
-        document.querySelectorAll('.blog-post-item').forEach(function (el) {
+        // Capture the post list before first swap
+        if (!_savedList) {
+            _savedList = listPanel.innerHTML;
+        }
+
+        // Mark active item if list is currently showing
+        listPanel.querySelectorAll('.blog-post-item').forEach(function (el) {
             el.classList.toggle('active', el.dataset.postId === String(postId));
         });
 
@@ -21,29 +55,46 @@
             .then(function (r) { return r.text(); })
             .then(function (html) {
                 contentArea.innerHTML = html;
-                initPostContent(postId);
+
+                // Pull nav items out of the hidden div and remove it from the article
+                var navData = document.getElementById('blog-nav-data');
+                var navInner = navData ? navData.innerHTML : '';
+                if (navData) navData.remove();
+
+                // Fade-swap the left panel to the "In This Post" nav
+                listPanel.classList.add('fading');
+                setTimeout(function () {
+                    listPanel.innerHTML =
+                        '<button class="blog-back-btn" id="blog-back-btn">← Posts</button>' +
+                        '<p class="blog-list-label" style="margin-top:1.25rem;">IN THIS POST</p>' +
+                        navInner;
+                    listPanel.classList.remove('fading');
+
+                    document.getElementById('blog-back-btn').addEventListener('click', goBack);
+
+                    // Init scrollspy & interactions — nav items are now in the DOM
+                    initPostContent(postId);
+                }, 180);
             })
             .catch(function () {
                 contentArea.innerHTML = '<div class="blog-placeholder"><p style="color:var(--rose);">Failed to load post.</p></div>';
             });
     }
 
-    // Click on post list item
-    document.getElementById('blog-post-list').addEventListener('click', function (e) {
+    listPanel.addEventListener('click', function (e) {
         var item = e.target.closest('.blog-post-item');
         if (!item) return;
         e.preventDefault();
         loadPost(item.dataset.postId);
     });
 
-    // Load from hash on page load
     var hash = window.location.hash;
     if (hash && hash.startsWith('#post-')) {
         loadPost(hash.replace('#post-', ''));
     }
 }());
 
-// ── Post content: scrollspy, comments, admin buttons ─────
+// ── Post content: scrollspy, comments, admin buttons ──
 function initPostContent(postId) {
 
     // Scrollspy
@@ -84,16 +135,29 @@ function initPostContent(postId) {
         });
     }
 
-    // Publish toggle
+    // Publish toggle — updates button + post list item without refresh
     var publishBtn = document.querySelector('.blog-publish-btn');
     if (publishBtn) {
         publishBtn.addEventListener('click', function () {
             fetch('/blog/posts/' + postId + '/publish', { method: 'POST' })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
-                    if (data.success) {
-                        publishBtn.textContent = data.is_published ? 'Unpublish' : 'Publish';
-                        publishBtn.dataset.published = data.is_published;
+                    if (!data.success) return;
+
+                    // Update the button text
+                    publishBtn.textContent = data.is_published ? 'Unpublish' : 'Publish';
+
+                    // Update the post list item on the left
+                    var listItem = document.querySelector('.blog-post-item[data-post-id="' + postId + '"]');
+                    if (listItem) {
+                        var dateEl = listItem.querySelector('.blog-post-item-date');
+                        if (data.is_published) {
+                            listItem.classList.remove('blog-post-item--draft');
+                            if (dateEl) dateEl.innerHTML = data.published_date;
+                        } else {
+                            listItem.classList.add('blog-post-item--draft');
+                            if (dateEl) dateEl.innerHTML = '<em>Draft</em>';
+                        }
                     }
                 });
         });
@@ -127,7 +191,81 @@ function initPostContent(postId) {
             });
     });
 
-    // Post comment
+    // Reply buttons — show/hide inline reply form
+    document.getElementById('blog-comments').addEventListener('click', function (e) {
+        var replyBtn = e.target.closest('.blog-reply-btn');
+        if (!replyBtn) return;
+        var commentId = replyBtn.dataset.commentId;
+        var form = document.getElementById('reply-form-' + commentId);
+        if (!form) return;
+        var isVisible = form.style.display !== 'none';
+        form.style.display = isVisible ? 'none' : 'block';
+        if (!isVisible) form.querySelector('textarea').focus();
+    });
+
+    // Cancel reply
+    document.getElementById('blog-comments').addEventListener('click', function (e) {
+        var cancelBtn = e.target.closest('.blog-reply-cancel');
+        if (!cancelBtn) return;
+        var form = cancelBtn.closest('.blog-reply-form');
+        if (form) {
+            form.style.display = 'none';
+            form.querySelector('textarea').value = '';
+        }
+    });
+
+    // Submit reply
+    document.getElementById('blog-comments').addEventListener('submit', function (e) {
+        var form = e.target.closest('.blog-reply-form');
+        if (!form) return;
+        e.preventDefault();
+
+        var commentId = form.id.replace('reply-form-', '');
+        var textarea = form.querySelector('textarea');
+        var submitBtn = form.querySelector('button[type="submit"]');
+        var body = textarea.value.trim();
+        if (!body) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Posting...';
+
+        var formData = new FormData();
+        formData.append('body', body);
+        formData.append('parent_id', commentId);
+
+        fetch('/blog/post/' + postId + '/comments', { method: 'POST', body: formData })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    var c = data.comment;
+                    var repliesEl = document.getElementById('replies-' + commentId);
+                    if (repliesEl) {
+                        var div = document.createElement('div');
+                        div.className = 'blog-comment blog-comment--reply';
+                        div.id = 'comment-' + c.id;
+                        div.innerHTML =
+                            '<div class="blog-comment-meta">' +
+                            '<div class="blog-comment-avatar">' + c.avatar_letter + '</div>' +
+                            '<div class="blog-comment-author-info">' +
+                            '<span class="blog-comment-author-name">' + c.author + '</span>' +
+                            '<span class="blog-comment-date">' + c.created_at + '</span>' +
+                            '</div></div>' +
+                            '<p class="blog-comment-body">' + c.body + '</p>';
+                        repliesEl.appendChild(div);
+                    }
+                    textarea.value = '';
+                    form.style.display = 'none';
+                }
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Post Reply';
+            })
+            .catch(function () {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Post Reply';
+            });
+    });
+
+    // Post top-level comment
     var commentForm = document.getElementById('comment-form');
     if (commentForm) {
         commentForm.addEventListener('submit', function (e) {
@@ -140,10 +278,7 @@ function initPostContent(postId) {
             btn.disabled = true;
             btn.textContent = 'Posting...';
 
-            fetch('/blog/post/' + postId + '/comments', {
-                method: 'POST',
-                body: formData
-            })
+            fetch('/blog/post/' + postId + '/comments', { method: 'POST', body: formData })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (data.success) {
@@ -156,10 +291,21 @@ function initPostContent(postId) {
                         div.id = 'comment-' + c.id;
                         div.innerHTML =
                             '<div class="blog-comment-meta">' +
-                            '<strong>' + c.author + '</strong>' +
-                            '<span>' + c.created_at + '</span>' +
-                            '</div>' +
-                            '<p class="blog-comment-body">' + c.body + '</p>';
+                            '<div class="blog-comment-avatar">' + c.avatar_letter + '</div>' +
+                            '<div class="blog-comment-author-info">' +
+                            '<span class="blog-comment-author-name">' + c.author + '</span>' +
+                            '<span class="blog-comment-date">' + c.created_at + '</span>' +
+                            '</div></div>' +
+                            '<p class="blog-comment-body">' + c.body + '</p>' +
+                            '<button class="blog-reply-btn" data-comment-id="' + c.id + '">Reply</button>' +
+                            '<form class="blog-reply-form" id="reply-form-' + c.id + '" style="display:none;">' +
+                            '<div class="form-group"><textarea name="body" class="form-input" rows="2" placeholder="Write a reply..."></textarea></div>' +
+                            '<div class="blog-reply-actions">' +
+                            '<button type="submit" class="btn btn-primary btn-sm">Post Reply</button>' +
+                            '<button type="button" class="btn btn-secondary btn-sm blog-reply-cancel">Cancel</button>' +
+                            '</div></form>' +
+                            '<div class="blog-replies" id="replies-' + c.id + '"></div>';
+
                         document.getElementById('comments-list').appendChild(div);
                         body.value = '';
                     }
@@ -174,20 +320,31 @@ function initPostContent(postId) {
     }
 }
 
-// ── Editor ───────────────────────────────────────────────
+// ── Editor ───────────────────────────────────────────
 (function () {
     var sectionsContainer = document.getElementById('sections-container');
-    if (!sectionsContainer) return; // not on editor page
+    if (!sectionsContainer) return;
 
     var sections = [];
 
-    // Parse existing post data if editing
     try {
         var raw = typeof EDIT_POST_DATA === 'string' ? JSON.parse(EDIT_POST_DATA) : EDIT_POST_DATA;
         sections = Array.isArray(raw) ? raw : [];
     } catch (e) { sections = []; }
 
-    // ── Render ──────────────────────────────────────────
+    // Auto-resize a textarea to fit its content
+    function autoResize(el) {
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+    }
+
+    function applyAutoResize() {
+        sectionsContainer.querySelectorAll('.block-input').forEach(function (el) {
+            autoResize(el);
+        });
+    }
+
+    // ── Render ──────────────────────────────────────
     function render() {
         sectionsContainer.innerHTML = '';
         sections.forEach(function (section, si) {
@@ -217,6 +374,8 @@ function initPostContent(postId) {
 
             sectionsContainer.appendChild(div);
         });
+
+        applyAutoResize();
     }
 
     function renderBlock(block, si, bi) {
@@ -244,12 +403,11 @@ function initPostContent(postId) {
             '</div>';
     }
 
-    // ── Block type picker ────────────────────────────────
+    // ── Block type picker ────────────────────────────
     var menu = document.getElementById('block-type-menu');
     var activeSi = null;
 
     sectionsContainer.addEventListener('click', function (e) {
-        // Add block
         var addBtn = e.target.closest('.add-block-btn');
         if (addBtn) {
             activeSi = parseInt(addBtn.dataset.si);
@@ -260,7 +418,6 @@ function initPostContent(postId) {
             return;
         }
 
-        // Delete section
         var delSec = e.target.closest('.section-delete-btn');
         if (delSec) {
             if (!confirm('Remove this section?')) return;
@@ -270,7 +427,6 @@ function initPostContent(postId) {
             return;
         }
 
-        // Move section up
         var upSec = e.target.closest('.section-up-btn');
         if (upSec) {
             var i = parseInt(upSec.dataset.si);
@@ -278,7 +434,6 @@ function initPostContent(postId) {
             render(); return;
         }
 
-        // Move section down
         var downSec = e.target.closest('.section-down-btn');
         if (downSec) {
             var i = parseInt(downSec.dataset.si);
@@ -286,7 +441,6 @@ function initPostContent(postId) {
             render(); return;
         }
 
-        // Delete block
         var delBlock = e.target.closest('.block-delete-btn');
         if (delBlock) {
             var si = parseInt(delBlock.dataset.si), bi = parseInt(delBlock.dataset.bi);
@@ -294,7 +448,6 @@ function initPostContent(postId) {
             render(); return;
         }
 
-        // Move block up
         var upBlock = e.target.closest('.block-up-btn');
         if (upBlock) {
             var si = parseInt(upBlock.dataset.si), bi = parseInt(upBlock.dataset.bi);
@@ -302,7 +455,6 @@ function initPostContent(postId) {
             render(); return;
         }
 
-        // Move block down
         var downBlock = e.target.closest('.block-down-btn');
         if (downBlock) {
             var si = parseInt(downBlock.dataset.si), bi = parseInt(downBlock.dataset.bi);
@@ -311,7 +463,6 @@ function initPostContent(postId) {
         }
     });
 
-    // Block type menu selection
     menu.addEventListener('click', function (e) {
         var btn = e.target.closest('button');
         if (!btn || activeSi === null) return;
@@ -332,7 +483,7 @@ function initPostContent(postId) {
         }
     });
 
-    // ── Section title edits (live sync) ─────────────────
+    // ── Live sync + auto-resize on input ────────────
     sectionsContainer.addEventListener('input', function (e) {
         if (e.target.classList.contains('section-title-input')) {
             var si = parseInt(e.target.dataset.si);
@@ -346,10 +497,11 @@ function initPostContent(postId) {
             } else {
                 sections[si].blocks[bi].text = e.target.value;
             }
+            autoResize(e.target);
         }
     });
 
-    // ── Add section ──────────────────────────────────────
+    // ── Add section ──────────────────────────────────
     document.getElementById('add-section-btn').addEventListener('click', function () {
         sections.push({ anchor: 'section-' + (sections.length + 1), number: '', title: '', blocks: [] });
         renumber();
@@ -363,12 +515,14 @@ function initPostContent(postId) {
         });
     }
 
-    // ── Collect & save ───────────────────────────────────
+    // ── Collect & save ───────────────────────────────
     function collectData() {
+        var sendEmailEl = document.getElementById('send-email-toggle');
         return {
             title: document.getElementById('post-title').value.trim(),
             version_tag: document.getElementById('post-version-tag').value.trim(),
-            sections: sections
+            sections: sections,
+            send_email: sendEmailEl ? sendEmailEl.checked : false
         };
     }
 
@@ -401,7 +555,7 @@ function initPostContent(postId) {
     document.getElementById('save-draft-btn').addEventListener('click', function () { save(false); });
     document.getElementById('save-publish-btn').addEventListener('click', function () { save(true); });
 
-    // ── Helpers ──────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────
     function escAttr(str) {
         return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
@@ -409,8 +563,6 @@ function initPostContent(postId) {
         return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
     }
 
-    // Initial render
     renumber();
     render();
 }());
-

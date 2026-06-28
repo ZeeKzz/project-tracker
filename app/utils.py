@@ -1,5 +1,22 @@
 from datetime import datetime, time, timedelta
 
+
+def get_actor():
+    """Return the effective acting user.
+
+    When an admin is emulating another user, actions like posting comments
+    or submitting requests should be recorded as that user, not the admin.
+    Admin-only write routes (delete, publish, status change) should use
+    current_user directly — they don't call this helper.
+    """
+    from flask import session
+    from flask_login import current_user
+    from app.models import User
+    emulating_id = session.get('emulating_user_id')
+    if emulating_id and current_user.role == 'admin':
+        return User.query.get(emulating_id)
+    return current_user
+
 WORK_START = time(9, 30)  # 9:30 AM
 WORK_END = time(18, 30)  # 6:30 PM
 WORK_DAYS = {0, 1, 2, 3, 4}  # Monday to Friday

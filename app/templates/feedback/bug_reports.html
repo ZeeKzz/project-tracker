@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Bug Reports — Vitamin Helix{% endblock %}
+
+{% block content %}
+<div class="page-container">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+        <h1 style="margin: 0; font-size: 2.4rem;">Bug Reports</h1>
+        <button class="btn btn-primary" id="br-report-btn">Report a Bug</button>
+    </div>
+
+    <div class="blog-outer">
+
+        <!-- ── Left: bug list ── -->
+        <nav class="blog-post-list" id="br-list-panel">
+
+            <!-- Sort toggle -->
+            <div class="fr-sort-toggle">
+                <button class="fr-sort-btn active" data-sort="status">Status</button>
+                <button class="fr-sort-btn" data-sort="newest">Newest</button>
+            </div>
+
+            <div id="br-card-list">
+                <!-- JS renders cards here -->
+            </div>
+
+        </nav>
+
+        <!-- ── Divider ── -->
+        <div class="blog-divider"></div>
+
+        <!-- ── Right: bug detail ── -->
+        <div class="blog-content-area" id="br-content-area">
+            <div class="blog-placeholder">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                    style="color: #ccc; margin-bottom: 1rem;">
+                    <rect x="8" y="6" width="8" height="12" rx="4" />
+                    <path d="m19 7-3 2" /><path d="m5 7 3 2" />
+                    <path d="m19 17-3-2" /><path d="m5 17 3-2" />
+                    <path d="M20 12h-4" /><path d="M4 12h4" />
+                </svg>
+                <p style="color: #bbb; font-size: 0.9rem;">Select a bug report to view details</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ── Delete confirmation modal ── -->
+<div class="del-overlay" id="br-del-overlay">
+    <div class="del-modal">
+        <p class="del-modal-title">Confirm Delete</p>
+        <p class="del-modal-body" id="br-del-message"></p>
+        <div class="del-modal-actions">
+            <button class="btn btn-secondary" id="br-del-cancel">Cancel</button>
+            <button class="btn btn-danger" id="br-del-confirm">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Submit modal overlay ── -->
+<div class="fr-modal-overlay" id="br-modal-overlay"></div>
+
+<!-- ── Submit modal panel ── -->
+<div class="fr-modal" id="br-modal">
+    <div class="fr-modal-header">
+        <h2 class="fr-modal-title">Report a Bug</h2>
+        <button class="fr-modal-close" id="br-modal-close">✕</button>
+    </div>
+    <div class="fr-modal-body">
+        <div class="form-group">
+            <label>Bug Title</label>
+            <input type="text" id="br-input-title" class="form-input"
+                placeholder="Briefly describe the issue">
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <textarea id="br-input-description" class="form-input" rows="6"
+                placeholder="Steps to reproduce, what you expected, what happened..."></textarea>
+        </div>
+    </div>
+    <div class="fr-modal-footer">
+        <button class="btn btn-secondary" id="br-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="br-modal-submit">Submit Report</button>
+    </div>
+</div>
+
+<!-- Embed bug data for JS sorting/rendering -->
+<script>
+    const BUGS_DATA = {{ bugs_data | tojson }};
+</script>
+
+<script src="{{ url_for('static', filename='js/bug_reports.js') }}"></script>
+{% endblock %}

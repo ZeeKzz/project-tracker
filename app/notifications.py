@@ -710,3 +710,185 @@ def broadcast_update_email(version, subject_line, intro_line, blog_url):
 
     db.session.commit()
     return sent
+
+def notify_admin_of_new_feedback(item_type, title, submitted_by, url_path):
+    """
+    Send a direct email to Ezekiel when someone submits a feature request or bug report.
+    item_type: 'Feature Request' or 'Bug Report'
+    No in-app notification — this is an admin alert only.
+    """
+    from flask import current_app
+    if str(current_app.config.get('MAIL_ENABLED', 'false')).lower() != 'true':
+        return
+
+    try:
+        from flask_mail import Message as MailMessage
+        from app import mail
+
+        app_url   = 'https://app.vitamin-e.work'
+        button_url = f'{app_url}{url_path}'
+
+        html_body = f"""
+        <table width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="background-color:#F5F0E8;">
+            <tr><td align="center" style="padding:48px 20px;">
+                <table width="520" cellpadding="0" cellspacing="0" border="0"
+                       style="max-width:520px;width:100%;background-color:#ffffff;
+                              border-radius:12px;overflow:hidden;">
+                    <tr><td style="padding:28px 36px 0 36px;">
+                        <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:bold;
+                                     letter-spacing:3px;color:#F27F55;text-transform:uppercase;">
+                            VITAMIN-E
+                        </span>
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
+                            <tr><td style="height:2px;background-color:#F27F55;font-size:0;line-height:0;">&nbsp;</td></tr>
+                        </table>
+                    </td></tr>
+                    <tr><td style="padding:32px 36px 28px 36px;">
+                        <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;
+                                   color:#bbb;letter-spacing:2px;text-transform:uppercase;">
+                            {item_type}
+                        </p>
+                        <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:17px;
+                                   font-weight:bold;color:#1A1A1A;">
+                            New {item_type}
+                        </p>
+                        <p style="margin:0 0 8px;font-family:Arial,sans-serif;font-size:15px;
+                                   line-height:1.7;color:#444444;">
+                            <strong>{submitted_by.name}</strong> submitted a new {item_type.lower()}:
+                        </p>
+                        <p style="margin:0 0 24px;font-family:Arial,sans-serif;font-size:16px;
+                                   font-weight:bold;color:#1A1A1A;">
+                            &ldquo;{title}&rdquo;
+                        </p>
+                        <table cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">
+                            <tr>
+                                <td style="background-color:#F27F55;border-radius:6px;">
+                                    <a href="{button_url}"
+                                       style="display:inline-block;padding:12px 28px;color:#ffffff;
+                                              text-decoration:none;font-family:Arial,sans-serif;
+                                              font-size:14px;font-weight:bold;letter-spacing:0.5px;">
+                                        View in Vitamin-E &rarr;
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+                    </td></tr>
+                    <tr><td style="background-color:#F5F0E8;padding:18px 36px;border-top:1px solid #ebe5d8;">
+                        <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#aaa;">
+                            Vitamin-E &middot; Admin Alert
+                        </p>
+                    </td></tr>
+                </table>
+            </td></tr>
+        </table>
+        """
+
+        text_body = (
+            f"New {item_type} from {submitted_by.name}:\n\n"
+            f'"{title}"\n\n'
+            f"View it: {button_url}\n\n— Vitamin-E"
+        )
+
+        msg = MailMessage(
+            subject=f'[Vitamin-E] New {item_type}: {title[:50]}{"..." if len(title) > 50 else ""}',
+            recipients=['ezekiel@vitamin.works'],
+            body=text_body,
+            html=html_body
+        )
+        mail.send(msg)
+
+    except Exception as e:
+        current_app.logger.warning(f'notify_admin_of_new_feedback: email failed: {e}')
+
+
+def notify_all_of_new_blog_post(post, triggered_by, send_inapp=True, send_email=True):
+    """
+    Notify all users of a new or updated blog post.
+    send_inapp: create in-app notifications (skips the author)
+    send_email: send HTML email to all users (skips the author)
+    """
+    from flask import current_app
+
+    message = f'New app update posted: {post.title}'
+    blog_url = f'https://app.vitamin-e.work/blog#post-{post.id}'
+    email_enabled = str(current_app.config.get('MAIL_ENABLED', 'false')).lower() == 'true'
+
+    mail_obj = None
+    MailMessage = None
+    if send_email and email_enabled:
+        try:
+            from flask_mail import Message as MailMessage
+            from app import mail as mail_obj
+        except Exception:
+            send_email = False
+
+    users = User.query.all()
+
+    for user in users:
+        if user.id == triggered_by.id:
+            continue
+
+        if send_inapp:
+            notif = Notification(
+                recipient_id=user.id,
+                message=message,
+                notification_type='system_update',
+                triggered_by_id=triggered_by.id
+            )
+            db.session.add(notif)
+
+        if send_email and email_enabled and user.email and mail_obj and MailMessage:
+            version_line = f'<p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:13px;color:#F27F55;letter-spacing:2px;text-transform:uppercase;">{post.version_tag}</p>' if post.version_tag else ''
+            html_body = f"""
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background-color:#F5F0E8;">
+                <tr><td align="center" style="padding:48px 20px;">
+                    <table width="520" cellpadding="0" cellspacing="0" border="0"
+                           style="max-width:520px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+                        <tr><td style="padding:28px 36px 0 36px;">
+                            <span style="font-family:Arial,sans-serif;font-size:11px;font-weight:bold;
+                                         letter-spacing:3px;color:#F27F55;text-transform:uppercase;">VITAMIN-E</span>
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
+                                <tr><td style="height:2px;background-color:#F27F55;font-size:0;line-height:0;">&nbsp;</td></tr>
+                            </table>
+                        </td></tr>
+                        <tr><td style="padding:32px 36px 28px 36px;">
+                            <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;color:#bbb;
+                                       letter-spacing:2px;text-transform:uppercase;">App Update</p>
+                            <p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:17px;
+                                       font-weight:bold;color:#1A1A1A;">Hi {user.name},</p>
+                            {version_line}
+                            <p style="margin:0 0 8px;font-family:Arial,sans-serif;font-size:19px;
+                                       font-weight:bold;color:#1A1A1A;">{post.title}</p>
+                            <p style="margin:0 0 28px;font-family:Arial,sans-serif;font-size:15px;
+                                       line-height:1.7;color:#444444;">
+                                A new update has been posted to Vitamin-E. Click below to read it.
+                            </p>
+                            <a href="{blog_url}"
+                               style="display:inline-block;padding:12px 28px;background-color:#F27F55;
+                                      color:#ffffff;font-family:Arial,sans-serif;font-size:14px;
+                                      font-weight:bold;text-decoration:none;border-radius:6px;">
+                                Read Update
+                            </a>
+                        </td></tr>
+                        <tr><td style="padding:20px 36px;border-top:1px solid #F5F0E8;">
+                            <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#aaa;">
+                                Vitamin-E · Internal Platform
+                            </p>
+                        </td></tr>
+                    </table>
+                </td></tr>
+            </table>"""
+
+            try:
+                msg = MailMessage(
+                    subject=f'Vitamin-E Update — {post.title}',
+                    recipients=[user.email],
+                    html=html_body
+                )
+                mail_obj.send(msg)
+            except Exception as e:
+                current_app.logger.warning(f'notify_all_of_new_blog_post: email failed for {user.email}: {e}')
+
+    db.session.commit()

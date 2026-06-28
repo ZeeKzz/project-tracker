@@ -1,16 +1,17 @@
 ================================================================================
 VITAMIN HELIX — CHANGELOG
 ===============================================================================
-For Server - add_custmer_cancelled.py, drop_deprecated_posm_columns.py
+For Server - add_blog_tables.py, add_blog_comment_replies.py,  migrations/add_feedback_tables.py, add_feedback_tables.py
 ================================================================================
-v1.3 Backend Overhaul and New Features
-     Long Term Sustainability — 27 JUNE 2026
+v1.3 Backend Overhaul, App Update Blog + More - Long Term Sustainability — 27 JUNE 2026
 ================================================================================
 
 New Features:
 
 - If there is a submission active on POSM, you can mark the customer as cancelled, saving the submission and revision history.
 - Added a visual indicator when carrying out actions, so you know that action is being processed by the system.
+- App update blog is live! All new updates will be posted here. In app notifications and emails will be sent out once a new post is added.
+- Added feature request section. Here you can request new features. other users can upvote your feature and even comment on it
 
 Adjustments:
 

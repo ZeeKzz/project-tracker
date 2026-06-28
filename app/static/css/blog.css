@@ -13,20 +13,21 @@
     width: 3px;
     background: var(--tangerine);
     flex-shrink: 0;
+    opacity: 0.5;
 }
 
 /* ── Left: post list ─────────────────────────────────────── */
 .blog-post-list {
     background: var(--white);
-    width: 240px;
+    width: 252px;
     flex-shrink: 0;
-    padding: 2rem 0;
+    padding: 1.5rem 0 1rem;
     overflow-y: auto;
 }
 
 .blog-list-label {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
+    font-family: var(--font-logo);
+    font-size: 1rem;
     letter-spacing: 0.12em;
     color: #aaa;
     padding: 0 1.5rem;
@@ -37,46 +38,67 @@
 .blog-post-item {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.75rem 1.5rem;
+    gap: 0.6rem;
+    margin: 0 0.75rem 0.6rem;
+    padding: 0.85rem 0.9rem;
     text-decoration: none;
     cursor: pointer;
-    transition: background 0.15s;
-    border-left: 3px solid transparent;
+    border: 1.5px solid var(--grey-light);
+    border-radius: 10px;
+    background: #FFFFFF;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 
 .blog-post-item:hover {
-    background: var(--sandstone);
+    border-color: var(--tangerine);
+    background: #f27f5582;
 }
 
 .blog-post-item.active {
-    background: rgba(242, 127, 85, 0.08);
-    border-left-color: var(--tangerine);
+    border-color: var(--tangerine);
+    background: rgba(242, 127, 85, 0.04);
+    box-shadow: 0 0 0 3px rgba(242, 127, 85, 0.12);
 }
 
 .blog-post-item--draft {
-    opacity: 0.6;
+    opacity: 0.55;
 }
 
 .blog-post-item-title {
-    font-family: var(--font-body);
+    font-family: var(--font-logo);
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--black);
     text-transform: none;
     letter-spacing: normal;
+    line-height: 1.3;
+    margin-left:5px;
 }
 
-.blog-post-item-tag {
+.blog-post-item-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.blog-post-item-date-pill,
+.blog-post-item-version-pill {
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.62rem;
+    background: #fefefe;
     color: var(--tangerine);
-    letter-spacing: 0.04em;
+    border: 1px solid #e0e0e0;
+    padding: 0.18rem 0.55rem;
+    border-radius: 20px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
 }
 
-.blog-post-item-date {
-    font-size: 0.75rem;
+.blog-post-item--draft .blog-post-item-date-pill {
     color: #aaa;
+    border-color: #ddd;
 }
 
 /* ── Right: content area ─────────────────────────────────── */
@@ -269,6 +291,7 @@
     line-height: 1.7;
     color: #444;
     margin: 0 0 0.75rem;
+    white-space: pre-line;
 }
 
 .blog-callout {
@@ -321,21 +344,49 @@
 }
 
 .blog-comment {
+    padding: 1rem 0 0.5rem;
     border-bottom: 1px solid var(--grey-light);
-    padding: 0.85rem 0;
 }
 
 .blog-comment-meta {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-size: 0.8rem;
-    color: #888;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.5rem;
 }
 
-.blog-comment-meta strong {
+/* Avatar pill — matches .account-avatar in main.css */
+.blog-comment-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--tangerine);
+    color: var(--white);
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.blog-comment-author-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    flex: 1;
+}
+
+.blog-comment-author-name {
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    font-weight: 600;
     color: var(--black);
+}
+
+.blog-comment-date {
+    font-size: 0.75rem;
+    color: #aaa;
 }
 
 .blog-comment-delete {
@@ -346,13 +397,92 @@
     font-size: 0.75rem;
     cursor: pointer;
     padding: 0;
+    flex-shrink: 0;
 }
 
 .blog-comment-body {
     font-size: 0.875rem;
     line-height: 1.6;
     color: #444;
-    margin: 0;
+    margin: 0 0 0.5rem;
+}
+
+/* ── Reply button ────────────────────────────────────────── */
+.blog-reply-btn {
+    background: none;
+    border: none;
+    color: var(--tangerine);
+    font-family: var(--font-body);
+    font-size: 0.775rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    letter-spacing: 0.02em;
+}
+
+.blog-reply-btn:hover {
+    text-decoration: underline;
+}
+
+/* ── Inline reply form ───────────────────────────────────── */
+.blog-reply-form {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: var(--sandstone);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--tangerine);
+}
+
+.blog-reply-form .form-group {
+    margin-bottom: 0.5rem;
+}
+
+.blog-reply-form .form-input {
+    font-size: 0.875rem;
+    min-height: 60px;
+    resize: vertical;
+}
+
+.blog-reply-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* ── Nested replies ──────────────────────────────────────── */
+.blog-replies {
+    margin-top: 0.5rem;
+    margin-left: 2.5rem;
+    border-left: 2px solid var(--grey-light);
+    padding-left: 1rem;
+}
+
+.blog-comment--reply {
+    border-bottom: none;
+    padding: 0.65rem 0 0.25rem;
+}
+
+.blog-comment--reply+.blog-comment--reply {
+    border-top: 1px solid var(--grey-light);
+}
+
+/* ── Main comment form ───────────────────────────────────── */
+.blog-comment-form {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid var(--sandstone);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.blog-comment-form .form-group {
+    margin-bottom: 0;
+}
+
+.blog-comment-form .form-input {
+    resize: vertical;
+    min-height: 80px;
 }
 
 .blog-no-comments {
@@ -361,16 +491,10 @@
     margin: 0 0 1.25rem;
 }
 
-.blog-comment-form {
-    margin-top: 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.blog-comment-form textarea {
-    resize: vertical;
-    min-height: 80px;
+/* ── Small button variant ────────────────────────────────── */
+.btn-sm {
+    font-size: 0.775rem;
+    padding: 0.3rem 0.75rem;
 }
 
 /* ── Editor ──────────────────────────────────────────────── */
@@ -460,8 +584,10 @@
     font-family: var(--font-body);
     font-size: 0.875rem;
     color: var(--black);
-    resize: vertical;
-    line-height: 1.5;
+    resize: none;
+    line-height: 1.6;
+    overflow: hidden;
+    min-height: 2rem;
 }
 
 .blog-editor-block textarea:focus,
@@ -539,5 +665,73 @@
 }
 
 .block-type-menu button:hover {
+    background: var(--sandstone);
+}
+
+/* ── Editor notification toggle ──────────────────────────── */
+.blog-editor-notify {
+    padding: 1rem 1.25rem;
+    background: var(--sandstone);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--tangerine);
+}
+
+.blog-notify-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    color: var(--black);
+}
+
+.blog-notify-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--tangerine);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.blog-notify-hint {
+    font-size: 0.775rem;
+    color: #aaa;
+    margin-left: 0.25rem;
+}
+
+/* ── Panel fade transitions ──────────────────────────── */
+.blog-post-list {
+    transition: opacity 0.18s ease;
+}
+.blog-post-list.fading {
+    opacity: 0;
+}
+
+.blog-content-area {
+    transition: opacity 0.18s ease;
+}
+.blog-content-area.fading {
+    opacity: 0;
+}
+
+/* ── Back button (shown in left panel when post is open) */
+.blog-back-btn {
+    display: block;
+    width: 100%;
+    padding: 0.8rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--grey-light);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    color: #888;
+    cursor: pointer;
+    text-align: left;
+    letter-spacing: 0.02em;
+    transition: color 0.15s, background 0.15s;
+}
+.blog-back-btn:hover {
+    color: var(--tangerine);
     background: var(--sandstone);
 }

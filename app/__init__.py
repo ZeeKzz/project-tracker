@@ -22,7 +22,7 @@ def create_app():
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection, ProjectFile, ProjectSubmission, ProjectSubmissionDeliverable, ProjectRevision, ProjectRevisionDeliverable, BlogPost, BlogComment)
+    from app.models import (User, Project, ProjectDesigner, Scope, Client, Customer, DeliverableType, DeliverableTypeDiscipline, ProjectRegion, ProjectCustomer, Deliverable, DeliverableAssignment, ActivityLog, DesignType, DesignDirection, ProjectFile, ProjectSubmission, ProjectSubmissionDeliverable, ProjectRevision, ProjectRevisionDeliverable, BlogPost, BlogComment, FeatureRequest, FeatureRequestUpvote, FeatureRequestComment, BugReport, BugReportComment)
     from app.routes import main
     from app.routes.auth import auth
     from app.routes.projects_brief import brief_bp
@@ -34,6 +34,7 @@ def create_app():
     from flask_login import current_user
     from app.routes.admin import admin_bp
     from app.routes.blog import blog_bp
+    from app.routes.feedback import feedback_bp
 
     app.register_blueprint(notifications_bp)
     app.register_blueprint(main)
@@ -44,6 +45,7 @@ def create_app():
     app.register_blueprint(approval_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(blog_bp)
+    app.register_blueprint(feedback_bp)
 
     from app.utils import calculate_project_hours
     
@@ -115,6 +117,7 @@ def create_app():
     
     app.jinja_env.filters['dubai_time'] = dubai_time
 
+
     # DEV TOOLS — hardcoded True for now. Switch back to env var check before deploying to prod:
     # app.jinja_env.globals['dev_tools_enabled'] = os.environ.get('DEV_TOOLS_ENABLED', '').lower() == 'true'
     app.jinja_env.globals['dev_tools_enabled'] = True
@@ -128,11 +131,17 @@ def create_app():
     
     @app.after_request
     def spa_strip_response(response):
-        if (g.get('is_nav_request') and 
+        if (g.get('is_nav_request') and
             response.content_type.startswith('text/html') and
             response.status_code == 200):
           import re
           html = response.get_data(as_text=True)
+          # Send the page title as a header so JS can update document.title.
+          # Percent-encode it so non-latin-1 characters (e.g. em dash) don't crash the header.
+          title_match = re.search(r'<title>(.*?)</title>', html, re.DOTALL)
+          if title_match:
+              from urllib.parse import quote
+              response.headers['X-Page-Title'] = quote(title_match.group(1).strip())
           m = re.search(
               r'<main[^>]+id=["\']main-content["\'][^>]*>(.*?)</main>',
               html, re.DOTALL

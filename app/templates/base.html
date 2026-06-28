@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Vitamin-E{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/feedback.css') }}">
 </head>
 
 {# Add has-sidebar to body when authenticated — CSS uses this to shift main content #}
@@ -96,7 +98,7 @@
                             {# Admin Panel — admin only, opens the slide-out panel #}
                             {% if current_user.role == 'admin' %}
                             <button type="button" class="sidebar-item" data-link="admin" title="Admin Panel"
-                                onclick="document.getElementById('admin-panel-trigger').click()">
+                                onclick="event.stopPropagation(); document.getElementById('admin-panel-trigger').click()">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                     stroke-linejoin="round">
@@ -235,7 +237,8 @@
                 <span class="sidebar-section-label">Studio</span>
                 <div class="sidebar-grid">
 
-                    <span class="sidebar-item sidebar-item--unlinked" data-link="bug-reporting" title="Bug Reporting">
+                    <a href="{{ url_for('feedback.bug_reports') }}" class="sidebar-item sidebar-item--nav"
+                        data-link="bug-reporting" title="Bug Reporting">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="8" y="6" width="8" height="12" rx="4" />
@@ -247,32 +250,31 @@
                             <path d="M4 12h4" />
                         </svg>
                         <span class="sidebar-item-label">Bug Reporting</span>
-                    </span>
+                    </a>
 
-                    <span class="sidebar-item sidebar-item--unlinked" data-link="feature-request"
-                        title="Request a Feature">
+                    <a href="{{ url_for('feedback.feature_requests') }}" class="sidebar-item sidebar-item--nav"
+                        data-link="feature-request" title="Feature Requests">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M9 21h6" />
                             <path
                                 d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
                         </svg>
-                        <span class="sidebar-item-label">Request a Feature</span>
-                    </span>
+                        <span class="sidebar-item-label">Feature Requests</span>
+                    </a>
 
-                    <span class="sidebar-item" data-link="update-blog" title="App Update Blog">
-                        <a href="{{ url_for('blog.index') }}" class="sidebar-item" data-link="update-blog" title="App Update Blog">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="16" y1="13" x2="8" y2="13" />
-                                <line x1="16" y1="17" x2="8" y2="17" />
-                                <polyline points="10 9 9 9 8 9" />
-                            </svg>
-                            <span class="sidebar-item-label">App Update Blog</span>
-                        </a>
-                    </span>
+                    <a href="{{ url_for('blog.index') }}" class="sidebar-item sidebar-item--nav" data-link="update-blog"
+                        title="App Update Blog">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                        </svg>
+                        <span class="sidebar-item-label">App Update Blog</span>
+                    </a>
 
                     {# Design Outing Board — only visible to designers and admin #}
                     {% if effective_user.role in ['designer', 'admin'] %}

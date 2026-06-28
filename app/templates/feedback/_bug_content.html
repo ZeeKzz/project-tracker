@@ -1,0 +1,112 @@
+<article class="blog-article" id="br-scroll-area">
+
+    <!-- ── Bug header ── -->
+    <div class="fr-detail-header">
+        <div class="fr-detail-title-row">
+            <h1 class="fr-detail-title">{{ bug.title }}</h1>
+            <span class="br-status-pill br-status-pill--{{ bug.status }}" id="br-status-display">
+                {{ {'in_queue': 'In Queue', 'fix_in_progress': 'Fix in Progress',
+                    'testing': 'Testing', 'resolved': 'Resolved'}[bug.status] }}
+            </span>
+        </div>
+        <p class="fr-detail-meta">
+            Reported by {{ bug.submitter.name }} · {{ bug.created_at.strftime('%d %b %Y') }}
+        </p>
+    </div>
+
+    <!-- ── Description ── -->
+    <div class="fr-detail-description">
+        {% for para in bug.description.split('\n\n') %}
+        {% if para.strip() %}<p class="blog-body">{{ para.strip() }}</p>{% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- ── Admin / creator actions ── -->
+    {% set is_admin = actor.role == 'admin' %}
+    {% set is_creator = actor.id == bug.submitted_by_id %}
+    {% if is_admin or is_creator %}
+    <div class="fr-admin-bar">
+        {% if is_admin %}
+        <select class="form-input fr-status-select" id="br-status-select" data-bug-id="{{ bug.id }}">
+            <option value="in_queue"        {% if bug.status == 'in_queue'        %}selected{% endif %}>In Queue</option>
+            <option value="fix_in_progress" {% if bug.status == 'fix_in_progress' %}selected{% endif %}>Fix in Progress</option>
+            <option value="testing"         {% if bug.status == 'testing'         %}selected{% endif %}>Testing</option>
+            <option value="resolved"        {% if bug.status == 'resolved'        %}selected{% endif %}>Resolved</option>
+        </select>
+        {% endif %}
+        <button class="btn btn-secondary fr-delete-btn" id="br-delete-btn" data-bug-id="{{ bug.id }}">
+            Delete
+        </button>
+    </div>
+    {% endif %}
+
+    <hr class="blog-hr">
+
+    <!-- ── Comments ── -->
+    <section class="blog-comments" id="br-comments">
+        <h3 class="blog-comments-title">Comments</h3>
+
+        <div id="br-comments-list">
+            {% for comment in comments %}
+            <div class="blog-comment" id="br-comment-{{ comment.id }}">
+                <div class="blog-comment-meta">
+                    <div class="blog-comment-avatar">{{ comment.author.name[0].upper() }}</div>
+                    <div class="blog-comment-author-info">
+                        <span class="blog-comment-author-name">{{ comment.author.name }}</span>
+                        <span class="blog-comment-date">{{ comment.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                    </div>
+                    {% if actor.role == 'admin' %}
+                    <button class="blog-comment-delete br-comment-delete" data-comment-id="{{ comment.id }}">Delete</button>
+                    {% endif %}
+                </div>
+                <p class="blog-comment-body">{{ comment.body }}</p>
+                <button class="blog-reply-btn br-reply-btn" data-comment-id="{{ comment.id }}">Reply</button>
+                <form class="blog-reply-form br-reply-form" id="br-reply-form-{{ comment.id }}" style="display:none;">
+                    <div class="form-group">
+                        <textarea name="body" class="form-input" rows="2" placeholder="Write a reply..."></textarea>
+                    </div>
+                    <div class="blog-reply-actions">
+                        <button type="submit" class="btn btn-primary btn-sm">Post Reply</button>
+                        <button type="button" class="btn btn-secondary btn-sm br-reply-cancel">Cancel</button>
+                    </div>
+                </form>
+
+                {% if comment.replies %}
+                <div class="blog-replies" id="br-replies-{{ comment.id }}">
+                    {% for reply in comment.replies %}
+                    <div class="blog-comment blog-comment--reply" id="br-comment-{{ reply.id }}">
+                        <div class="blog-comment-meta">
+                            <div class="blog-comment-avatar">{{ reply.author.name[0].upper() }}</div>
+                            <div class="blog-comment-author-info">
+                                <span class="blog-comment-author-name">{{ reply.author.name }}</span>
+                                <span class="blog-comment-date">{{ reply.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                            </div>
+                            {% if actor.role == 'admin' %}
+                            <button class="blog-comment-delete br-comment-delete" data-comment-id="{{ reply.id }}">Delete</button>
+                            {% endif %}
+                        </div>
+                        <p class="blog-comment-body">{{ reply.body }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="blog-replies" id="br-replies-{{ comment.id }}"></div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            {% if not comments %}
+            <p class="blog-no-comments">No comments yet.</p>
+            {% endif %}
+        </div>
+
+        <form class="blog-comment-form" id="br-comment-form">
+            <div class="form-group">
+                <label>Leave a comment</label>
+                <textarea name="body" class="form-input" rows="3" placeholder="Write a comment..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Post Comment</button>
+        </form>
+    </section>
+
+</article>

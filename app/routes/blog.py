@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, jsonify, request, abort
 from flask_login import login_required, current_user
 from app import db
 from app.models import BlogPost, BlogComment, User
+from app.utils import get_actor
 from datetime import datetime
 import json
 
@@ -13,7 +14,6 @@ def index():
     posts = BlogPost.query.filter_by(is_published=True)\
      .order_by(BlogPost.published_at.desc()).all()
 
-    # Admins also see unpublished drafts
     if current_user.role == 'admin':
         posts = BlogPost.query.order_by(BlogPost.created_at.desc()).all()
 
@@ -24,14 +24,15 @@ def index():
 def get_post(post_id):
     post = BlogPost.query.get_or_404(post_id)
 
-    # Non-admins can't see unpublished posts
     if not post.is_published and current_user.role != 'admin':
         abort(404)
-    
-    comments = BlogComment.query.filter_by(post_id=post_id)\
+
+    # Only top-level comments; replies are loaded via the backref
+    comments = BlogComment.query.filter_by(post_id=post_id, parent_id=None)\
      .order_by(BlogComment.created_at.asc()).all()
 
-    return render_template('blog/_post_content.html', post=post, comments=comments)
+    actor = get_actor()
+    return render_template('blog/_post_content.html', post=post, comments=comments, actor=actor)
 
 @blog_bp.route('/blog/post/<int:post_id>/comments', methods=['POST'])
 @login_required
@@ -42,13 +43,18 @@ def add_comment(post_id):
         abort(404)
 
     body = request.form.get('body', '').strip()
+    parent_id = request.form.get('parent_id', type=int)
+
     if not body:
         return jsonify({'success': False, 'error': 'Comment cannot be empty'}), 400
-    
+
+    actor = get_actor()
+
     comment = BlogComment(
         post_id=post_id,
-        user_id=current_user.id,
-        body=body
+        user_id=actor.id,
+        body=body,
+        parent_id=parent_id
     )
     db.session.add(comment)
     db.session.commit()
@@ -58,7 +64,9 @@ def add_comment(post_id):
         'comment': {
             'id': comment.id,
             'body': comment.body,
-            'author': current_user.name,
+            'author': actor.name,
+            'avatar_letter': actor.name[0].upper(),
+            'parent_id': comment.parent_id,
             'created_at': comment.created_at.strftime('%d %b %Y, %H:%M')
         }
     })
@@ -83,31 +91,42 @@ def editor_edit(post_id):
 def create_post():
     if current_user.role != 'admin':
         abort(403)
-    
+
     data = request.get_json()
     post = BlogPost(
         title=data['title'],
         version_tag=data.get('version_tag', ''),
         author_id=current_user.id,
         sections_json=json.dumps(data.get('sections', []))
-
     )
     db.session.add(post)
     db.session.commit()
+
+    from app.notifications import notify_all_of_new_blog_post
+    send_email = data.get('send_email', False)
+    notify_all_of_new_blog_post(post, current_user, send_inapp=True, send_email=send_email)
+
     return jsonify({'success': True, 'post_id': post.id})
+
 
 @blog_bp.route('/blog/posts/<int:post_id>', methods=['PUT'])
 @login_required
 def update_post(post_id):
     if current_user.role != 'admin':
         abort(403)
-    
+
     post = BlogPost.query.get_or_404(post_id)
     data = request.get_json()
     post.title = data['title']
     post.version_tag = data.get('version_tag', '')
     post.sections_json = json.dumps(data.get('sections', []))
     db.session.commit()
+
+    send_email = data.get('send_email', False)
+    if send_email:
+        from app.notifications import notify_all_of_new_blog_post
+        notify_all_of_new_blog_post(post, current_user, send_inapp=False, send_email=True)
+
     return jsonify({'success': True})
 
 @blog_bp.route('/blog/posts/<int:post_id>/publish', methods=['POST'])
@@ -115,20 +134,27 @@ def update_post(post_id):
 def toggle_publish(post_id):
     if current_user.role != 'admin':
         abort(403)
-    
+
     post = BlogPost.query.get_or_404(post_id)
     post.is_published = not post.is_published
     if post.is_published and not post.published_at:
         post.published_at = datetime.utcnow()
     db.session.commit()
-    return jsonify({'success': True, 'is_published': post.is_published})
+
+    published_date = post.published_at.strftime('%d %b %Y') if post.published_at else ''
+
+    return jsonify({
+        'success': True,
+        'is_published': post.is_published,
+        'published_date': published_date
+    })
 
 @blog_bp.route('/blog/comments/<int:comment_id>', methods=['DELETE'])
 @login_required
 def delete_comment(comment_id):
     if current_user.role != 'admin':
         abort(403)
-    
+
     comment = BlogComment.query.get_or_404(comment_id)
     db.session.delete(comment)
     db.session.commit()

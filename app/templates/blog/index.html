@@ -5,13 +5,10 @@
 {% block content %}
 <div class="page-container">
 
-    <div style="text-align: center; margin-bottom: 1.75rem;">
-        <h1 style="margin: 0; font-size: 2.4rem; display: inline; vertical-align: baseline;">App Updates</h1>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+        <h1 style="margin: 0; font-size: 2.4rem;">App Updates</h1>
         {% if current_user.role == 'admin' %}
-        <a href="{{ url_for('blog.editor') }}" class="btn btn-primary"
-            style="margin-left: 1.25rem; vertical-align: baseline;">
-            + New Post
-        </a>
+        <a href="{{ url_for('blog.editor') }}" class="btn btn-primary">+ New Post</a>
         {% endif %}
     </div>
 
@@ -30,16 +27,18 @@
                 class="blog-post-item {% if not post.is_published %}blog-post-item--draft{% endif %}"
                 data-post-id="{{ post.id }}">
                 <span class="blog-post-item-title">{{ post.title }}</span>
-                {% if post.version_tag %}
-                <span class="blog-post-item-tag">{{ post.version_tag }}</span>
-                {% endif %}
-                <span class="blog-post-item-date">
-                    {% if post.is_published %}
-                    {{ post.published_at.strftime('%d %b %Y') }}
-                    {% else %}
-                    <em>Draft</em>
+                <div class="blog-post-item-footer">
+                    <span class="blog-post-item-date-pill">
+                        {% if post.is_published %}
+                            {{ post.published_at.strftime('%d %b %Y') }}
+                        {% else %}
+                            Draft
+                        {% endif %}
+                    </span>
+                    {% if post.version_tag %}
+                    <span class="blog-post-item-version-pill">{{ post.version_tag }}</span>
                     {% endif %}
-                </span>
+                </div>
             </a>
             {% endfor %}
         </nav>
@@ -65,6 +64,5 @@
     </div>
 </div>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
 <script src="{{ url_for('static', filename='js/blog.js') }}"></script>
 {% endblock %}

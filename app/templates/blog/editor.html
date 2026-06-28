@@ -34,9 +34,20 @@
                     Sections</h2>
                 <button type="button" class="btn btn-secondary" id="add-section-btn">+ Add Section</button>
             </div>
-            <div id="sections-container">
-                <!-- Sections injected by JS -->
-            </div>
+            <div id="sections-container"></div>
+        </div>
+
+        <!-- ── Notification toggle ── -->
+        <div class="blog-editor-notify">
+            <label class="blog-notify-label">
+                <input type="checkbox" id="send-email-toggle" {{ 'checked' if not post else '' }}>
+                <span class="blog-notify-text">
+                    Send email notification to all users
+                    {% if post %}
+                    <span class="blog-notify-hint">(off by default for edits)</span>
+                    {% endif %}
+                </span>
+            </label>
         </div>
 
         <!-- ── Save actions ── -->
@@ -51,7 +62,7 @@
 
 </div>
 
-<!-- Block type picker template -->
+<!-- Block type picker -->
 <div id="block-type-menu" class="block-type-menu" style="display:none;">
     <button data-type="body">Paragraph</button>
     <button data-type="callout">Callout</button>

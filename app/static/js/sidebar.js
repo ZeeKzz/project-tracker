@@ -150,9 +150,15 @@
     function execScripts(container) {
         container.querySelectorAll('script').forEach(function(old) {
             var fresh = document.createElement('script');
-            fresh.textContent = old.textContent;
+            if (old.src) {
+                // External script — set src so the browser loads and runs the file
+                fresh.src = old.src;
+            } else {
+                // Inline script — copy the code directly
+                fresh.textContent = old.textContent;
+            }
             old.parentNode.replaceChild(fresh, old);
-        })
+        });
     }
 
     function navigateTo(url, push) {
@@ -161,13 +167,18 @@
         })
         .then(function (r) {
             if (!r.ok) throw new Error('nav-failed');
-            return r.text();
+            // Capture the title header before consuming the body
+            var pageTitle = r.headers.get('X-Page-Title');
+            return r.text().then(function (html) {
+                return { html: html, title: pageTitle };
+            });
         })
-        .then(function (html) {
+        .then(function (result) {
             mainContent.style.opacity = '0';
             setTimeout(function () {
-                mainContent.innerHTML = html;
+                mainContent.innerHTML = result.html;
                 execScripts(mainContent);
+                if (result.title) { document.title = decodeURIComponent(result.title); }
                 document.dispatchEvent(new CustomEvent('helix:navigated'));
                 mainContent.style.opacity = '1';
                 if (push !== false) { history.pushState(null, '', url); }

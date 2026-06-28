@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Feature Requests — Vitamin Helix{% endblock %}
+
+{% block content %}
+<div class="page-container">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+        <h1 style="margin: 0; font-size: 2.4rem;">Feature Requests</h1>
+        <button class="btn btn-primary" id="fr-request-btn">Request a Feature</button>
+    </div>
+
+    <div class="blog-outer">
+
+        <!-- ── Left: feature list ── -->
+        <nav class="blog-post-list" id="fr-list-panel">
+
+            <!-- Sort toggle -->
+            <div class="fr-sort-toggle">
+                <button class="fr-sort-btn active" data-sort="status">Status</button>
+                <button class="fr-sort-btn" data-sort="popular">Popular</button>
+            </div>
+
+            <div id="fr-card-list">
+                <!-- JS renders cards here -->
+            </div>
+
+        </nav>
+
+        <!-- ── Divider ── -->
+        <div class="blog-divider"></div>
+
+        <!-- ── Right: feature detail ── -->
+        <div class="blog-content-area" id="fr-content-area">
+            <div class="blog-placeholder">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                    style="color: #ccc; margin-bottom: 1rem;">
+                    <path d="M9 21h6" />
+                    <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
+                </svg>
+                <p style="color: #bbb; font-size: 0.9rem;">Select a feature to view details</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ── Delete confirmation modal ── -->
+<div class="del-overlay" id="fr-del-overlay">
+    <div class="del-modal">
+        <p class="del-modal-title">Confirm Delete</p>
+        <p class="del-modal-body" id="fr-del-message"></p>
+        <div class="del-modal-actions">
+            <button class="btn btn-secondary" id="fr-del-cancel">Cancel</button>
+            <button class="btn btn-danger" id="fr-del-confirm">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Submit modal overlay ── -->
+<div class="fr-modal-overlay" id="fr-modal-overlay"></div>
+
+<!-- ── Submit modal panel ── -->
+<div class="fr-modal" id="fr-modal">
+    <div class="fr-modal-header">
+        <h2 class="fr-modal-title">Request a Feature</h2>
+        <button class="fr-modal-close" id="fr-modal-close">✕</button>
+    </div>
+    <div class="fr-modal-body">
+        <div class="form-group">
+            <label>Feature Title</label>
+            <input type="text" id="fr-input-title" class="form-input"
+                placeholder="What would you like to see?">
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <textarea id="fr-input-description" class="form-input" rows="6"
+                placeholder="Describe the feature and how it would help the team..."></textarea>
+        </div>
+    </div>
+    <div class="fr-modal-footer">
+        <button class="btn btn-secondary" id="fr-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="fr-modal-submit">Submit Request</button>
+    </div>
+</div>
+
+<!-- Embed feature data for JS sorting/rendering -->
+<script>
+    const FEATURES_DATA = {{ features_data | tojson }};
+</script>
+
+<script src="{{ url_for('static', filename='js/feedback.js') }}"></script>
+{% endblock %}

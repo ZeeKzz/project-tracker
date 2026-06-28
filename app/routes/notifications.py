@@ -171,3 +171,4 @@ def restore_notification(notification_id):
     db.session.commit()
 
     return jsonify({'success': True})
+
