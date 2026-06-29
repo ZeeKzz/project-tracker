@@ -23,6 +23,12 @@ class Config:
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', os.environ.get('MAIL_USERNAME'))
     MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'true'
 
+    # NAS configuration — Synology DS925+ File Station API
+    NAS_HOST = os.environ.get('NAS_HOST', '10.101.21.76')
+    NAS_USERNAME = os.environ.get('NAS_USERNAME')
+    NAS_PASSWORD = os.environ.get('NAS_PASSWORD')
+    NAS_PROJECT_ROOT = os.environ.get('NAS_PROJECT_ROOT', '/Projects')
+
     # Dev-only tools — set DEV_TOOLS_ENABLED=true in .env on your local machine only.
     # NEVER set this on the production server — it exposes destructive data operations.
     DEV_TOOLS_ENABLED = os.environ.get('DEV_TOOLS_ENABLED', 'false').lower() == 'true'

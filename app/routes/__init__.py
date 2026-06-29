@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, jsonif
 from flask_login import login_required, current_user
 from datetime import date, timedelta
 from app import db
+from sqlalchemy import func
 from app.models import Project, ProjectDesigner, User, ProjectSecondaryCS
 
 main = Blueprint('main', __name__)
@@ -66,12 +67,16 @@ def cs_dashboard():
             Project.project_status != 'approved'
         ).order_by(Project.design_needed_by.asc()).all()
 
-    all_projects = Project.query.filter(
-        Project.project_status != 'draft',
-        Project.project_status != 'approved'
-    ).order_by(
-        Project.design_needed_by.asc()
-    ).all()
+    if effective_user.role == 'admin':
+        all_projects = my_projects
+    else:
+        all_projects = Project.query.filter(
+            Project.project_status != 'draft',
+            Project.project_status != 'approved'
+        ).order_by (
+            Project.design_needed_by.asc()
+        ).all()
+        
 
     # All approved projects — shown in the Approved Projects tab, visible to all CS/admin
     approved_projects = Project.query.filter_by(
@@ -108,19 +113,15 @@ def designer_dashboard():
     tomorrow = today + timedelta(days=1)
 
     # ── Personal projects ──
-    assigned_project_ids = [
-        pd.project_id for pd in
-        ProjectDesigner.query.filter_by(user_id=effective_user.id).all()
-    ]
+    assigned_subquery = db.session.query(
+        ProjectDesigner.project_id
+    ).filter_by(user_id=effective_user.id).subquery()
 
-    if assigned_project_ids:
-        my_projects = Project.query.filter(
-            Project.id.in_(assigned_project_ids),
-            Project.project_status != 'draft',
-            Project.project_status != 'approved'
-        ).order_by(Project.design_needed_by.asc()).all()
-    else:
-        my_projects = []
+    my_projects = Project.query.filter(
+        Project.id.in_(assigned_subquery),
+        Project.project_status != 'draft',
+        Project.project_status != 'approved'
+    ).order_by(Project.design_needed_by.asc()).all()
 
     active_count = len(my_projects)
     due_today = sum(1 for p in my_projects if p.design_needed_by == today)
@@ -141,17 +142,22 @@ def designer_dashboard():
             User.role.in_(['designer', 'team_lead'])
         ).order_by(User.name).all()
 
-        team_workload = []
-        for designer in designers_in_team:
-            count = ProjectDesigner.query.join(Project).filter(
-                ProjectDesigner.user_id == designer.id,
-                Project.project_status != 'draft',
-                Project.project_status != 'approved'
-            ).count()
-            team_workload.append({'name': designer.name, 'count': count})
-    else:
-        team_projects = []
-        team_workload = []
+    workload_counts = dict(
+        db.session.query(
+            ProjectDesigner.user_id,
+            func.count(ProjectDesigner.project_id)
+        ).join(Project)
+        .filter(
+            ProjectDesigner.user_id.in_([d.id for d in designers_in_team]),
+            Project.project_status != 'draft',
+            Project.project_status != 'approved'
+        ).group_by(ProjectDesigner.user_id).all()
+    )
+
+    team_workload = [
+        {'name': designer.name, 'count': workload_counts.get(designer.id, 0)}
+        for designer in designers_in_team
+    ]
 
     team_active = len(team_projects)
     team_due_today = sum(1 for p in team_projects if p.design_needed_by == today)
@@ -217,28 +223,34 @@ def team_lead_dashboard():
         User.role.in_(['designer', 'team_lead'])
     ).order_by(User.name).all()
 
-    team_workload = []
-    for designer in designers_in_team:
-        count = ProjectDesigner.query.join(Project).filter(
-            ProjectDesigner.user_id == designer.id,
+    workload_counts = dict(
+        db.session.query(
+            ProjectDesigner.user_id,
+            func.count(ProjectDesigner.project_id)
+        ).join(Project)
+        .filter(
+            ProjectDesigner.user_id.in_([d.id for d in designers_in_team]),
             Project.project_status != 'draft',
             Project.project_status != 'approved'
-        ).count()
-        team_workload.append({'name': designer.name, 'count': count})
+        ).group_by(ProjectDesigner.user_id).all()
+    )
 
-    personal_project_ids = [
-        pd.project_id for pd in
-        ProjectDesigner.query.filter_by(user_id=effective_user.id).all()
+    team_workload = [
+        {'name': designer.name, 'count': workload_counts.get(designer.id, 0)}
+        for designer in designers_in_team
     ]
 
-    if personal_project_ids:
-        personal_projects = Project.query.filter(
-            Project.id.in_(personal_project_ids),
-            Project.project_status != 'draft',
-            Project.project_status != 'approved'
-        ).order_by(Project.design_needed_by.asc()).all()
-    else:
-        personal_projects = []
+    personal_subquery = db.session.query(
+       ProjectDesigner.project_id
+    ).filter_by(user_id=effective_user.id).subquery()
+
+    personal_projects = Project.query.filter(
+        Project.id.in_(personal_subquery),
+        Project.project_status != 'draft',
+        Project.project_status != 'approved'
+
+    ).order_by(Project.design_needed_by.asc()).all()
+
 
     personal_active = len(personal_projects)
     personal_due_today = sum(1 for p in personal_projects if p.design_needed_by == today)
