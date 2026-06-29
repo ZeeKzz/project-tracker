@@ -21,7 +21,7 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', os.environ.get('MAIL_USERNAME'))
-    MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'false'
+    MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'true'
 
     # Dev-only tools — set DEV_TOOLS_ENABLED=true in .env on your local machine only.
     # NEVER set this on the production server — it exposes destructive data operations.
