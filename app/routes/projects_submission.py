@@ -10,7 +10,8 @@ from app import db
 from app.models import (Project, User, Customer, ProjectCustomer, Deliverable,
                         DeliverableAssignment, ProjectSubmission,
                         ProjectSubmissionDeliverable, ProjectRevision,
-                        ProjectRevisionDeliverable, ProjectPosmChannel, ProjectFile)
+                        ProjectRevisionDeliverable, ProjectPosmChannel, ProjectFile,
+                        ProjectRegion)
 from app.decorators import role_required
 from app.notifications import (
     notify_cs_of_revision_submitted, create_notification,

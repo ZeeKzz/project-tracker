@@ -1,7 +1,23 @@
 ================================================================================
 VITAMIN HELIX — CHANGELOG
 ===============================================================================
-For Server - add_blog_tables.py, add_blog_comment_replies.py,  migrations/add_feedback_tables.py, add_feedback_tables.py
+Migrations: 
+
+================================================================================
+v2.0 NAS Integration, Internal Routing
+================================================================================
+
+New Features:
+
+
+Adjustments:
+
+- SECURITY: Nginx is now serving all static files (CSS, JS, images) directly from disk — no more bouncing through the app server for every stylesheet. Pages should feel snappier as a result.
+
+Bug Fixes:
+
+- Fixed email's being sent even when toggled off by user.
+
 ================================================================================
 v1.3 Backend Overhaul, App Update Blog + More - Long Term Sustainability — 27 JUNE 2026
 ================================================================================
