@@ -15,7 +15,7 @@ from app.models import (Project, User, Customer, ProjectCustomer, Deliverable,
 from app.decorators import role_required
 from app.notifications import (
     notify_cs_of_revision_submitted, create_notification,
-    notify_of_submission_to_client
+    notify_of_submission_to_client, notify_team_leads_of_new_project
 )
 from app.utils import log_activity
 
@@ -59,6 +59,9 @@ def submit_project():
         if not project:
             project = Project(creator=current_user)
             db.session.add(project)
+            is_new = True
+        else:
+            is_new = False
 
         project.name = data['name']
         project.client_id = int(data['client_id'])
@@ -177,6 +180,11 @@ def submit_project():
                 db.session.add(deliverable)
 
         db.session.commit()
+        # --- NAS Folder Creation ------
+        print(f'NAS check: is_new={is_new}, project_id={project.id}')
+        if is_new:
+            from app.nas import create_project_folders
+            create_project_folders(project)
 
         # ── FOC conflict check ────────────────────────────────────
         # A draft can sit for a long time. By the time it's submitted,
