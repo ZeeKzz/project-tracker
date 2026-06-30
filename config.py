@@ -25,6 +25,7 @@ class Config:
 
     # NAS configuration — Synology DS925+ File Station API
     NAS_HOST = os.environ.get('NAS_HOST', '10.101.21.76')
+    NAS_PORT = os.environ.get('NAS_PORT', '5001')
     NAS_USERNAME = os.environ.get('NAS_USERNAME')
     NAS_PASSWORD = os.environ.get('NAS_PASSWORD')
     NAS_PROJECT_ROOT = os.environ.get('NAS_PROJECT_ROOT', '/Projects')

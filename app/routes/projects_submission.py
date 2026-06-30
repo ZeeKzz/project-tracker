@@ -61,7 +61,7 @@ def submit_project():
             db.session.add(project)
             is_new = True
         else:
-            is_new = False
+            is_new = project.project_status == 'draft'  # True if promoting from draft
 
         project.name = data['name']
         project.client_id = int(data['client_id'])
