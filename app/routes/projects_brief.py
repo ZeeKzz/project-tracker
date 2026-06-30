@@ -374,6 +374,15 @@ def update_project(project_id):
                 
         db.session.commit()
 
+        # Sync NAS folder tree in background — creates any folders added by this edit.
+        # Idempotent: force_parent=true means existing folders are silently skipped.
+        _pid = project.id
+        from flask import current_app as _app
+        from app.nas import _run_in_background, create_project_folders
+        from app.models import Project as _Project
+        _app_obj = _app._get_current_object()
+        _run_in_background(_app_obj, lambda: create_project_folders(_Project.query.get(_pid)))
+
         # -- Emulation-aware actor -----
         emulating_id = flask.session.get('emulating_user_id')
         actor = User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user

@@ -183,8 +183,14 @@ def submit_project():
         # --- NAS Folder Creation ------
         print(f'NAS check: is_new={is_new}, project_id={project.id}')
         if is_new:
-            from app.nas import create_project_folders
-            create_project_folders(project)
+            from flask import current_app as _app
+            from app.nas import _run_in_background, create_project_folders
+            from app.models import Project as _Project
+            _pid = project.id
+            _app_obj = _app._get_current_object()
+            _run_in_background(_app_obj, lambda: create_project_folders(
+                _Project.query.get(_pid)
+            ))
 
         # ── FOC conflict check ────────────────────────────────────
         # A draft can sit for a long time. By the time it's submitted,
@@ -727,6 +733,20 @@ def submit_to_client(project_id):
             project.kv_status = 'submitted_to_client'
 
         db.session.commit()
+
+        # Mirror the deck to NAS — C&CM Concept & KV goes in its own subfolder
+        import os as _os
+        _local = _os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
+        _orig  = submission.original_filename
+        _pid   = project.id
+        from flask import current_app as _app
+        from app.nas import _run_in_background, upload_file_to_nas
+        from app.models import Project as _Project
+        _app_obj = _app._get_current_object()
+        _run_in_background(_app_obj, lambda: upload_file_to_nas(
+            _Project.query.get(_pid), 'Submissions/Concept & KV', _local, _orig
+        ))
+
         log_activity('submitted_to_client',
                      f'C&KV for "{project.name}" submitted to client by {current_user.name}',
                      user=current_user, entity_type='project',
@@ -787,6 +807,31 @@ def submit_to_client(project_id):
             project.kv_status = 'submitted_to_client'
 
     db.session.commit()
+
+    # Mirror the deck to NAS — C&CM POSM submissions go into Submissions/{Region}/{Customer}/
+    import os as _os
+    _local = _os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
+    _orig  = submission.original_filename
+    _pid   = project.id
+    from app.nas import upload_file_to_nas, REGION_DISPLAY
+    if channel and project.brief_type == 'ccm':
+        _region = REGION_DISPLAY.get((channel.posm_country or '').lower(),
+                                     (channel.posm_country or '').title())
+        if channel.posm_customer_id:
+            _pc = ProjectCustomer.query.get(channel.posm_customer_id)
+            _customer = _pc.customer.name if (_pc and _pc.customer) else 'Unknown'
+            _subfolder = f'Submissions/{_region}/{_customer}'
+        else:
+            _subfolder = f'Submissions/{_region}'
+    else:
+        _subfolder = 'Submissions'
+    from flask import current_app as _app
+    from app.nas import _run_in_background
+    from app.models import Project as _Project
+    _app_obj = _app._get_current_object()
+    _run_in_background(_app_obj, lambda: upload_file_to_nas(
+        _Project.query.get(_pid), _subfolder, _local, _orig
+    ))
 
     log_activity('submitted_to_client',
                  f'"{project.name}" submitted to client by {current_user.name}',

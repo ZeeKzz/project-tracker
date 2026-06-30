@@ -2188,6 +2188,10 @@ def upload_project_file(project_id):
     db.session.add(project_file)
     db.session.commit()
 
+    # Mirror the file to the NAS under Reference Files/
+    from app.nas import upload_file_to_nas
+    upload_file_to_nas(project, 'Reference Files', save_path, original_filename)
+
     log_activity('file_uploaded', f'Reference file "{original_filename}" uploaded to "{project.name}"',
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
 

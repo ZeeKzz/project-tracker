@@ -1288,6 +1288,22 @@ def upload_project_file(project_id):
     db.session.add(project_file)
     db.session.commit()
 
+    # Ensure NAS folders exist then upload — runs in background so the upload
+    # response returns immediately regardless of NAS speed.
+    _pid      = project_id
+    _path     = save_path
+    _filename = original_filename
+    from flask import current_app as _app
+    from app.nas import _run_in_background, create_project_folders, upload_file_to_nas
+    from app.models import Project as _Project
+    _app_obj = _app._get_current_object()
+    def _nas_ref_upload():
+        _p = _Project.query.get(_pid)
+        if _p:
+            create_project_folders(_p)
+            upload_file_to_nas(_p, 'Reference Files', _path, _filename)
+    _run_in_background(_app_obj, _nas_ref_upload)
+
     log_activity('file_uploaded', f'Reference file "{original_filename}" uploaded to "{project.name}"',
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
 

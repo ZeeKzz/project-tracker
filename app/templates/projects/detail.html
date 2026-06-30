@@ -624,7 +624,7 @@
                             data-deliverable-id="{{ deliverable.id }}" data-context="{{ deliverable.name }}"
                             data-action="open-flag-modal">⚑ Flag Issue</button>
                         {% endif %}
-                        {% if effective_user.role != 'admin' %}
+                        {% if effective_user.role not in ['admin', 'cs', 'management'] %}
                         <span class="status-badge s-{{ deliverable.status }}">{{ deliverable.status | replace('_', ' ')
                             | title }}</span>
                         {% else %}
@@ -774,7 +774,7 @@
                         {%- else %}—{% endif -%}
                     </span>
                 </div>
-                {% if effective_user.role != 'admin' %}
+                {% if effective_user.role not in ['admin', 'cs', 'management'] %}
                 <span class="status-badge s-{{ d.status }}">{{ d.status | replace('_', ' ') | title }}</span>
                 {% else %}
                 <select class="status-select"
