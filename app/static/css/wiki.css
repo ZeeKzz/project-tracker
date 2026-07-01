@@ -212,6 +212,7 @@
 }
 
 .wiki-block-list {
+    list-style-type: disc;
     margin: 0.5rem 0 0.75rem 1.25rem;
     padding: 0;
 }
