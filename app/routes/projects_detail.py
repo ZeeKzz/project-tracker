@@ -1,5 +1,6 @@
 import os
 import uuid
+import re
 from datetime import date, datetime, timezone, timedelta
 from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, current_app, send_from_directory, jsonify, abort, session)
@@ -1251,7 +1252,6 @@ import uuid
 def upload_project_file(project_id):
     """Handle reference file uploads for a project. CS and admin only."""
     from app.models import ProjectFile
-    import os
 
     project = Project.query.get_or_404(project_id)
 
@@ -1272,38 +1272,27 @@ def upload_project_file(project_id):
     if ext not in allowed_extensions:
         return jsonify({'success': False, 'error': f'File type .{ext} not allowed'}), 400
 
-    # Generate a unique filename to avoid collisions on disk
-    stored_filename = f"{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(current_app.config['UPLOAD_FOLDER'], stored_filename)
-    file.save(save_path)
+    # Read file bytes before anything else (file stream can only be read once)
+    file_bytes = file.read()
 
-    # Save the record to the database
+    # Upload directly to NAS - synchronous, user waits for confirmation
+    from app.nas import upload_app_file, build_file_path
+    nas_file_path = build_file_path(project, 'Reference Files', original_filename)
+    nas_folder = nas_file_path.rsplit('/',1)[0]
+    upload_app_file(file_bytes, nas_folder, original_filename)
+
+    # Save record - Filename column stores the NAS filename (Same as original)
     project_file = ProjectFile(
         project_id=project_id,
-        filename=stored_filename,
+        filename=original_filename,
         original_filename=original_filename,
         file_type=ext,
         uploaded_by_id=current_user.id
     )
+
     db.session.add(project_file)
     db.session.commit()
-
-    # Ensure NAS folders exist then upload — runs in background so the upload
-    # response returns immediately regardless of NAS speed.
-    _pid      = project_id
-    _path     = save_path
-    _filename = original_filename
-    from flask import current_app as _app
-    from app.nas import _run_in_background, create_project_folders, upload_file_to_nas
-    from app.models import Project as _Project
-    _app_obj = _app._get_current_object()
-    def _nas_ref_upload():
-        _p = _Project.query.get(_pid)
-        if _p:
-            create_project_folders(_p)
-            upload_file_to_nas(_p, 'Reference Files', _path, _filename)
-    _run_in_background(_app_obj, _nas_ref_upload)
-
+    
     log_activity('file_uploaded', f'Reference file "{original_filename}" uploaded to "{project.name}"',
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
 
@@ -1321,19 +1310,23 @@ def upload_project_file(project_id):
 @detail_bp.route('/projects/files/<int:file_id>/download')
 @login_required
 def download_project_file(file_id):
-    """Serve a reference file for download. All authenticated users can download."""
+    """Serve a reference file for download. All authenticated users can download. Download is served from the NAS"""
     from app.models import ProjectFile
-    import os
-
-    project_file = ProjectFile.query.get_or_404(file_id)
-    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], project_file.filename)
-
-    if not os.path.exists(file_path):
-        abort(404)
-
-    # send_file serves the file to the browser with the original filename
+    from app.nas import download_app_file, build_file_path
+    import io
     from flask import send_file
-    return send_file(file_path, as_attachment=True, download_name=project_file.original_filename)
+    
+    project_file = ProjectFile.query.get_or_404(file_id)
+    project = Project.query.get(project_file.project_id)
+
+    nas_path = build_file_path(project, 'Reference Files', project_file.original_filename)
+    file_bytes = download_app_file(nas_path)
+
+    return send_file(
+        io.BytesIO(file_bytes),
+        as_attachment=True,
+        download_name=project_file.original_filename
+    )
 
 
 @detail_bp.route('/projects/files/<int:file_id>/delete', methods=['POST'])
@@ -1342,15 +1335,14 @@ def download_project_file(file_id):
 def delete_project_file(file_id):
     """Delete a reference file. CS and admin only."""
     from app.models import ProjectFile
-    import os
 
     project_file = ProjectFile.query.get_or_404(file_id)
     project = Project.query.get(project_file.project_id)
 
-    # Remove the file from disk
-    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], project_file.filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
+    # Delete from NAS
+    from app.nas import delete_app_file, build_file_path
+    nas_path = build_file_path(project, 'Reference Files', project_file.original_filename)
+    delete_app_file(nas_path)
 
     log_activity('file_deleted', f'Reference file "{project_file.original_filename}" deleted from "{project.name}"',
                  user=current_user, entity_type='project', entity_name=project.name, entity_id=project.id)
@@ -1359,6 +1351,38 @@ def delete_project_file(file_id):
     db.session.commit()
 
     return jsonify({'success': True})
+
+
+@detail_bp.route('/projects/<int:project_id>/nas-link', methods=['GET'])
+@login_required
+def get_nas_link(project_id):
+    """Return a File Station deep link for the project's NAS folder.
+    Logged-in DSM users are taken straight to the folder.
+    Users who need to log in first can use the displayed path to navigate."""
+    import urllib.parse
+    project = Project.query.get_or_404(project_id)
+
+    root        = current_app.config['NAS_PROJECT_ROOT']
+    year        = project.created_at.year
+    client_name = project.client_brand.name if project.client_brand else 'Unknown Client'
+    folder_path = f'{root}/{year}/{client_name}/{project.name}'
+
+    base = (current_app.config.get('NAS_WEB_URL') or
+            f"https://{current_app.config['NAS_HOST']}:{current_app.config['NAS_PORT']}")
+
+    # DSM 7 deep-link format: launchParam carries openfile=<path>.
+    # Double-encode so that & in folder names (e.g. "P&G") survives Synology's
+    # internal sub-param parse of launchParam: & → %26 (step 1) → %2526 (step 2).
+    # After the server decodes launchParam once, openfile value contains %26 (not &),
+    # so no spurious splitting occurs. File Station then decodes %26 → & correctly.
+    path_encoded = urllib.parse.quote(folder_path, safe='/')   # & → %26, space → %20
+    launch_param = urllib.parse.quote(f"opendir={path_encoded}", safe='/')  # % → %25
+    url = (f"{base}/index.cgi"
+           f"?launchApp=SYNO.SDS.App.FileStation3.Instance"
+           f"&launchParam={launch_param}")
+
+    return jsonify({'success': True, 'url': url, 'path': folder_path})
+
 
 # ── Project Submission Routes ─────────────────────────────────────────────────
 # Flow:

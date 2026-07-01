@@ -51,6 +51,17 @@
                 </div>
                 <button type="submit" class="btn-primary">Update Password</button>
             </form>
+            <script>
+                document.getElementById('current_password').closest('form').addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    var form = this;
+                    showConfirm(
+                        "Changing your password will log you out of all active sessions. You'll need to sign in again.",
+                        function () { form.submit(); },
+                        'You will be logged out'
+                    );
+                });
+            </script>
         </div>
 
         <!-- ③ Email Notifications -->

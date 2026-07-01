@@ -1,7 +1,6 @@
-import os
-import re
-import uuid
 from datetime import datetime, timezone, timedelta
+import re
+from flask import send_file, abort
 from flask import (Blueprint, request, current_app, send_from_directory,
                    jsonify, session, url_for)
 from flask_login import login_required, current_user
@@ -305,8 +304,8 @@ def upload_submission(project_id):
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext not in allowed:
         return jsonify({'success': False, 'error': 'Only PDF and PPTX files are accepted'}), 400
-
-    upload_folder = current_app.config['UPLOAD_FOLDER']
+    
+    file_bytes = file.read()
 
     # Channel-aware upload: if posm_channel_id is present, only deactivate the
     # previous submission for THAT channel, not all active submissions.
@@ -341,15 +340,13 @@ def upload_submission(project_id):
         ]
         # Only delete the physical file if this deck was never approved and sent to the client.
         # Approved decks are kept permanently for invoice / audit history.
-        if not previous.submitted_to_client_at:
-            old_path = os.path.join(upload_folder, previous.filename)
-            if os.path.exists(old_path):
-                os.remove(old_path)
+        from app.nas import delete_app_file, build_file_path
+        _old_nas = build_file_path(project, 'Submissions', previous.original_filename)
+        delete_app_file(_old_nas)
         previous.is_active = False
 
-    # Save the new file with a UUID-based name to prevent filename collisions
-    stored_filename = f"submission_{uuid.uuid4().hex}.{ext}"
-    file.save(os.path.join(upload_folder, stored_filename))
+    # Set temporary file name
+    stored_filename = f"pending.{ext}"
 
     submission = ProjectSubmission(
         project_id=project_id,
@@ -431,6 +428,13 @@ def upload_submission(project_id):
         project.concept_status = 'in_progress'
         if project.kv_status in ('revision_in_queue', 'revision_in_progress', 'internal_revision'):
             project.kv_status = 'in_progress'
+    
+    # Upload to NAS now that we have the final canonical filename
+    from app.nas import upload_app_file, build_file_path
+    _nas_path = build_file_path(project, 'Submissions', submission.original_filename)
+    _nas_folder = _nas_path.rsplit('/', 1)[0]
+    upload_app_file(file_bytes, _nas_folder, submission.original_filename)
+    submission.filename = submission.original_filename
 
     db.session.commit()
 
@@ -734,18 +738,15 @@ def submit_to_client(project_id):
 
         db.session.commit()
 
-        # Mirror the deck to NAS — C&CM Concept & KV goes in its own subfolder
+        # Upload to NAS now the file is permanent
         import os as _os
         _local = _os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
-        _orig  = submission.original_filename
-        _pid   = project.id
-        from flask import current_app as _app
-        from app.nas import _run_in_background, upload_file_to_nas
-        from app.models import Project as _Project
-        _app_obj = _app._get_current_object()
-        _run_in_background(_app_obj, lambda: upload_file_to_nas(
-            _Project.query.get(_pid), 'Submissions/Concept & KV', _local, _orig
-        ))
+        from app.nas import upload_app_file, build_file_path
+        _nas_folder = build_file_path(project, 'Submissions', submission.original_filename).rsplit('/', 1)[0]
+        if _os.path.exists(_local):
+            upload_app_file(open(_local, 'rb').read(), _nas_folder, submission.original_filename)
+        else:
+            current_app.logger.warning(f'Local file missing for submission {submission.id} — skipping NAS upload')
 
         log_activity('submitted_to_client',
                      f'C&KV for "{project.name}" submitted to client by {current_user.name}',
@@ -753,6 +754,11 @@ def submit_to_client(project_id):
                      entity_name=project.name, entity_id=project.id)
         notify_of_submission_to_client(project, triggered_by=current_user)
         client_email = project.client_brand.contact_email if project.client_brand else None
+
+        # Delete local file after everything else succeeds
+        if _os.path.exists(_local):
+            _os.remove(_local)
+
         return jsonify({'success': True, 'client_email': client_email or '', 'project_name': project.name})
 
     else:
@@ -808,30 +814,15 @@ def submit_to_client(project_id):
 
     db.session.commit()
 
-    # Mirror the deck to NAS — C&CM POSM submissions go into Submissions/{Region}/{Customer}/
+    # Upload to NAS now the file is permanent
     import os as _os
     _local = _os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
-    _orig  = submission.original_filename
-    _pid   = project.id
-    from app.nas import upload_file_to_nas, REGION_DISPLAY
-    if channel and project.brief_type == 'ccm':
-        _region = REGION_DISPLAY.get((channel.posm_country or '').lower(),
-                                     (channel.posm_country or '').title())
-        if channel.posm_customer_id:
-            _pc = ProjectCustomer.query.get(channel.posm_customer_id)
-            _customer = _pc.customer.name if (_pc and _pc.customer) else 'Unknown'
-            _subfolder = f'Submissions/{_region}/{_customer}'
-        else:
-            _subfolder = f'Submissions/{_region}'
+    from app.nas import upload_app_file, build_file_path
+    _nas_folder = build_file_path(project, 'Submissions', submission.original_filename).rsplit('/', 1)[0]
+    if _os.path.exists(_local):
+        upload_app_file(open(_local, 'rb').read(), _nas_folder, submission.original_filename)
     else:
-        _subfolder = 'Submissions'
-    from flask import current_app as _app
-    from app.nas import _run_in_background
-    from app.models import Project as _Project
-    _app_obj = _app._get_current_object()
-    _run_in_background(_app_obj, lambda: upload_file_to_nas(
-        _Project.query.get(_pid), _subfolder, _local, _orig
-    ))
+        current_app.logger.warning(f'Local file missing for submission {submission.id} — skipping NAS upload')
 
     log_activity('submitted_to_client',
                  f'"{project.name}" submitted to client by {current_user.name}',
@@ -844,6 +835,10 @@ def submit_to_client(project_id):
     # Return the client's email (dormant — will be populated once v1.1 adds client email UI)
     client_email = project.client_brand.contact_email if project.client_brand else None
 
+    # Delete local file after everything else succeeds
+    if _os.path.exists(_local):
+        _os.remove(_local)
+
     return jsonify({
         'success': True,
         'client_email': client_email or '',
@@ -854,15 +849,30 @@ def submit_to_client(project_id):
 @submission_bp.route('/projects/submission/<int:submission_id>/download')
 @login_required
 def download_submission(submission_id):
-    """Serve a submission deck for download. Available to all authenticated users."""
+    """Serve a submission deck. Submitted decks are on NAS; drafts are on local disk."""
     from app.models import ProjectSubmission
-    import os
-    submission = ProjectSubmission.query.get_or_404(submission_id)
-    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
-    if not os.path.exists(file_path):
-        abort(404)
     from flask import send_file
-    return send_file(file_path, as_attachment=True, download_name=submission.original_filename)
+    import io, os
+
+    submission = ProjectSubmission.query.get_or_404(submission_id)
+    project    = Project.query.get(submission.project_id)
+
+    if submission.submitted_to_client_at:
+        # File has been submitted — it lives on the NAS
+        from app.nas import download_app_file, build_file_path
+        nas_path   = build_file_path(project, 'Submissions', submission.original_filename)
+        file_bytes = download_app_file(nas_path)
+        return send_file(
+            io.BytesIO(file_bytes),
+            as_attachment=True,
+            download_name=submission.original_filename
+        )
+    else:
+        # Still a draft — serve from local disk
+        file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
+        if not os.path.exists(file_path):
+            abort(404)
+        return send_file(file_path, as_attachment=True, download_name=submission.original_filename)
 
 
 @submission_bp.route('/projects/<int:project_id>/submission/send-revision', methods=['POST'])

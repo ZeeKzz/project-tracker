@@ -28,7 +28,11 @@ def mark_read(notification_id):
     db.session.commit()
 
     # Build the URL to redirect the user to
-    if notification.project_id:
+    # Prefer an explicit link (blog posts, feature requests, bug reports),
+    # then fall back to the related project, then home.
+    if notification.link:
+        redirect_url = notification.link
+    elif notification.project_id:
         redirect_url = url_for('project_detail.detail', project_id=notification.project_id)
     else:
         redirect_url = url_for('main.index')

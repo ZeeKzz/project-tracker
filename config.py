@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
@@ -12,6 +13,11 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB limit for file uploads
+
+    # Session persistence — stay logged in for 30 days unless password changes
+    REMEMBER_COOKIE_DURATION = timedelta(days=30)
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = 'Lax'
 
     # Email configuration — reads from .env so switching providers requires no code changes
     MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.resend.com')
@@ -29,6 +35,10 @@ class Config:
     NAS_USERNAME = os.environ.get('NAS_USERNAME')
     NAS_PASSWORD = os.environ.get('NAS_PASSWORD')
     NAS_PROJECT_ROOT = os.environ.get('NAS_PROJECT_ROOT', '/Projects')
+    # Base URL for File Station deep links — set to QuickConnect URL for external access.
+    # e.g. NAS_WEB_URL=https://quickconnect.to/YOUR_QUICKCONNECT_ID
+    # Defaults to LAN IP (https://{NAS_HOST}:{NAS_PORT}) if not set.
+    NAS_WEB_URL = os.environ.get('NAS_WEB_URL')
 
     # Dev-only tools — set DEV_TOOLS_ENABLED=true in .env on your local machine only.
     # NEVER set this on the production server — it exposes destructive data operations.

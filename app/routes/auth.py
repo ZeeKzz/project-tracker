@@ -77,11 +77,17 @@ def login():
 
         if not user or not check_password_hash(user.password_hash, password):
             flash('Incorrect email or password.', 'error')
-            return redirect(url_for('auth.login'))
+            # Preserve next so the redirect still works after a failed attempt
+            return redirect(url_for('auth.login', next=request.form.get('next', '')))
 
-        login_user(user)
+        login_user(user, remember=True)
         flash(f'Welcome back, {user.name}.', 'success')
         next_page = request.form.get('next') or ''
+        # Flask-Login sometimes sets next to a full URL — extract just the path
+        if next_page and not next_page.startswith('/'):
+            from urllib.parse import urlparse
+            parsed = urlparse(next_page)
+            next_page = parsed.path + ('?' + parsed.query if parsed.query else '')
         if next_page and next_page.startswith('/'):
             return redirect(next_page)
         return redirect(url_for('main.index'))

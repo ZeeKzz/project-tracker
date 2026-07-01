@@ -36,6 +36,10 @@
             <button class="btn-brief-flag" data-flag-type="project" data-project-id="{{ project.id }}"
                 data-context="Entire Project" data-action="open-flag-modal">⚑ Flag Issue</button>
             {% endif %}
+            <button class="btn-secondary" id="open-nas-btn"
+                data-url="{{ url_for('project_detail.get_nas_link', project_id=project.id) }}">
+                Open NAS Folder
+            </button>
             <a href="{{ url_for('main.index') }}" class="btn-secondary sidebar-item--nav">← Back</a>
         </div>
     </div>
@@ -87,6 +91,7 @@
 
                 {% if effective_user.role == 'admin' or project.cs_lead_id == effective_user.id %}
                 {% if available_cs_users %}
+                {% if project.project_status != 'approved' %}
                 <div class="detail-field">
                     <span class="detail-label">Add Secondary CS</span>
                     <form method="POST" action="{{ url_for('project_detail.add_secondary_cs', project_id=project.id) }}"
@@ -102,6 +107,7 @@
                         </div>
                     </form>
                 </div>
+                {% endif %}
                 {% endif %}
                 {% endif %}
 
@@ -624,7 +630,7 @@
                             data-deliverable-id="{{ deliverable.id }}" data-context="{{ deliverable.name }}"
                             data-action="open-flag-modal">⚑ Flag Issue</button>
                         {% endif %}
-                        {% if effective_user.role not in ['admin', 'cs', 'management'] %}
+                        {% if effective_user.role != 'admin' %}
                         <span class="status-badge s-{{ deliverable.status }}">{{ deliverable.status | replace('_', ' ')
                             | title }}</span>
                         {% else %}
@@ -774,7 +780,7 @@
                         {%- else %}—{% endif -%}
                     </span>
                 </div>
-                {% if effective_user.role not in ['admin', 'cs', 'management'] %}
+                {% if effective_user.role != 'admin' %}
                 <span class="status-badge s-{{ d.status }}">{{ d.status | replace('_', ' ') | title }}</span>
                 {% else %}
                 <select class="status-select"
@@ -2317,6 +2323,34 @@
                 setTimeout(function () { location.reload(); }, 700);
             })
             .catch(function () { showToast('Something went wrong', 'error'); });
+    }
+
+    // Open NAS folder — calls the Flask endpoint to generate a Synology sharing link,
+    // then opens it in a new tab. Button is disabled while the request is in flight.
+    var openNasBtn = document.getElementById('open-nas-btn');
+    if (openNasBtn) {
+        openNasBtn.addEventListener('click', function () {
+            var btn = this;
+            var url = btn.dataset.url;
+            btn.disabled = true;
+            btn.textContent = 'Opening…';
+            fetch(url)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        window.open(data.url, '_blank');
+                    } else {
+                        alert('Could not open NAS folder: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(function () {
+                    alert('Could not reach the NAS. Are you on the network?');
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                    btn.textContent = 'Open NAS Folder';
+                });
+        });
     }
 
     // Wire up the delete project button — intercept with styled confirm modal,

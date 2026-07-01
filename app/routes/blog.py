@@ -102,10 +102,6 @@ def create_post():
     db.session.add(post)
     db.session.commit()
 
-    from app.notifications import notify_all_of_new_blog_post
-    send_email = data.get('send_email', False)
-    notify_all_of_new_blog_post(post, current_user, send_inapp=True, send_email=send_email)
-
     return jsonify({'success': True, 'post_id': post.id})
 
 
@@ -140,6 +136,13 @@ def toggle_publish(post_id):
     if post.is_published and not post.published_at:
         post.published_at = datetime.utcnow()
     db.session.commit()
+
+    # Only notify when publishing (not unpublishing)
+    if post.is_published:
+        payload = request.get_json(silent=True) or {}
+        send_email = payload.get('send_email', False)
+        from app.notifications import notify_all_of_new_blog_post
+        notify_all_of_new_blog_post(post, current_user, send_inapp=True, send_email=send_email)
 
     published_date = post.published_at.strftime('%d %b %Y') if post.published_at else ''
 

@@ -19,7 +19,7 @@ REGION_DISPLAY = {
 # --------- Authentication ---------------
 
 def _get_session():
-    """Login to Synology File Station API, return (sid, host)."""
+    """Login to Synology File Station API, return (sid, host, port)."""
     host = current_app.config['NAS_HOST']
     port = current_app.config['NAS_PORT']
     resp = requests.get(
@@ -36,7 +36,6 @@ def _get_session():
         },
         timeout=10
     )
-    print(f'NAS auth response: {resp.status_code} {resp.text}')
     data = resp.json()
     if not data.get('success'):
         raise RuntimeError(f"NAS login failed: {data}")
@@ -58,12 +57,13 @@ def _logout(host, port, sid):
     )
 
 # ------ Folder Operations --------
+
 def _create_folder(host, port, sid, parent_path, folder_name):
     """
     Create a single folder inside parent_path.
-    Silenty succeeds if folder already exists (force_parent=true)
+    Silently succeeds if folder already exists (force_parent=true).
     """
-    resp = requests.get(
+    requests.get(
         f'https://{host}:{port}/webapi/entry.cgi',
         verify=False,
         params={
@@ -77,7 +77,6 @@ def _create_folder(host, port, sid, parent_path, folder_name):
         },
         timeout=10
     )
-    print(f'NAS create_folder {parent_path}/{folder_name}: {resp.json()}')
 
 def _build_folder_tree(host, port, sid, project):
     """
@@ -85,7 +84,6 @@ def _build_folder_tree(host, port, sid, project):
     Determines structure based on project.brief_type (Standard or C&CM).
     Year folder is auto-created if this is the first project of that year.
     """
-
     root         = current_app.config['NAS_PROJECT_ROOT']
     year         = project.created_at.year
     year_path    = f'{root}/{year}'
@@ -97,7 +95,7 @@ def _build_folder_tree(host, port, sid, project):
     _create_folder(host, port, sid, year_path, client_name)
     _create_folder(host, port, sid, client_path, project.name)
 
-    for folder in ['Quotes & Invoices', 'Submissions', 'Reference Files', 'Design Files']:
+    for folder in ['Quotes & Invoices', 'Submissions', 'Reference Files', 'Design Files', 'Close Out Report']:
         _create_folder(host, port, sid, project_path, folder)
 
     design_path = f'{project_path}/Design Files'
@@ -110,9 +108,9 @@ def _build_folder_tree(host, port, sid, project):
 def _build_standard_design_folders(host, port, sid, design_path, project):
     """
     Standard Brief:
-       Design Files
+       Design Files/
           {Deliverable}/
-              3D Files - Renders - Artwork - DWG - PDF  <- based on project teams
+              3D Files · Renders · Artwork · DWG · PDF  (based on project teams)
     """
     deliverables = Deliverable.query.filter_by(
         project_id=project.id,
@@ -139,11 +137,10 @@ def _build_ccm_design_folders(host, port, sid, design_path, project):
     C&CM Brief:
     Design Files/
         Initial KV/
-        {Region}/   <-- ProjectRegion.region string e.g. 'UAE', 'Qatar'
-            {Customer}/  <-- customers where Customer.region matches
+        {Region}/        e.g. UAE, Kuwait
+            {Customer}/  customers whose Customer.region matches this region
                 {Deliverable}/
     """
-
     _create_folder(host, port, sid, design_path, 'Initial KV')
 
     project_regions = ProjectRegion.query.filter_by(project_id=project.id).all()
@@ -183,7 +180,6 @@ def upload_file_to_nas(project, subfolder, local_file_path, nas_filename):
 
     Failures are logged as warnings and never crash the calling route.
     """
-    import os
     try:
         sid, host, port = _get_session()
         try:
@@ -222,7 +218,6 @@ def upload_file_to_nas(project, subfolder, local_file_path, nas_filename):
             f'NAS upload failed for project {project.id} / {nas_filename}: {e}'
         )
 
-
 # ---- Background helpers ----------
 
 def _run_in_background(app, fn):
@@ -236,23 +231,123 @@ def _run_in_background(app, fn):
 
     threading.Thread(target=_worker, daemon=True).start()
 
-
 # ---- Project Interface -----------
 
 def create_project_folders(project):
     """
-    Main entry point - call this after a project is created.
+    Main entry point — call this after a project is created or edited.
+    Idempotent: safe to call multiple times (force_parent=true on all folders).
     Failures are logged as warnings and never crash the calling route.
     """
-    print(f'NAS: starting folder creation for project {project.id} — {project.name}')
     try:
         sid, host, port = _get_session()
-        print(f'NAS: logged in, sid={sid}')
         try:
             _build_folder_tree(host, port, sid, project)
-            print('NAS: folder tree built')
         finally:
             _logout(host, port, sid)
     except Exception as e:
         current_app.logger.warning(f'NAS folder creation failed for project {project.id}: {e}')
-        print(f'NAS ERROR: {e}')
+
+def build_file_path(project, subfolder, filename):
+    """
+    Build the full NAS path for a project file.
+    e.g. /Projects/2026/P&G/Summer 2026/Reference Files/brief.pdf
+    """
+    root        = current_app.config['NAS_PROJECT_ROOT']
+    year        = project.created_at.year
+    client_name = project.client_brand.name if project.client_brand else 'Unknown Client'
+    return f'{root}/{year}/{client_name}/{project.name}/{subfolder}/{filename}'
+
+def upload_app_file(file_bytes, nas_folder_path, filename):
+    """
+    Upload file bytes directly to a NAS folder. Synchronous — raises on failure.
+
+    Args:
+        file_bytes:      raw bytes of the file (call file.read() before passing)
+        nas_folder_path: destination folder on NAS (not including filename)
+        filename:        filename to use on the NAS
+    """
+    sid, host, port = _get_session()
+    try:
+        resp = requests.post(
+            f'https://{host}:{port}/webapi/entry.cgi',
+            verify=False,
+            params={
+                'api':     'SYNO.FileStation.Upload',
+                'version': '2',
+                'method':  'upload',
+                '_sid':    sid,
+            },
+            data={
+                'path':           nas_folder_path,
+                'create_parents': 'true',
+                'overwrite':      'true',
+            },
+            files={'file': (filename, file_bytes)},
+            timeout=60,
+        )
+        data = resp.json()
+        if not data.get('success'):
+            raise RuntimeError(f'NAS upload failed: {data}')
+    finally:
+        _logout(host, port, sid)
+
+def download_app_file(nas_file_path):
+    """
+    Fetch a file from the NAS and return its raw bytes.
+
+    Args:
+        nas_file_path: full path including filename, e.g.
+                       /Projects/2026/P&G/Summer 2026/Reference Files/brief.pdf
+    Raises RuntimeError if the NAS returns an error.
+    """
+    sid, host, port = _get_session()
+    try:
+        resp = requests.get(
+            f'https://{host}:{port}/webapi/entry.cgi',
+            verify=False,
+            params={
+                'api':     'SYNO.FileStation.Download',
+                'version': '2',
+                'method':  'download',
+                'path':    nas_file_path,
+                'mode':    'download',
+                '_sid':    sid,
+            },
+            timeout=30,
+        )
+        # If something went wrong, NAS returns JSON instead of file bytes
+        if 'application/json' in resp.headers.get('Content-Type', ''):
+            raise RuntimeError(f'NAS download failed: {resp.json()}')
+        return resp.content
+    finally:
+        _logout(host, port, sid)
+
+def delete_app_file(nas_file_path):
+    """
+    Delete a single file from the NAS.
+    Failures are logged as warnings and never crash the caller.
+
+    Args:
+        nas_file_path: full path including filename
+    """
+    try:
+        sid, host, port = _get_session()
+        try:
+            requests.get(
+                f'https://{host}:{port}/webapi/entry.cgi',
+                verify=False,
+                params={
+                    'api':     'SYNO.FileStation.Delete',
+                    'version': '2',
+                    'method':  'start',
+                    'path':    json.dumps([nas_file_path]),
+                    'accurate_progress': 'false',
+                    '_sid':    sid,
+                },
+                timeout=10,
+            )
+        finally:
+            _logout(host, port, sid)
+    except Exception as e:
+        current_app.logger.warning(f'NAS delete failed for {nas_file_path}: {e}')

@@ -544,7 +544,11 @@ function initPostContent(postId) {
                 if (!res.success) { alert('Save failed.'); return; }
                 var postId = isEdit ? EDIT_POST_ID : res.post_id;
                 if (andPublish) {
-                    fetch('/blog/posts/' + postId + '/publish', { method: 'POST' })
+                    fetch('/blog/posts/' + postId + '/publish', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ send_email: data.send_email })
+                    })
                         .then(function () { window.location.href = '/blog#post-' + postId; });
                 } else {
                     window.location.href = '/blog#post-' + postId;

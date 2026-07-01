@@ -4,8 +4,24 @@ from datetime import datetime
 
 
 @login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+def load_user(token):
+    """
+    Token format: "{user_id}:{password_fingerprint}"
+    The fingerprint is the last 12 chars of the password hash.
+    If the password changes, the fingerprint changes, killing all active sessions.
+    """
+    parts = token.split(':', 1)
+    try:
+        user_id = int(parts[0])
+    except (ValueError, IndexError):
+        return None
+    user = User.query.get(user_id)
+    if user is None:
+        return None
+    # Validate fingerprint — returns None (forces logout) if password was changed
+    if len(parts) == 2 and parts[1] != user.password_hash[-12:]:
+        return None
+    return user
 
 
 class User(db.Model, UserMixin):
@@ -32,6 +48,12 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         from werkzeug.security import check_password_hash
         return check_password_hash(self.password_hash, password)
+
+    def get_id(self):
+        """Return a token that includes a password fingerprint.
+        Flask-Login stores this in the session/cookie. Changing the password
+        changes the fingerprint, which invalidates all existing sessions."""
+        return f"{self.id}:{self.password_hash[-12:]}"
 
     def wants_notification(self, key):
         """Return True if this user wants to receive email for the given pref key.
@@ -62,6 +84,7 @@ class Notification(db.Model):
     is_read = db.Column(db.Boolean, default=False, nullable=False)
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    link = db.Column(db.String(500), nullable=True)
 
     # Relationships
     recipient = db.relationship('User', foreign_keys=[recipient_id], backref='notifications')

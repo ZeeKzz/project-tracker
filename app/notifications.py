@@ -196,7 +196,7 @@ def _send_notification_email(recipient, message, project=None):
 # ── Core factory ──────────────────────────────────────────────────────────────
 
 def create_notification(recipient, message, notification_type, project=None,
-                        triggered_by=None, pref_key=None):
+                        triggered_by=None, pref_key=None, link=None):
     """
     Create a single in-app notification and (optionally) send an email.
 
@@ -210,7 +210,8 @@ def create_notification(recipient, message, notification_type, project=None,
         message=message,
         notification_type=notification_type,
         project_id=project.id if project else None,
-        triggered_by_id=triggered_by.id if triggered_by else None
+        triggered_by_id=triggered_by.id if triggered_by else None,
+        link=link
     )
     db.session.add(notification)
     db.session.commit()
@@ -834,7 +835,8 @@ def notify_all_of_new_blog_post(post, triggered_by, send_inapp=True, send_email=
                 recipient_id=user.id,
                 message=message,
                 notification_type='system_update',
-                triggered_by_id=triggered_by.id
+                triggered_by_id=triggered_by.id,
+                link=f'/blog#post-{post.id}'
             )
             db.session.add(notif)
 
