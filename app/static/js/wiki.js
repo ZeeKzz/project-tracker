@@ -327,6 +327,7 @@
 
     document.querySelectorAll('.wiki-add-block-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
+            syncBlocks();  // ← add this line
             blocks.push({ _id: uid(), type: this.dataset.blockType, content: '', items: [] });
             renderBlocks();
             blockList.lastElementChild && blockList.lastElementChild.scrollIntoView({ behavior: 'smooth' });
