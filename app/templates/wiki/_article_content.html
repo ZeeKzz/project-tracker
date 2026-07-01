@@ -33,7 +33,7 @@ https://player.vimeo.com/video/{{ url.split('vimeo.com/')[1].split('?')[0] }}
 
 {% elif block.type == 'list' %}
 <ul class="wiki-block-list">
-    {% for item in block.items %}
+    {% for item in block['items'] %}
     <li>{{ item }}</li>
     {% endfor %}
 </ul>
