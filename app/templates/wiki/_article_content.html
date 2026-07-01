@@ -1,0 +1,55 @@
+{# AJAX partial — no layout wrapper #}
+{% macro embed_url(url) %}
+{%- if 'youtube.com/watch?v=' in url -%}
+https://www.youtube.com/embed/{{ url.split('v=')[1].split('&')[0] }}
+{%- elif 'youtu.be/' in url -%}
+https://www.youtube.com/embed/{{ url.split('youtu.be/')[1].split('?')[0] }}
+{%- elif 'vimeo.com/' in url and 'player' not in url -%}
+https://player.vimeo.com/video/{{ url.split('vimeo.com/')[1].split('?')[0] }}
+{%- else -%}{{ url }}{%- endif -%}
+{% endmacro %}
+
+<div class="wiki-article-header">
+    <h1>{{ article.title }}</h1>
+    <p class="wiki-article-meta">Last updated {{ article.updated_at.strftime('%d %b %Y') }}</p>
+</div>
+
+{% for block in blocks %}
+
+{% if block.type == 'body' %}
+<p class="wiki-block-body">{{ block.content }}</p>
+
+{% elif block.type == 'richtext' %}
+<div class="wiki-block-richtext ql-editor">{{ block.content | safe }}</div>
+
+{% elif block.type == 'h3' %}
+<h3 class="wiki-block-h3">{{ block.content }}</h3>
+
+{% elif block.type == 'callout' %}
+<div class="wiki-block-callout">{{ block.content }}</div>
+
+{% elif block.type == 'callout-pine' %}
+<div class="wiki-block-callout wiki-block-callout--pine">{{ block.content }}</div>
+
+{% elif block.type == 'list' %}
+<ul class="wiki-block-list">
+    {% for item in block.items %}
+    <li>{{ item }}</li>
+    {% endfor %}
+</ul>
+
+{% elif block.type == 'image' %}
+<figure class="wiki-block-image">
+    <img src="{{ block.url }}" alt="{{ block.caption or '' }}">
+    {% if block.caption %}<figcaption>{{ block.caption }}</figcaption>{% endif %}
+</figure>
+
+{% elif block.type == 'video' %}
+<div class="wiki-block-video">
+    <iframe src="{{ embed_url(block.content) }}" frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen></iframe>
+</div>
+{% endif %}
+
+{% endfor %}

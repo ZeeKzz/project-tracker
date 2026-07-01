@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ 'Edit Article' if article else 'New Article' }}</h1>
+    <div style="display:flex;gap:0.5rem;">
+        {% if article %}
+        <button id="wiki-publish-btn" class="btn-secondary" data-article-id="{{ article.id }}">
+            {{ 'Unpublish' if article.is_published else 'Publish' }}
+        </button>
+        <button id="wiki-delete-article-btn" data-article-id="{{ article.id }}"
+            style="background:var(--rose);color:white;border:none;padding:0.4rem 0.8rem;border-radius:4px;cursor:pointer;">
+            Delete Article
+        </button>
+        {% endif %}
+        <a href="{{ url_for('wiki.editor_dashboard') }}" class="btn-secondary">← Back</a>
+    </div>
+</div>
+
+<form id="wiki-article-form" method="POST" action="{{ url_for('wiki.save_article') }}">
+    {% if article %}
+    <input type="hidden" name="article_id" value="{{ article.id }}">
+    {% endif %}
+    <input type="hidden" name="section_id" value="{{ section.id if section else article.section_id }}">
+
+    <!-- ── Article meta ─── -->
+    <div class="form-card" style="margin-bottom:1rem;">
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" name="title" id="wiki-title" value="{{ article.title if article else '' }}" required>
+        </div>
+        <div class="form-group">
+            <label>Slug <span class="form-hint">(auto-generated)</span></label>
+            <input type="text" name="slug" id="wiki-slug" value="{{ article.slug if article else '' }}">
+        </div>
+        <div class="form-group">
+            <label>Sort Order</label>
+            <input type="number" name="sort_order" value="{{ article.sort_order if article else 0 }}"
+                style="width:100px;">
+        </div>
+    </div>
+
+    <!-- ── Hidden JSON — populated safely via script below ── -->
+    <input type="hidden" id="wiki-sections-json" name="sections_json" value="">
+    <script>
+        (function () {
+            var data = {{ (article.sections_json if article else '[]') | tojson
+        }};
+        document.getElementById('wiki-sections-json').value = data;
+  }());
+    </script>
+
+    <!-- ── Block list ─── -->
+    <div id="wiki-block-list"></div>
+
+    <!-- ── Add block toolbar ─── -->
+    <div class="wiki-add-block-toolbar">
+        <span class="wiki-add-block-label">Add block:</span>
+        {% for btype, blabel in [
+        ('body', 'Paragraph'),
+        ('richtext', 'Rich Text'),
+        ('h3', 'Heading'),
+        ('callout', 'Callout'),
+        ('callout-pine', 'Callout (Green)'),
+        ('list', 'List'),
+        ('image', 'Image'),
+        ('video', 'Video')
+        ] %}
+        <button type="button" class="btn-secondary btn-sm wiki-add-block-btn" data-block-type="{{ btype }}">+ {{ blabel
+            }}</button>
+        {% endfor %}
+    </div>
+
+    <div style="margin-top:1.5rem;">
+        <button type="submit" class="btn-primary">Save Article</button>
+    </div>
+</form>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
+<script src="{{ url_for('static', filename='js/wiki.js') }}"></script>
+{% endblock %}

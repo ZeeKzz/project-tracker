@@ -1534,24 +1534,34 @@
             by {{ active_submission.submitted_by.name if active_submission.submitted_by else '—' }}
             {% if project.revision_count > 0 %} — Revision #{{ project.revision_count }}{% endif %}
         </div>
-        {# Deliverable approval picker #}
-        {% if active_submission.included_deliverables %}
+        {# Deliverable approval picker — shows ALL project deliverables, not just those in this submission #}
+        {% if project.project_deliverables %}
         <div style="margin-top:0.75rem;">
-            <p class="detail-label" style="margin-bottom:0.4rem;">Deliverables in this submission:</p>
+            <p class="detail-label" style="margin-bottom:0.4rem;">Deliverables:</p>
             <div style="display:flex;flex-direction:column;gap:0.3rem;">
-                {% for link in active_submission.included_deliverables %}{% if link.deliverable %}
+                {% for deliverable in project.project_deliverables %}
+                {% if deliverable.status == 'approved' %}
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:default;">
+                    <input type="checkbox" class="std-deliverable-approve-cb"
+                        data-deliverable-id="{{ deliverable.id }}" checked disabled>
+                    <span style="text-decoration:line-through;color:var(--pine);">{{ deliverable.name }}</span>
+                    <span class="customer-approved-badge" style="margin-left:0.25rem;">✓</span>
+                </label>
+                {% elif deliverable.status == 'submitted_to_client' %}
                 <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:pointer;">
                     <input type="checkbox" class="std-deliverable-approve-cb"
-                        data-deliverable-id="{{ link.deliverable.id }}"
-                        {% if link.deliverable.status != 'approved' %}checked{% else %}checked disabled{% endif %}>
-                    <span {% if link.deliverable.status == 'approved' %}style="text-decoration:line-through;color:var(--pine);"{% endif %}>
-                        {{ link.deliverable.name }}
-                    </span>
-                    {% if link.deliverable.status == 'approved' %}
-                    <span class="customer-approved-badge" style="margin-left:0.25rem;">✓</span>
-                    {% endif %}
+                        data-deliverable-id="{{ deliverable.id }}" checked>
+                    <span>{{ deliverable.name }}</span>
                 </label>
-                {% endif %}{% endfor %}
+                {% else %}
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:default;">
+                    <input type="checkbox" class="std-deliverable-approve-cb"
+                        data-deliverable-id="{{ deliverable.id }}" disabled>
+                    <span style="color:var(--text-muted);">{{ deliverable.name }}</span>
+                    <span style="font-size:0.75rem;color:var(--text-muted);margin-left:0.25rem;">{{ deliverable.status | replace('_', ' ') | title }}</span>
+                </label>
+                {% endif %}
+                {% endfor %}
             </div>
         </div>
         {% endif %}
@@ -1643,6 +1653,41 @@
         {% else %}
         <p style="margin-top: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">Waiting for the designer to
             acknowledge and start the revision.</p>
+        {% endif %}
+        {# CS/Admin: approve deliverables that weren't sent back for revision #}
+        {% if effective_user.role in ['admin', 'cs'] %}
+        {% set approvable = project.project_deliverables | selectattr('status', 'equalto', 'submitted_to_client') | list %}
+        {% if approvable %}
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--sandstone);">
+            <p class="detail-label" style="margin-bottom: 0.4rem;">Deliverables available to approve:</p>
+            <div style="display:flex;flex-direction:column;gap:0.3rem;margin-bottom:0.75rem;">
+                {% for deliverable in project.project_deliverables %}
+                {% if deliverable.status == 'approved' %}
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:default;">
+                    <input type="checkbox" class="std-deliverable-approve-cb"
+                        data-deliverable-id="{{ deliverable.id }}" checked disabled>
+                    <span style="text-decoration:line-through;color:var(--pine);">{{ deliverable.name }}</span>
+                    <span class="customer-approved-badge" style="margin-left:0.25rem;">✓</span>
+                </label>
+                {% elif deliverable.status == 'submitted_to_client' %}
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:pointer;">
+                    <input type="checkbox" class="std-deliverable-approve-cb"
+                        data-deliverable-id="{{ deliverable.id }}" checked>
+                    <span>{{ deliverable.name }}</span>
+                </label>
+                {% elif deliverable.status == 'revision_in_queue' %}
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;cursor:default;">
+                    <input type="checkbox" class="std-deliverable-approve-cb"
+                        data-deliverable-id="{{ deliverable.id }}" disabled>
+                    <span style="color:var(--text-muted);">{{ deliverable.name }}</span>
+                    <span style="font-size:0.75rem;color:var(--rose);margin-left:0.25rem;">↩ Revision</span>
+                </label>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <button type="button" class="btn-secondary btn-sm" id="approveSelectedBtn" data-project-id="{{ project.id }}">✓ Approve Selected</button>
+        </div>
+        {% endif %}
         {% endif %}
 
         {# ── State 7: Revision in Progress — designer uploads new deck ── #}

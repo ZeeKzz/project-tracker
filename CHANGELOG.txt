@@ -4,7 +4,7 @@ VITAMIN HELIX — CHANGELOG
 Migrations: python add_notification_link.py
 
 ================================================================================
-v2.0 NAS Integration, Internal Routing, Das & More
+v2.0 NAS Integration, Internal Routing, Security update
 ================================================================================
 
 New Features:

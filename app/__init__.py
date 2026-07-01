@@ -35,6 +35,7 @@ def create_app():
     from app.routes.admin import admin_bp
     from app.routes.blog import blog_bp
     from app.routes.feedback import feedback_bp
+    from app.routes.wiki import wiki_bp
 
     app.register_blueprint(notifications_bp)
     app.register_blueprint(main)
@@ -46,6 +47,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(blog_bp)
     app.register_blueprint(feedback_bp)
+    app.register_blueprint(wiki_bp)
 
     from app.utils import calculate_project_hours
     
