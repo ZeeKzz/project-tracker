@@ -429,14 +429,17 @@ def upload_submission(project_id):
         if project.kv_status in ('revision_in_queue', 'revision_in_progress', 'internal_revision'):
             project.kv_status = 'in_progress'
     
-    # Upload to NAS now that we have the final canonical filename
-    from app.nas import upload_app_file, build_file_path
-    _nas_path = build_file_path(project, 'Submissions', submission.original_filename)
-    _nas_folder = _nas_path.rsplit('/', 1)[0]
-    upload_app_file(file_bytes, _nas_folder, submission.original_filename)
+    # Commit immediately — never block the HTTP response on a NAS upload
     submission.filename = submission.original_filename
-
     db.session.commit()
+
+    # Upload to NAS in background thread
+    from app.nas import upload_app_file, build_file_path, _run_in_background
+    _bg_folder   = build_file_path(project, 'Submissions', submission.original_filename).rsplit('/', 1)[0]
+    _bg_bytes    = file_bytes
+    _bg_filename = submission.original_filename
+    _bg_app      = current_app._get_current_object()
+    _run_in_background(_bg_app, lambda: upload_app_file(_bg_bytes, _bg_folder, _bg_filename))
 
     log_activity('submission_uploaded',
                  f'Client deck "{file.filename}" uploaded for "{project.name}" by {current_user.name}',
@@ -738,26 +741,13 @@ def submit_to_client(project_id):
 
         db.session.commit()
 
-        # Upload to NAS now the file is permanent
-        import os as _os
-        _local = _os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
-        from app.nas import upload_app_file, build_file_path
-        _nas_folder = build_file_path(project, 'Submissions', submission.original_filename).rsplit('/', 1)[0]
-        if _os.path.exists(_local):
-            upload_app_file(open(_local, 'rb').read(), _nas_folder, submission.original_filename)
-        else:
-            current_app.logger.warning(f'Local file missing for submission {submission.id} — skipping NAS upload')
-
+        # File is already on NAS from initial upload — nothing to do here
         log_activity('submitted_to_client',
                      f'C&KV for "{project.name}" submitted to client by {current_user.name}',
                      user=current_user, entity_type='project',
                      entity_name=project.name, entity_id=project.id)
         notify_of_submission_to_client(project, triggered_by=current_user)
         client_email = project.client_brand.contact_email if project.client_brand else None
-
-        # Delete local file after everything else succeeds
-        if _os.path.exists(_local):
-            _os.remove(_local)
 
         return jsonify({'success': True, 'client_email': client_email or '', 'project_name': project.name})
 
@@ -814,16 +804,7 @@ def submit_to_client(project_id):
 
     db.session.commit()
 
-    # Upload to NAS now the file is permanent
-    import os as _os
-    _local = _os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
-    from app.nas import upload_app_file, build_file_path
-    _nas_folder = build_file_path(project, 'Submissions', submission.original_filename).rsplit('/', 1)[0]
-    if _os.path.exists(_local):
-        upload_app_file(open(_local, 'rb').read(), _nas_folder, submission.original_filename)
-    else:
-        current_app.logger.warning(f'Local file missing for submission {submission.id} — skipping NAS upload')
-
+    # File is already on NAS from initial upload — nothing to do here
     log_activity('submitted_to_client',
                  f'"{project.name}" submitted to client by {current_user.name}',
                  user=current_user, entity_type='project',
@@ -834,10 +815,6 @@ def submit_to_client(project_id):
 
     # Return the client's email (dormant — will be populated once v1.1 adds client email UI)
     client_email = project.client_brand.contact_email if project.client_brand else None
-
-    # Delete local file after everything else succeeds
-    if _os.path.exists(_local):
-        _os.remove(_local)
 
     return jsonify({
         'success': True,
@@ -857,22 +834,15 @@ def download_submission(submission_id):
     submission = ProjectSubmission.query.get_or_404(submission_id)
     project    = Project.query.get(submission.project_id)
 
-    if submission.submitted_to_client_at:
-        # File has been submitted — it lives on the NAS
-        from app.nas import download_app_file, build_file_path
-        nas_path   = build_file_path(project, 'Submissions', submission.original_filename)
-        file_bytes = download_app_file(nas_path)
-        return send_file(
-            io.BytesIO(file_bytes),
-            as_attachment=True,
-            download_name=submission.original_filename
-        )
-    else:
-        # Still a draft — serve from local disk
-        file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], submission.filename)
-        if not os.path.exists(file_path):
-            abort(404)
-        return send_file(file_path, as_attachment=True, download_name=submission.original_filename)
+    # All files live on NAS — upload route never saves to local disk
+    from app.nas import download_app_file, build_file_path
+    nas_path   = build_file_path(project, 'Submissions', submission.original_filename)
+    file_bytes = download_app_file(nas_path)
+    return send_file(
+        io.BytesIO(file_bytes),
+        as_attachment=True,
+        download_name=submission.original_filename
+    )
 
 
 @submission_bp.route('/projects/<int:project_id>/submission/send-revision', methods=['POST'])

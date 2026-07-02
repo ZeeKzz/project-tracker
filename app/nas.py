@@ -311,10 +311,11 @@ def download_app_file(nas_file_path):
                 'version': '2',
                 'method':  'download',
                 'path':    nas_file_path,
-                'mode':    'download',
+                'mode':    'open',
                 '_sid':    sid,
             },
-            timeout=30,
+            cookies={'id': sid},
+            timeout=60,
         )
         # If something went wrong, NAS returns JSON instead of file bytes
         if 'application/json' in resp.headers.get('Content-Type', ''):
