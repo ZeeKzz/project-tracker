@@ -509,11 +509,14 @@
             ptAddClientForm.classList.toggle('hidden');
         });
     }
-    document.getElementById('pt-add-client-cancel').addEventListener('click', function () {
-        ptAddClientForm.classList.add('hidden');
-        document.getElementById('pt-new-client-name').value = '';
-    });
-    ptAddClientForm.addEventListener('submit', function (e) {
+    var ptAddClientCancel = document.getElementById('pt-add-client-cancel');
+    if (ptAddClientCancel) {
+        ptAddClientCancel.addEventListener('click', function () {
+            ptAddClientForm.classList.add('hidden');
+            document.getElementById('pt-new-client-name').value = '';
+        });
+    }
+    if (ptAddClientForm) ptAddClientForm.addEventListener('submit', function (e) {
         e.preventDefault();
         var name = document.getElementById('pt-new-client-name').value.trim();
         if (!name) return;
