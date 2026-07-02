@@ -12,7 +12,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
-    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB limit for file uploads
+    MAX_CONTENT_LENGTH = 900 * 1024 * 1024  # 900 MB file upload limit
 
     # Session persistence — stay logged in for 30 days unless password changes
     REMEMBER_COOKIE_DURATION = timedelta(days=30)
