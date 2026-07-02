@@ -340,9 +340,11 @@ def upload_submission(project_id):
         ]
         # Only delete the physical file if this deck was never approved and sent to the client.
         # Approved decks are kept permanently for invoice / audit history.
-        from app.nas import delete_app_file, build_file_path
-        _old_nas = build_file_path(project, 'Submissions', previous.original_filename)
-        delete_app_file(_old_nas)
+        from app.nas import delete_app_file, build_file_path, _run_in_background
+        _old_nas  = build_file_path(project, 'Submissions', previous.original_filename)
+        _del_app  = current_app._get_current_object()
+        _del_path = _old_nas
+        _run_in_background(_del_app, lambda: delete_app_file(_del_path))
         previous.is_active = False
 
     # Set temporary file name
