@@ -773,10 +773,23 @@
         rows.forEach((row) => {
             const match = !needle || (row.dataset.search || '').includes(needle);
             row.hidden = !match;
+
+            // Each project owns two grid rows: its own (--row-num) and the
+            // reserved slot below for its expand panel. Step by 2 so a
+            // renumbered row never lands on the prior project's panel slot.
+            const panel = row.nextElementSibling;
+            const hasPanel = panel && panel.classList.contains('project-expand-container');
+
             if (match) {
                 row.style.setProperty('--row-num', n);
-                n += 1;
+                if (hasPanel) panel.style.gridRow = n + 1;
+                n += 2;
                 visible += 1;
+            } else if (hasPanel) {
+                // Filtered out — collapse its panel so it can't linger open.
+                panel.hidden = true;
+                const toggle = row.querySelector('.project-expand-toggle');
+                if (toggle) toggle.setAttribute('aria-expanded', 'false');
             }
         });
         return visible;

@@ -2,14 +2,13 @@
 VITAMIN HELIX — CHANGELOG
 ===============================================================================
 
-================================================================================
-v2.4.3 - Dark Mode, Digital Innovation & Client Servicing
-================================================================================
+=======================================================================================
+v2.4.1, v2.4.2, v2.4.3 - Dark Mode, Digital Innovation, Profile Pics & JS/CSS Refactor
+=======================================================================================
 New Features:
 
 - Dark mode added to OVP! Toggle in settings or on the top header bar.
 - Added the Digital Innovation section. Keep track of what's happening in OVP!.
-- Client Servicing Module is LIVE! Use this going forward, instead of the Excel!
 
 Adjustments:
 
@@ -26,9 +25,10 @@ Bug Fixes:
 
 - Fixed deliverables page loading extremely slowly.
 - Fixed page hangs when navigating quickly
+- Fixed project table deliverables/customers not rendering correctly.
 
 ================================================================================
-v2.4 - Escalations & Projects Revamp
+v2.4 - Escalations & Projects Revamp & Full SSE Live updates
 ================================================================================
 New Features:
 
@@ -37,6 +37,7 @@ New Features:
 - Implemented daily backups of the database
 - Projects has been revamped completely to be more focused and better UI/UX
 - Added global themes to the platform, ensuring visual consistency across the platform
+- Full SEE Live updates are in place across the platform!
 
 Adjustments:
 
@@ -84,7 +85,7 @@ Bug Fixes:
 
 
 ================================================================================
-v2.2 - Dashboard, File Template Directory & Lots of QoL updates
+v2.2 - File Template Directory & Lots of QoL updates
 ================================================================================
 New Features:
 
