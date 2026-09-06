@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Client Servicing — Dashboard{% endblock %}
+
+{% block content %}
+<div class="cs-page">
+  <div class="cs-shell">
+    {% with active_nav = 'dashboard' %}
+    {% include "client_servicing/_sidebar.html" %}
+    {% endwith %}
+    <main class="cs-main">
+      {# .cs-dash is the live-refresh marker polling.js looks for; #cs-dash-panels
+         is what the SSE refresh swaps (client_servicing_dashboard.js). #}
+      <div class="cs-dash">
+        <div id="cs-dash-panels">
+          {% include "client_servicing/_dashboard_panels.html" %}
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_nav.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_dashboard.js') }}?v={{ config.STATIC_VERSION }}"></script>
+{% endblock %}

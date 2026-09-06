@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Client Servicing{% endblock %}
+
+{% block content %}
+{# The module's own internal sidebar shell (Table / Invoicing / Calendar) —
+   see _sidebar.html. .cs-page/.cs-shell/.cs-sidebar/.cs-main are the shell;
+   the table under .cs-main keeps its own sticky-header/height-sync JS
+   (client_servicing.js) — see client_servicing.css. #}
+<div class="cs-page">
+    <div class="cs-shell">
+        {% with active_nav = 'table' %}
+        {% include "client_servicing/_sidebar.html" %}
+        {% endwith %}
+        <main class="cs-main">
+            <div class="client-servicing-page">
+                {# Search + filter toolbar — all client-side over the loaded
+                   rows (client_servicing.js). It sits outside
+                   #client-servicing-table-body so it survives the SSE row-swap;
+                   the filter chips are injected by JS from the rows themselves,
+                   so the options always match what's in the table. #}
+                <div class="cs-toolbar">
+                    <div class="cs-search">
+                        <span class="cs-search-icon" aria-hidden="true">🔍</span>
+                        <input type="text" id="cs-search" class="cs-search-input"
+                               placeholder="Search client, project, job no…" autocomplete="off">
+                        <button type="button" id="cs-search-clear" class="cs-search-clear"
+                                aria-label="Clear search" hidden>&times;</button>
+                    </div>
+                    <div class="cs-filter">
+                        <button type="button" id="cs-filter-toggle" class="cs-filter-toggle">Filter</button>
+                        <div id="cs-filter-panel" class="cs-filter-panel" hidden>
+                            <div class="cs-filter-head">
+                                <span class="cs-filter-count" id="cs-filter-count">Showing all</span>
+                                <button type="button" id="cs-filter-clear" class="cs-filter-clear">Clear all</button>
+                            </div>
+                            {# Chip columns injected by client_servicing.js. #}
+                            <div class="cs-filter-columns" id="cs-filter-columns"></div>
+                        </div>
+                    </div>
+                </div>
+                {# .cs-table-scroll is height-capped and scrolls internally on
+                   both axes — see client_servicing.css. #}
+                <div class="cs-table-scroll" id="cs-table-scroll">
+                    <div id="client-servicing-table-body">
+                        {% include 'client_servicing/_table_rows.html' %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.__csScopeOptions = {{ scope_options | tojson }};
+    window.__csStatusOptions = {{ status_options | tojson }};
+    window.__csLeadOptions = {{ cs_lead_options | tojson }};
+    window.__csProjectOwnerOptions = {{ project_owner_options | tojson }};
+    window.__csContactsByClient = {{ contacts_by_client | tojson }};
+</script>
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_nav.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing.js') }}?v={{ config.STATIC_VERSION }}"></script>
+{% endblock %}

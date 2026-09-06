@@ -57,7 +57,8 @@ def test_year_summary_buckets_and_sums(db_session):
     assert march['pipeline'] == 180        # 100 + 50 + 30
     assert march['confirmed'] == 150       # 100 + 50 (both have LPO)
     assert march['invoiced'] == 90         # only A invoiced
-    assert march['stuck'] == 1             # C has no LPO
+    assert march['stuck'] == 1              # C has no LPO
+    assert march['stuck_amount'] == 30       # C: no LPO, value 30             
     assert march['progress'] == 60         # 90 / 150
 
     may = rows[4]
@@ -65,6 +66,7 @@ def test_year_summary_buckets_and_sums(db_session):
 
     assert total['pipeline'] == 380        # 180 + 200 (D and draft excluded)
     assert total['invoiced'] == 290
+    assert total['stuck_amount'] == 30
 
 
 def test_empty_month_is_zero(db_session):
@@ -72,7 +74,7 @@ def test_empty_month_is_zero(db_session):
     rows, _ = summary_lib.year_summary(2026)
     jan = rows[0]
     assert jan['pipeline'] == 0 and jan['confirmed'] == 0 and jan['stuck'] == 0
-    assert jan['progress'] == 0
+    assert jan['stuck_amount'] == 0
 
 
 def test_due_this_month_only_uninvoiced(db_session):

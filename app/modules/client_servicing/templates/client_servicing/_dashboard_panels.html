@@ -1,0 +1,167 @@
+{# Dashboard panels — included by dashboard.html and re-rendered on its own by
+   the dashboard-panels fragment route (SSE live refresh). Self-contained (its
+   own macros) so it renders standalone. Everything here is recomputed from
+   dashboard_context on each refresh. #}
+{% set FAMILY_MOD = {
+    'In Design': 'coral', 'Pending Approval': 'sage', 'Pre-Production': 'oak',
+    'In Production': 'clover', 'Post-Install': 'lavender', 'Invoicing': 'canary',
+    'On Hold': 'poppy'
+} %}
+{% set LINK_LABEL = {
+    'install_risk': 'Calendar →', 'data_gap': 'Open →',
+    'lpo_outstanding': 'Invoicing →', 'invoice_overdue': 'Invoicing →', 'invoice_due': 'Invoicing →'
+} %}
+{% macro money(v) %}{% set n = v|float %}{% if n >= 1000000 %}{{ '%.2f'|format(n/1000000) }}M{% elif n >= 1000 %}{{ '%.0f'|format(n/1000) }}K{% else %}{{ '%.0f'|format(n) }}{% endif %}{% endmacro %}
+
+{# ── header ── #}
+<header class="cs-dash-head">
+  <h1 class="cs-dash-title">Dashboard</h1>
+  <span class="cs-dash-live"><span class="cs-dash-live-dot"></span>Live · {{ today.strftime('%a') }} {{ today.day }} {{ today.strftime('%b') }}</span>
+</header>
+
+{# ── KPI band ── #}
+<section class="cs-dash-kpis{% if show_finance %} cs-dash-kpis--finance{% endif %}">
+  <div class="cs-dash-kpi">
+    <div class="cs-dash-kpi-label">Active Projects</div>
+    <div class="cs-dash-kpi-value">{{ kpis.active }}</div>
+  </div>
+  <div class="cs-dash-kpi">
+    <div class="cs-dash-kpi-label">Installs · {{ today.strftime('%b') }}</div>
+    <div class="cs-dash-kpi-value">{{ kpis.installs_month }}</div>
+  </div>
+  <div class="cs-dash-kpi cs-dash-kpi--warn">
+    <div class="cs-dash-kpi-label">Next 7 Days</div>
+    <div class="cs-dash-kpi-value">{{ kpis.next7 }}</div>
+  </div>
+  <div class="cs-dash-kpi cs-dash-kpi--risk">
+    <div class="cs-dash-kpi-label">At Risk</div>
+    <div class="cs-dash-kpi-value">{{ kpis.at_risk }}</div>
+  </div>
+  {% if show_finance %}
+  <div class="cs-dash-kpi">
+    <div class="cs-dash-kpi-label">Pipeline · {{ today.strftime('%b') }}</div>
+    <div class="cs-dash-kpi-value">{{ money(kpis.pipeline) }}<span class="cs-dash-kpi-unit">AED</span></div>
+  </div>
+  <div class="cs-dash-kpi cs-dash-kpi--warn">
+    <div class="cs-dash-kpi-label">Stuck · No LPO</div>
+    <div class="cs-dash-kpi-value">{{ kpis.stuck }}</div>
+  </div>
+  {% endif %}
+</section>
+
+{# ── main grid ── #}
+<section class="cs-dash-grid">
+
+  {# Urgent Actions — scrolls internally #}
+  <div class="card cs-dash-panel cs-dash-urgent">
+    <div class="cs-dash-panel-head">
+      <span class="cs-dash-panel-title">Urgent Actions</span>
+      {% if urgent_actions %}<span class="cs-dash-badge">{{ urgent_actions|length }}</span>{% endif %}
+      <span class="cs-dash-panel-note">needs you today</span>
+    </div>
+    <div class="cs-dash-panel-body">
+      {% for it in urgent_actions %}
+      <a class="cs-dash-row cs-sig--{{ it.urgency }}" href="{{ it.link }}">
+        <span class="cs-dash-row-dot"></span>
+        <span class="cs-dash-row-main">
+          <span class="cs-dash-row-title">{{ it.title }}</span>
+          <span class="cs-dash-row-detail">{{ it.detail }}</span>
+        </span>
+        <span class="cs-dash-row-link">{{ LINK_LABEL.get(it.kind, 'Open →') }}</span>
+      </a>
+      {% else %}
+      <div class="cs-dash-empty">All clear — nothing urgent right now.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# right column #}
+  <div class="cs-dash-col">
+
+    {# Status Spread #}
+    <div class="card cs-dash-static">
+      <div class="cs-dash-panel-head">
+        <span class="cs-dash-panel-title">Status Spread</span>
+        <span class="cs-dash-panel-note">{{ status_spread.total }} active</span>
+      </div>
+      <div class="cs-dash-bar">
+        {% for f in status_spread.families if f.count %}
+        <span class="cs-dash-seg cs-fam--{{ FAMILY_MOD[f.name] }}" style="flex: {{ f.count }}"></span>
+        {% endfor %}
+      </div>
+      <div class="cs-dash-legend">
+        {% for f in status_spread.families %}
+        <span class="cs-dash-legend-item">
+          <span class="cs-dash-swatch cs-fam--{{ FAMILY_MOD[f.name] }}"></span>{{ f.name }}<span class="cs-dash-legend-count">{{ f.count }}</span>
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Upcoming Installs — scrolls internally #}
+    <div class="card cs-dash-panel cs-dash-upcoming">
+      <div class="cs-dash-panel-head">
+        <span class="cs-dash-panel-title">Upcoming Installs</span>
+        <a class="cs-dash-link" href="{{ url_for('client_servicing.calendar') }}">Calendar →</a>
+      </div>
+      <div class="cs-dash-panel-body">
+        {% for it in upcoming %}
+        {% set delta = (it.install_date - today).days %}
+        <div class="cs-dash-install">
+          <span class="cs-dash-dot cs-dash-dot--{{ it.risk_class }}"></span>
+          <span class="cs-dash-install-day">{% if delta == 0 %}TODAY{% elif delta == 1 %}TMRW{% else %}{{ it.install_date.strftime('%a')|upper }} {{ it.install_date.day }}{% endif %}</span>
+          <span class="cs-dash-install-name">{{ it.client }}{% if it.name and it.name != it.client %} — {{ it.name }}{% endif %}</span>
+        </div>
+        {% else %}
+        <div class="cs-dash-empty">No upcoming installs.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</section>
+
+{# ── bottom row ── #}
+<section class="cs-dash-bottom{% if not show_finance %} cs-dash-bottom--solo{% endif %}">
+
+  {% if show_finance %}
+  <div class="card cs-dash-static">
+    <div class="cs-dash-panel-head">
+      <span class="cs-dash-panel-title">Invoicing Health · {{ today.strftime('%b') }}</span>
+      <a class="cs-dash-link" href="{{ url_for('client_servicing.invoicing_summary') }}">Invoicing →</a>
+    </div>
+    <div class="cs-dash-figures">
+      <div><div class="cs-dash-fig-label">Pipeline</div><div class="cs-dash-fig">AED {{ money(invoicing_health.pipeline) }}</div></div>
+      <div><div class="cs-dash-fig-label">Confirmed</div><div class="cs-dash-fig">AED {{ money(invoicing_health.confirmed) }}</div></div>
+      <div><div class="cs-dash-fig-label">Invoiced</div><div class="cs-dash-fig cs-dash-fig--good">AED {{ money(invoicing_health.invoiced) }}</div></div>
+    </div>
+    <div class="cs-dash-progress-wrap">
+      <div class="cs-dash-progress-head"><span>Invoiced of confirmed</span><span>{{ invoicing_health.progress }}%</span></div>
+      <div class="cs-dash-progress"><span style="width: {{ invoicing_health.progress }}%"></span></div>
+    </div>
+    {% if invoicing_health.stuck %}
+    <div class="cs-dash-stuck"><span class="cs-dash-stuck-icon">!</span>{{ invoicing_health.stuck }} stuck · AED {{ money(invoicing_health.stuck_amount) }} awaiting LPO / overdue</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="card cs-dash-static">
+    <div class="cs-dash-panel-head">
+      <span class="cs-dash-panel-title">CS Lead Workload</span>
+      <span class="cs-dash-panel-note">active · at&nbsp;risk</span>
+    </div>
+    {% set maxw = (workload|map(attribute='active')|max) if workload else 1 %}
+    <div class="cs-dash-workload">
+      {% for w in workload %}
+      <div class="cs-dash-wl">
+        <span class="cs-dash-wl-name">{{ w.name }}</span>
+        <span class="cs-dash-wl-bar"><span style="width: {{ (w.active / maxw * 100)|round(0, 'floor')|int }}%"></span></span>
+        <span class="cs-dash-wl-count">{{ w.active }} · <span class="{{ 'cs-dash-wl-risk' if w.at_risk else 'cs-dash-wl-zero' }}">{{ w.at_risk }}</span></span>
+      </div>
+      {% else %}
+      <div class="cs-dash-empty">No active CS leads.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+</section>

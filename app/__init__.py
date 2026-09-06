@@ -7,34 +7,10 @@ from app.modules.core.shared.extensions import db, login_manager, mail
 
 
 def _compute_static_version():
-    """Cache-busting stamp for STATIC_VERSION — see the long comment in
-    create_app() for the git-hash and time.time() history. This is the
-    24 Aug 2026 fix for the bug those two attempts left in place: gunicorn
-    runs multiple worker processes in production, and time.time() at
-    process startup gives EACH worker its own value a few seconds apart
-    (whenever they happened to boot). polling.js's init() (fires on every
-    page load AND every SPA nav) compares the STATIC_VERSION baked into
-    the page against a fresh /api/version fetch, and reloads on any
-    mismatch — with requests round-robining across workers, the page-
-    render worker and the /api/version-answering worker frequently
-    disagreed, so real users saw a "refresh loop" and everything felt
-    slow (constant full-page reloads instead of the app's normal SPA
-    partial-swap nav). Never showed up locally because `python run.py` is
-    a single process — nothing for it to disagree with.
-
-    Fix: derive the stamp from the source tree's own newest file mtime
-    instead of wall-clock time at process start. Every worker reads the
-    same files off the same disk, so they always compute the identical
-    value — no more cross-worker mismatch — and it still changes on the
-    next deploy, since `git pull` rewrites the mtime of anything that
-    changed. No new env var or GEVENT_WORKER branch needed, so it doesn't
-    reintroduce either problem the two earlier attempts ran into.
-
-    Ported onto refactor/vsa 24 Aug 2026 alongside main — this branch's
-    own module restructuring (app.modules.core.shared.extensions etc.)
-    is untouched by this fix; only the STATIC_VERSION computation itself
-    changed.
-    """
+    """Cache-busting stamp for STATIC_VERSION: the newest source-file mtime.
+    Mtime (not wall-clock) so all gunicorn workers compute the same value —
+    otherwise polling.js's version check misreads the drift as a redeploy and
+    loops reloads. Changes on deploy, since git rewrites changed files' mtimes."""
     import time
     app_dir = os.path.dirname(os.path.abspath(__file__))
     newest = 0.0
@@ -66,61 +42,8 @@ def create_app(config=Config):
     from app.modules.core.shared.services.sse_relay import init_sse_relay
     init_sse_relay(app)  # no-op unless GEVENT_WORKER=1 — see sse_relay.py
 
-    # Cache-busting query string for every static <link>/<script> tag in
-    # base.html (?v={{ config.STATIC_VERSION }}). Originally the short git
-    # commit hash (computed once at process startup) everywhere, gated on
-    # whether it could be worth telling "real production" apart from local
-    # dev — but that gate was tried with GEVENT_WORKER=1 as the signal (the
-    # same flag run.py uses for real prod's gevent monkey-patching) and
-    # turned out to be unreliable: Ezekiel also sets GEVENT_WORKER=1 in his
-    # LOCAL shell, because run.py's gevent patching is what makes the SSE
-    # live-update relay (app/sse_relay.py) work at all, and he wants that
-    # locally too. So GEVENT_WORKER=1 does not uniquely mean "real
-    # production" — using it as the branch condition just silently kept
-    # local dev on the frozen-git-hash path anyway.
-    #
-    # The git hash was always the wrong signal for local dev regardless:
-    # CSS/JS get hand-edited and tested against a locally running server
-    # WITHOUT a commit for every change (that's the whole point of
-    # iterating locally). Since the hash only moves on a new commit,
-    # STATIC_VERSION stayed frozen at whatever commit HEAD was on for an
-    # entire editing session, so every static asset URL was byte-identical
-    # across dozens of edits — the browser's HTTP cache correctly, and
-    # indefinitely, kept serving old CSS/JS, surviving hard refreshes and
-    # even brand-new tabs, since the URL genuinely never changed. This is
-    # what can produce a "stylesheet has no effect after deploy" symptom —
-    # the served bytes and the file on disk are both correct the whole
-    # time, only the browser's cached copy of the frozen-URL
-    # response was stale. Confirmed via `git status`/`git rev-parse HEAD`
-    # directly: dashboard.css showed as modified/uncommitted while
-    # STATIC_VERSION matched HEAD exactly — then confirmed AGAIN after a
-    # first attempted fix (branching on GEVENT_WORKER) still showed the
-    # frozen hash, traced to Ezekiel's local GEVENT_WORKER=1 export.
-    #
-    # Fix (16 Jul 2026): always use the current timestamp at process
-    # startup, everywhere, no GEVENT_WORKER branch at all. Production
-    # deploys are always `git pull && systemctl restart` together anyway
-    # (see Infrastructure section below), so a restart-time timestamp
-    # changes exactly when a deploy happens there too — the git hash's
-    # only actual benefit was cosmetic traceability (eyeballing which
-    # commit a running instance's assets match), never something anything
-    # else in the app depends on, and it's not worth reintroducing a
-    # second env-var signal just to get it back. Still requires
-    # restarting the local Flask process to pick up new CSS/JS (there's
-    # no cheaper fix without moving to per-request computation, which
-    # would kill browser caching for stable assets too) — but a restart
-    # is something Ezekiel already does periodically, whereas a new git
-    # commit is not.
-    #
-    # Second fix (24 Aug 2026): time.time() at process startup turned out
-    # to have the SAME class of bug the git hash fix above was solving
-    # for — just triggered by multiple gunicorn workers instead of by
-    # git commits. See _compute_static_version() above for the full
-    # story; short version is every worker computed its own timestamp a
-    # few seconds apart, and polling.js's cross-worker version check
-    # treated that disagreement as "the app was redeployed," causing
-    # constant spurious full-page reloads in production only (local dev
-    # is a single process, so there was nothing to disagree with).
+    # Cache-buster for every static tag in base.html (?v=...). See
+    # _compute_static_version — mtime-based so all workers agree.
     app.config['STATIC_VERSION'] = _compute_static_version()
 
     login_manager.login_view = 'auth.login'
@@ -141,18 +64,18 @@ def create_app(config=Config):
     from app.modules.feedback.routes.feedback import feedback_bp
     from app.modules.wiki.routes.wiki import wiki_bp
     from app.modules.core.shared.routes.api import api_bp  # polling endpoints for live dashboard/detail updates
-    from app.modules.profile.routes.profile import profile_bp  # profile view/edit routes (split out of auth.py 3 Jul 2026)
+    from app.modules.profile.routes.profile import profile_bp  # profile view/edit routes
     from app.modules.achievements.routes.admin_achievements import admin_achievements_bp  # achievement system admin panel
     from app.modules.profile.routes.wizard import wizard_bp
     from app.modules.file_templates.routes.file_templates import file_templates_bp
-    from app.modules.core.shared.routes.sse import sse_bp  # Stage 4 of the SSE redesign — live push routes
+    from app.modules.core.shared.routes.sse import sse_bp  # SSE live push routes
     from app.modules.client_directory.routes.client_directory import client_directory_bp  # Client Directory — companies + contacts
-    from app.modules.dashboard.routes.dashboard import dashboard_bp  # role-based dashboard (backend only for now)
+    from app.modules.dashboard.routes.dashboard import dashboard_bp  # role-based dashboard
     from app.modules.time_tracking.routes.time_tracking import time_tracking_bp  # project/deliverable business-hours breakdown page
     from app.modules.projects.routes.transfer import transfer_bp  # C&CM deliverable transfer (move / duplicate to new customer)
     from app.modules.projects.routes.project_list import project_list_bp # Projects page list
     from app.modules.projects.routes.project_overlay import project_overlay_bp # Projects detail overlay
-    from app.modules.projects.routes.project_preproduction import project_preproduction_bp # Pre-Production phase backend (13 Aug 2026)
+    from app.modules.projects.routes.project_preproduction import project_preproduction_bp # Pre-Production phase backend
     from app.modules.projects.routes.project_notes import project_notes_bp  # Project Notes & Site Visits
     from app.modules.projects.blueprint import project_assets  # projects module static assets
     from app.modules.profile.blueprint import profile_assets
@@ -181,12 +104,13 @@ def create_app(config=Config):
     from app.modules.client_servicing.routes import edit as client_servicing_edit  # field-update endpoint
     from app.modules.client_servicing.routes import scopes_admin as client_servicing_scopes_admin  # CS Scopes CRUD + quick-add
     from app.modules.client_servicing.routes import layout as client_servicing_layout  # per-user column widths/order
-    from app.modules.client_servicing.routes import invoicing as client_servicing_invoicing  # Invoicing sidebar section (placeholder)
-    from app.modules.client_servicing.routes import calendar as client_servicing_calendar  # Calendar sidebar section (placeholder)
+    from app.modules.client_servicing.routes import dashboard as client_servicing_dashboard  # Dashboard landing (first rail entry)
+    from app.modules.client_servicing.routes import invoicing as client_servicing_invoicing  # Invoicing sidebar section 
+    from app.modules.client_servicing.routes import calendar as client_servicing_calendar  # Calendar sidebar section
     from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 
 
-    app.register_blueprint(core_bp)  # shared templates (later static) on the Jinja search path
+    app.register_blueprint(core_bp)  # shared templates + static
     app.register_blueprint(notifications_bp)
     app.register_blueprint(main)
     app.register_blueprint(auth)
@@ -248,18 +172,9 @@ def create_app(config=Config):
 
             unread_count = sum(1 for n in active_notifications if not n.is_read)
 
-            # Request Editing Access (26 Aug 2026, per Ezekiel) — attach
-            # the still-pending ProjectEditAccessRequest id to each
-            # matching notification, so base.html can render inline
-            # Approve/Deny buttons that POST straight to
-            # project_overlay.py's approve_edit_access()/deny_edit_access()
-            # without a template-side query. One extra query total (not
-            # per-notification): notification.project_id + .triggered_by_id
-            # (the requesting designer) uniquely key a pending request
-            # thanks to ProjectEditAccessRequest's own UNIQUE(project_id,
-            # user_id). None here just means it's already been decided
-            # (e.g. from the overlay, if that ever grows its own UI) —
-            # base.html skips the buttons in that case.
+            # Attach each pending edit-access request id to its notification
+            # so base.html can show inline Approve/Deny buttons. One query total,
+            # keyed by (project_id, requester); None means already decided.
             edit_access_notif_ids = [
                 n.id for n in active_notifications if n.notification_type == 'edit_access_requested'
             ]
@@ -273,10 +188,8 @@ def create_app(config=Config):
                     if n.notification_type == 'edit_access_requested':
                         n.edit_access_request_id = pending_by_key.get((n.project_id, n.triggered_by_id))
 
-            # Resolve this user's saved sound prefs (enabled/volume/chosen file)
-            # from the same notification_prefs JSON blob used on the account page.
-            # Every page needs this — not just /account — because the 30-second
-            # poll loop that actually plays the sound runs globally via base.html.
+            # Sound prefs from the notification_prefs JSON — needed on every
+            # page, since the global poll loop in base.html plays the sound.
             try:
                 prefs = json.loads(current_user.notification_prefs or '{}')
             except (ValueError, TypeError):
@@ -307,29 +220,10 @@ def create_app(config=Config):
         }
     
     def _active_badge_image(user):
-        """
-        Resolves the given user's active badge image filename, or None.
-        Cached on flask.g per request: a dashboard table can easily render
-        the same designer 10+ times across different rows, and without this
-        cache that would be 10+ identical UserDisplaySettings +
-        UserAchievement queries for the exact same answer. g is
-        request-scoped, so the cache never leaks between users or requests.
-
-        Registered below as a Jinja GLOBAL (app.jinja_env.globals), NOT a
-        @app.context_processor. That distinction matters and caused a real
-        bug: context processors only inject into the per-request render
-        context, which is visible to directly-rendered templates and to
-        {% include %}'d ones (context passes by default there) — but NOT to
-        templates pulled in via {% from '_macros.html' import user_avatar %},
-        since Jinja's import statement does not pass context unless every
-        single call site adds `with context`. The user_avatar()/
-        user_avatar_visual() macros in _macros.html are imported this way
-        in ~10 templates, so as a context processor this function was
-        UndefinedError-ing everywhere it was actually used. A true Jinja
-        global is compiled into every template's namespace unconditionally,
-        macros included, regardless of how they were imported — so this is
-        the fix, not just a workaround for one call site.
-        """
+        """The user's active badge image filename, or None. Cached on flask.g
+        per request (a table can render one designer many times). A Jinja global,
+        not a context processor — those don't reach macros imported without
+        `with context`, so user_avatar() couldn't see it."""
         from flask import g
         from app.modules.core.shared.models import UserDisplaySettings, UserAchievement
 
@@ -341,10 +235,8 @@ def create_app(config=Config):
             settings = UserDisplaySettings.query.filter_by(user_id=user.id).first()
             if settings and settings.active_badge_id:
                 ua = UserAchievement.query.get(settings.active_badge_id)
-                # Defensive: the achievement itself might not have an
-                # uploaded image yet (Phase 7 admin upload didn't exist
-                # when this was earned) — in that case there's nothing
-                # to overlay, same as the tile fallback trophy elsewhere.
+                # The achievement may have no uploaded image yet — nothing to
+                # overlay then, same as the fallback trophy elsewhere.
                 if ua and ua.achievement.badge_image:
                     badge_image = ua.achievement.badge_image
             g._active_badge_cache[user.id] = badge_image
@@ -354,17 +246,10 @@ def create_app(config=Config):
     app.jinja_env.globals['active_badge_image'] = _active_badge_image
 
     def _nas_deliverable_url(deliverable, project, project_customer=None, region_slug=None):
-        """
-        Returns the DSM 7 File Station deep-link URL for a deliverable's Design Files folder,
-        or None if NAS_WEB_URL is not configured.
-
-        Standard brief:  .../Design Files/{deliverable.name}
-        C&CM brief:      .../Design Files/{Region}/{Customer}/{deliverable.name}
-        Pass project_customer (ProjectCustomer ORM) + region_slug for C&CM deliverables.
-
-        Uses the same double-encoded launchParam format as get_nas_link() — & in folder
-        names survives Synology's internal sub-param parse that way.
-        """
+        """DSM 7 File Station deep-link to a deliverable's Design Files folder,
+        or None if NAS is unconfigured. Standard: .../Design Files/{name};
+        C&CM (pass project_customer + region_slug): .../{Region}/{Customer}/{name}.
+        launchParam is double-encoded so & in folder names survives Synology's parse."""
         from urllib.parse import quote
         from app.modules.core.shared.services.nas import REGION_DISPLAY
 
@@ -394,13 +279,9 @@ def create_app(config=Config):
     app.jinja_env.globals['nas_deliverable_url'] = _nas_deliverable_url
 
     def _nas_project_url(project):
-        """Returns the DSM 7 File Station deep-link URL for a project's root
-        folder, or None if NAS_WEB_URL is not configured. Same launchParam
-        double-encoding as _nas_deliverable_url()/get_nas_link() — kept as
-        its own function rather than calling _nas_deliverable_url with no
-        deliverable, since the two produce genuinely different paths (this
-        one has no 'Design Files/...' suffix at all).
-        """
+        """DSM 7 File Station deep-link to a project's root folder, or None if
+        NAS is unconfigured. Separate from _nas_deliverable_url — no 'Design
+        Files' suffix."""
         from urllib.parse import quote
 
         base = (app.config.get('NAS_WEB_URL') or
@@ -420,13 +301,8 @@ def create_app(config=Config):
 
     app.jinja_env.globals['nas_project_url'] = _nas_project_url
 
-    # Sidebar gating for the Client Servicing nav icon reads the exact
-    # same function every CS route already gates through (lib/access.py)
-    # — a Jinja global, not a context processor, same reasoning as
-    # active_badge_image above: base.html is rendered directly (not via
-    # a macro import) so either would technically work here, but a
-    # global keeps this reusable anywhere without that footgun waiting
-    # for the next place someone wants to check it.
+    # CS sidebar icon gates through the same access check the CS routes use.
+    # A Jinja global (not a context processor) so it's reusable anywhere.
     from app.modules.client_servicing.lib.access import can_access_client_servicing
     app.jinja_env.globals['can_access_client_servicing'] = can_access_client_servicing
 
@@ -469,14 +345,8 @@ def create_app(config=Config):
     def dubai_time(dt):
         if dt is None:
             return '_'
-        # Accept an ISO-format string too, not just a real datetime object.
-        # Added for dashboard.py's What Changed card: _compute_what_changed()
-        # returns 'timestamp' as e.created_at.isoformat() (a plain string)
-        # because that same dict is also returned as-is from the JSON API
-        # endpoint (jsonify can't serialize a raw datetime). Every OTHER
-        # existing caller of this filter passes a real datetime and hits the
-        # isinstance check below as False, so their behavior is unchanged —
-        # this is purely additive.
+        # Accept an ISO string too (dashboard's What Changed passes timestamps
+        # as isoformat strings for the JSON API); real datetimes are unchanged.
         if isinstance(dt, str):
             dt = datetime.fromisoformat(dt)
         dubai_tz = timezone(timedelta(hours=4))
@@ -513,15 +383,9 @@ def create_app(config=Config):
           )
           if m:
               content = m.group(1)
-              # Page-specific scripts (each template's own {% block extra_js %})
-              # render AFTER </main> in the full page, so they were never part
-              # of the slice above — meaning sidebar.js's execScripts() had
-              # nothing to find, and a page whose JS lives in extra_js (rather
-              # than loading globally in base.html, like detail.js/polling.js
-              # do) got zero of its own JS on an SPA-navigated visit. Markers
-              # bound just that one block so this can never accidentally sweep
-              # up sidebar.js/polling.js/etc., which already load globally and
-              # must NOT be re-executed a second time (duplicate listeners).
+              # A page's own {% block extra_js %} renders after </main>, so it's
+              # outside the sliced content. Markers pull in just that block —
+              # never the global scripts, which must not run twice.
               extra_js_match = re.search(
                   r'<!--\s*SPA:EXTRA_JS:START\s*-->(.*?)<!--\s*SPA:EXTRA_JS:END\s*-->',
                   html, re.DOTALL

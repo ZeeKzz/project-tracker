@@ -92,6 +92,12 @@
     if (hash && hash.startsWith('#post-')) {
         loadPost(hash.replace('#post-', ''));
     }
+
+    // One-time flash message set by the editor before it redirected here.
+    try {
+        var blogFlash = sessionStorage.getItem('blogFlash');
+        if (blogFlash) { sessionStorage.removeItem('blogFlash'); if (typeof showToast === 'function') showToast(blogFlash, 'success'); }
+    } catch (e) {}
 }());
 
 // ── Post content: scrollspy, comments, admin buttons ──
@@ -589,13 +595,40 @@ function initPostContent(postId) {
         };
     }
 
+    var saving = false;
+    var savedPostId = (typeof EDIT_POST_ID === 'number') ? EDIT_POST_ID : null;
+
     function save(andPublish) {
+        if (saving) return;  // ignore repeat clicks while a save is in flight
         var data = collectData();
         if (!data.title) { alert('Please add a post title.'); return; }
 
-        var isEdit = typeof EDIT_POST_ID === 'number';
-        var url = isEdit ? '/blog/posts/' + EDIT_POST_ID : '/blog/posts';
-        var method = isEdit ? 'PUT' : 'POST';
+        var draftBtn = document.getElementById('save-draft-btn');
+        var pubBtn = document.getElementById('save-publish-btn');
+        var clicked = andPublish ? pubBtn : draftBtn;
+        var originalLabel = clicked ? clicked.textContent : '';
+        saving = true;
+        if (draftBtn) draftBtn.disabled = true;
+        if (pubBtn) pubBtn.disabled = true;
+        if (clicked) clicked.textContent = andPublish ? 'Publishing…' : 'Saving…';
+
+        function fail(msg) {
+            saving = false;
+            if (draftBtn) draftBtn.disabled = false;
+            if (pubBtn) pubBtn.disabled = false;
+            if (clicked) clicked.textContent = originalLabel;
+            showToast(msg, 'error');
+        }
+        function go(message) {
+            try { sessionStorage.setItem('blogFlash', message); } catch (e) {}
+            window.location.href = '/blog#post-' + savedPostId;
+        }
+
+        // Once the post exists, always update it — a retry after a failed
+        // publish must not create a second post.
+        var isUpdate = savedPostId !== null;
+        var url = isUpdate ? '/blog/posts/' + savedPostId : '/blog/posts';
+        var method = isUpdate ? 'PUT' : 'POST';
 
         fetch(url, {
             method: method,
@@ -604,22 +637,22 @@ function initPostContent(postId) {
         })
             .then(function (r) { return r.json(); })
             .then(function (res) {
-                if (!res.success) { showToast('Save failed.', 'error'); return; }
-                var postId = isEdit ? EDIT_POST_ID : res.post_id;
+                if (!res.success) { fail('Save failed.'); return; }
+                if (savedPostId === null) savedPostId = res.post_id;
                 if (andPublish) {
-                    fetch('/blog/posts/' + postId + '/publish', {
+                    fetch('/blog/posts/' + savedPostId + '/publish', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ send_email: data.send_email })
                     })
                         .then(function (r) { return r.json(); })
-                        .then(function () { window.location.href = '/blog#post-' + postId; })
-                        .catch(function () { showToast('Post saved but could not publish. Try again.', 'error'); });
+                        .then(function () { go('Post published.'); })
+                        .catch(function () { fail('Post saved but could not publish. Try again.'); });
                 } else {
-                    window.location.href = '/blog#post-' + postId;
+                    go('Draft saved.');
                 }
             })
-            .catch(function () { showToast('Could not save post. Check your connection.', 'error'); });
+            .catch(function () { fail('Could not save post. Check your connection.'); });
     }
 
     document.getElementById('save-draft-btn').addEventListener('click', function () { save(false); });

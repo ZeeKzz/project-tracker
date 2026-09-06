@@ -25,7 +25,7 @@ def _user(db_session, tag, role='cs'):
 
 def _get_table_rows(client, app):
     with app.test_request_context():
-        url = url_for('client_servicing.index')
+        url = url_for('client_servicing.table')
     resp = client.get(url)
     assert resp.status_code == 200
     return resp.get_data(as_text=True)

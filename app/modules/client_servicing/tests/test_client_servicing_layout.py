@@ -91,7 +91,7 @@ def test_saved_widths_appear_in_the_rendered_colgroup(app, client, db_session):
     assert resp.status_code == 200
 
     with app.test_request_context():
-        url = url_for('client_servicing.index')
+        url = url_for('client_servicing.table')
     resp = client.get(url)
     body = resp.get_data(as_text=True)
     assert 'data-col-key="job_number" style="width: 175px;"' in body
@@ -106,7 +106,7 @@ def test_one_users_layout_does_not_affect_another(app, client, db_session):
 
     login_as(client, app, user_b, 'password123')
     with app.test_request_context():
-        url = url_for('client_servicing.index')
+        url = url_for('client_servicing.table')
     resp = client.get(url)
     body = resp.get_data(as_text=True)
     assert 'width: 999px' not in body
@@ -117,7 +117,7 @@ def _rendered_column_order(client, app):
     i.e. what the user actually sees, after table.py's _ordered_columns()
     has applied their saved layout."""
     with app.test_request_context():
-        url = url_for('client_servicing.index')
+        url = url_for('client_servicing.table')
     resp = client.get(url)
     body = resp.get_data(as_text=True)
     thead = body.split('<tbody>')[0]

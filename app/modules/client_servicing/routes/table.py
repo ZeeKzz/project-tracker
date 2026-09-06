@@ -223,11 +223,11 @@ def _page_context():
     }
 
 
-@client_servicing_bp.route('/')
+@client_servicing_bp.route('/table')
 @login_required
-def index():
+def table():
     _require_access()
-    return render_template('client_servicing/index.html', **_page_context())
+    return render_template('client_servicing/table.html', **_page_context())
 
 
 @client_servicing_bp.route('/table-rows')

@@ -84,7 +84,7 @@ def test_index_shows_project_and_cs_fields(app, client, db_session):
 
     login_as(client, app, user, 'password123')
     with app.test_request_context():
-        url = url_for('client_servicing.index')
+        url = url_for('client_servicing.table')
     resp = client.get(url)
     body = resp.get_data(as_text=True)
 
@@ -126,7 +126,7 @@ def test_deactivated_scope_drops_out_of_options_but_still_shows_on_its_row(app, 
 
     login_as(client, app, user, 'password123')
     with app.test_request_context():
-        url = url_for('client_servicing.index')
+        url = url_for('client_servicing.table')
     resp = client.get(url)
     body = resp.get_data(as_text=True)
 
@@ -234,9 +234,28 @@ def test_draft_projects_are_hidden_from_the_table(app, client, db_session):
     login_as(client, app, user, 'password123')
 
     with app.test_request_context():
-        table_url = url_for('client_servicing.index')
+        table_url = url_for('client_servicing.table')
         inv_url = url_for('client_servicing.invoicing')
     for url in (table_url, inv_url):
         body = client.get(url).get_data(as_text=True)
         assert 'Real Briefed Project' in body
         assert 'Hidden Draft Project' not in body
+
+
+def test_table_page_has_search_and_filter_toolbar(app, client, db_session):
+    """The CS table renders the client-side search + filter toolbar, and rows
+    still carry the data-sort-value hooks the filter reads."""
+    user = _user(db_session, 'toolbar', role='cs')
+    project = Project(name='Toolbar Project', cs_lead_id=user.id, created_by_id=user.id, project_status='briefed')
+    db_session.add(project)
+    db_session.flush()
+    login_as(client, app, user, 'password123')
+
+    with app.test_request_context():
+        url = url_for('client_servicing.table')
+    body = client.get(url).get_data(as_text=True)
+
+    assert 'id="cs-search"' in body
+    assert 'id="cs-filter-columns"' in body
+    # The filter reads each row's data-sort-value, same hooks the sort uses.
+    assert 'data-col-key="client" data-sort-value=' in body

@@ -13,22 +13,31 @@ dashboard.
 app/modules/client_servicing/
   models.py                 # ClientServicing (1:1 companion), ClientServicingScope, ClientServicingSetting
   lib/
-    access.py               # can_access_client_servicing + emulation-aware _effective_user
+    access.py               # can_access_client_servicing, can_view_finance, emulation-aware _effective_user
+    status.py               # effective_cs_status (manual overlay + derived) + design-stream chips
+    calendar.py             # install risk + month/agenda data service
     summary.py              # Monthly Summary rollup (computed live, nothing stored)
+    dashboard.py            # Dashboard aggregations (six panels) + module feed items
+  services/
+    dashboard_feed.py       # feed_for(user) — the module's feed for the global Dashboard
   routes/
     blueprint.py            # the client_servicing blueprint (url_prefix /client-servicing)
-    table.py                # table page + live-refresh rows partial, row serialize, shared draft-excluding query
+    dashboard.py            # Dashboard page — the module landing (GET /)
+    table.py                # table page (GET /table) + live-refresh rows partial, shared draft-excluding query
     edit.py                 # PATCH one cell — the single field-update endpoint (CS + finance fields)
     layout.py               # save per-user column widths/order (shared UserTableLayout)
     scopes_admin.py         # CS Scope option-list CRUD + inline quick-add
-    calendar.py             # Calendar section (placeholder)
+    calendar.py             # Installation Calendar — Month + Agenda
     invoicing.py            # Invoicing section — By Project + Monthly Summary tabs, thresholds endpoint
   templates/client_servicing/
   tests/
 ```
-Routes are split one concern per file. Static: `app/static/js/client_servicing.js`
-(table), `app/static/js/client_servicing_invoicing.js` (invoicing edits +
-thresholds modal), `app/static/css/client_servicing.css`.
+Routes are one concern per file. Static (in the module):
+`static/js/client_servicing.js` (table inline-edit, sort, search + filter),
+`static/js/client_servicing_dashboard.js` (dashboard SSE refresh),
+`static/js/client_servicing_nav.js` (internal SPA nav),
+`static/js/client_servicing_calendar.js`, `static/js/client_servicing_invoicing.js`,
+`static/css/client_servicing.css` (table, calendar, dashboard, toolbar).
 
 ## Architecture
 The CS-only and finance fields live on a companion table, never on the shared
@@ -68,19 +77,42 @@ Page-access roles: admin, management, cs, project_owner, finance. Editing the
 **finance fields** is further restricted to **admin / cs / finance**
 (`_FINANCE_EDIT_ROLES` in `edit.py`) — narrower than page access, so
 management/project_owner can view them but not edit. Editing the **day
-thresholds** is admin/management only. `_effective_user()` is emulation-aware,
+thresholds** is admin/management only. Viewing **finance on the Dashboard**
+(money KPIs, Invoicing Health, feed finance items) is gated by
+`can_view_finance` — admin / management / cs / finance; project_owner can open
+CS but doesn't see finance there. `_effective_user()` is emulation-aware,
 so an admin previewing as someone else is gated, has their layout saved, and
 has edits attributed as that person; the admin-only Scope CRUD stays on
 `current_user` so real admin tools survive a preview.
 
 ## Routes (blueprint prefix `/client-servicing`)
-- `GET /` — the table page. `GET /table-rows` — the rows partial for live refresh.
+- `GET /` — **Dashboard** (the module landing). `GET /dashboard-panels` — panels fragment for the dashboard's SSE refresh.
+- `GET /table` — the table page. `GET /table-rows` — the rows partial for the table's live refresh.
 - `PATCH /<project_id>` — update one cell: `{field, value}` (CS + finance fields).
 - `POST /layout` — save this user's column widths/order.
 - `GET|POST /scopes`, `PATCH /scopes/<id>`, `POST /scopes/quick-add` — scope CRUD + inline add.
 - `GET /invoicing` — By Project finance table. `GET /invoicing/summary?year=&month=` — Monthly Summary.
 - `POST /invoicing/day-thresholds` — save the Days Pending thresholds (admin/management).
-- `GET /calendar` — placeholder.
+- `GET /calendar` — Installation Calendar (Month + Agenda).
+
+## Dashboard (`routes/dashboard.py`, `lib/dashboard.py`)
+The module landing (`GET /`) and first rail entry — the daily-standup "where
+does everything stand" view. Read-only, no new models: one eager-loaded
+`_base_projects()` fetch, composed from the existing helpers so numbers can't
+drift from the Table / Calendar / Invoicing pages.
+
+Six panels:
+- **KPI band** — Active · Installs (month) · Next 7 days · At Risk · Pipeline · Stuck.
+- **Urgent Actions** — at-risk/attention installs + finance items (LPO / overdue / unbilled) + data gaps; each row deep-links (Calendar / Invoicing / Open in Projects). Scrolls internally.
+- **Status Spread** — active count per lifecycle family (segmented bar + legend).
+- **Upcoming Installs** — next installs, risk dot + relative day. Scrolls internally.
+- **Invoicing Health** — month pipeline / confirmed / invoiced + progress + stuck count/amount.
+- **CS Lead Workload** — active + at-risk count per lead.
+
+- **Finance gating** — the Pipeline/Stuck KPIs, Invoicing Health, and finance rows in Urgent Actions show only to `can_view_finance` roles.
+- **Module feed** — `services/dashboard_feed.py::feed_for(user)` exposes the cross-cutting subset (upcoming installs + finance items) for the future global Dashboard — same computation as the panels, one source. Empty for no-access users; finance items hidden from non-finance.
+- **Layout** — role tokens, light + dark; the two list panels scroll internally, the page scrolls to the bottom row.
+- **Live refresh** — panels live in `_dashboard_panels.html`, re-rendered by `GET /dashboard-panels`. `polling.js` opens `/sse/dashboard` on the `.cs-dash` marker and calls `window.helixRefreshCSDashboard()` (`client_servicing_dashboard.js`), which swaps `#cs-dash-panels`. Same doorbell as the table/calendar.
 
 ## The table
 Reuses the projects-table patterns: the shared `UserTableLayout` model
@@ -89,6 +121,14 @@ data-driven columns, client-side click-to-sort (no server round-trip, no saved
 sort), column resize/reorder, a sticky Project-name column, and an "Open in
 Projects" button per row that deep-links to that project's overlay
 (`?project=<id>`). No project overlay here — every cell is edited in place.
+
+**Search + filter** (client-side, in `client_servicing.js`) — a toolbar above
+the table: a search box (client / project / job no) and a Filter panel of chips
+(Client, CS Contact, Project Owner, Status, Scope, Priority). Options and
+faceted counts are built from the loaded rows, so they always match what's in
+the table. Filtering hides rows and re-runs the sort, and re-applies after each
+live refresh — no server round-trip. CSS is module-local (`cs-toolbar` /
+`cs-filter-*` / `cs-chip`).
 
 ## Cell editing (`edit.py`)
 One endpoint, `PATCH /<project_id>` with `{field, value}`. It resolves the
@@ -151,16 +191,20 @@ finance rows spread across the year, plus a hidden draft. Marker-scoped, so it
 never touches real data; `--wipe` clears only. Not the real importer.
 
 ## Sections
-Sidebar shell: **Table** and **Invoicing** (both built), **Calendar**
-(placeholder). The module's entry in the global app sidebar is currently a
-disabled (greyed) `<span class="sidebar-item sidebar-item--unlinked">`; to
-enable, swap it back for `<a href="{{ url_for('client_servicing.index') }}"
-class="sidebar-item sidebar-item--nav">`.
+Sidebar shell, in order: **Dashboard** (landing) · **Table** · **Invoicing** ·
+**Calendar** — all built. Opening CS lands on the Dashboard. The global
+app-sidebar entry is a live link pointing at `client_servicing.index`.
+
+Internal nav between the four sections is SPA soft-nav:
+`client_servicing_nav.js` routes `.cs-nav-item` clicks through the app's
+`window.navigateTo`. The global `sidebar.js` only intercepts its own
+`.sidebar-item--nav`, so each module SPA-ifies its own secondary nav — same
+pattern as `digital_innovation_nav.js`. The listener is document-delegated and
+guarded (`_csNavDispatcherWired`), so it survives SPA swaps without stacking.
 
 ## Remaining scope
 - **Invoicing toolbar** — search, month/validation filters and Export are
   visual only; not wired.
-- **Calendar** — real content; scope not yet defined.
 - **Data import** — mapping the real master spreadsheet to `Project` +
   `ClientServicing` (matching/creating projects, handling non-matching rows).
   Not built; `seed_invoicing_demo.py` is the pattern to adapt.

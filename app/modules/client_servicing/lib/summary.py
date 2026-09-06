@@ -46,7 +46,8 @@ def year_summary(year):
     full-year total. Each row: month, label, pipeline, confirmed, invoiced,
     progress (invoiced/confirmed %), stuck count."""
     buckets = {m: {'pipeline': Decimal('0'), 'confirmed': Decimal('0'),
-                   'invoiced': Decimal('0'), 'stuck': 0} for m in range(1, 13)}
+                   'invoiced': Decimal('0'), 'stuck': 0,
+                   'stuck_amount': Decimal('0')} for m in range(1, 13)}
 
     for p in _base_projects().all():
         bm = _billing_month(p)
@@ -61,6 +62,7 @@ def year_summary(year):
             b['invoiced'] += _dec(cs.invoice_amount if cs else None)
         if _is_stuck(cs):
             b['stuck'] += 1
+            b['stuck_amount'] += _dec(cs.project_value if cs else None)
 
     rows = []
     for m in range(1, 13):
@@ -74,6 +76,7 @@ def year_summary(year):
             'invoiced': b['invoiced'],
             'progress': progress,
             'stuck': b['stuck'],
+            'stuck_amount': b['stuck_amount'],
         })
 
     total = {
@@ -81,6 +84,7 @@ def year_summary(year):
         'confirmed': sum((r['confirmed'] for r in rows), Decimal('0')),
         'invoiced': sum((r['invoiced'] for r in rows), Decimal('0')),
         'stuck': sum(r['stuck'] for r in rows),
+        'stuck_amount': sum((r['stuck_amount'] for r in rows), Decimal('0')),
     }
     return rows, total
 

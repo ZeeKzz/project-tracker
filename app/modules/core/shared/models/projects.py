@@ -374,31 +374,13 @@ class SiteVisit(db.Model):
 
 
 class ProjectEditAccessRequest(db.Model):
-    """A designer's self-service request for full deliverable-management
-    rights (add/edit deliverables + status override — same tier as
-    _can_manage_deliverables/admin) on one specific live project they're
-    assigned to. Added 26 Aug 2026 per Ezekiel — the overlay sidebar's
-    "Request Editing Access" button, for a designer who needs to manage
-    deliverables on a project whose CS Lead is someone else and who has
-    no other route to that permission tier.
-
-    Deliberately its own row rather than a boolean flag on ProjectDesigner:
-    this needs a pending/approved/denied lifecycle plus an audit trail (who
-    decided, when), and a designer can be assigned to a project without
-    ever having requested (or been granted) this. Eligibility — who is even
-    allowed to request, and on which projects — is NOT stored here; it's
-    recomputed live by _project_edit_access_eligible()/_is_assigned_designer()
-    in project_overlay.py, scoped to open projects (not draft, not
-    cancelled) that already existed before _EDIT_ACCESS_CUTOFF there. This
-    table only tracks the request/decision itself.
-
-    A grant is permanent once approved — there is no expiry/revoke flow
-    yet (matches Ezekiel's "Permanent + notification action" answer).
-    UNIQUE(project_id, user_id): one row per designer per project. A denied
-    request can be re-requested — see request_edit_access() in
-    project_overlay.py — which resets this same row rather than inserting
-    a second one, so the unique constraint never has to be worked around.
-    """
+    """A designer's self-service request for full deliverable-management rights
+    on one live project they're assigned to (the overlay's "Request Editing
+    Access" button), for when the CS Lead is someone else. Its own row, not a
+    flag, because it needs a pending/approved/denied lifecycle + audit trail.
+    Eligibility is computed live in project_overlay.py, not stored here. Grants
+    are permanent (no revoke yet). UNIQUE(project_id, user_id): a denied request
+    is re-requested by resetting the same row."""
     __tablename__ = 'project_edit_access_requests'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -422,32 +404,13 @@ class ProjectEditAccessRequest(db.Model):
 
 
 class ProjectActivitySeen(db.Model):
-    """Per-(user, project) watermark backing the Projects table's two
-    unread dots (26/27 Aug 2026, per Ezekiel — "notification bubble... for
-    new updates or chats"). Two independent timestamps, not one: Ezekiel
-    was explicit that staff need to clear an "update" dot separately from
-    a "chat" dot, since chat is newly adopted and opening some other tab
-    shouldn't silently mark unread messages as read.
-
-    last_seen_update_at is advanced by opening the project overlay at all
-    (project_overlay.py's overlay() route calls
-    mark_project_activity_seen(project, actor, 'update')).
-    last_seen_chat_at is advanced only by opening the Chat drawer
-    specifically (project_notes.py's overlay_chat() route calls
-    mark_project_activity_seen(project, actor, 'chat')). Both go through
-    that one shared helper in core/shared/lib/utils.py.
-
-    No row for a (user, project) pair means "never seen" — project_list.py
-    treats that as seen at _ACTIVITY_SEEN_ROLLOUT_CUTOFF (there), not as
-    forever-unread, so the existing backlog of activity/chat history
-    doesn't light up every row the moment this ships. Same rollout-cutoff
-    shape as ProjectEditAccessRequest's _EDIT_ACCESS_CUTOFF above.
-
-    "Updates" is read from ActivityLog (entity_type='project') and "chats"
-    from ProjectNote — both already exist and are already logged uniformly
-    for every project-affecting action in this codebase, so no new event-
-    logging code was needed to define either side of "unread".
-    """
+    """Per-(user, project) watermark backing the Projects table's two unread
+    dots. Two independent timestamps: last_seen_update_at (advanced by opening
+    the overlay) and last_seen_chat_at (advanced only by opening Chat) — both via
+    mark_project_activity_seen() in lib/utils.py. No row means "never seen";
+    project_list.py treats that as seen at its rollout cutoff so the existing
+    backlog doesn't light up every row. "Updates" read from ActivityLog, "chats"
+    from ProjectNote."""
     __tablename__ = 'project_activity_seen'
 
     id = db.Column(db.Integer, primary_key=True)

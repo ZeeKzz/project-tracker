@@ -35,3 +35,11 @@ def can_access_client_servicing(user):
     _effective_user() result; getattr guards the logged-out case, which
     has no .role."""
     return getattr(user, 'role', None) in _CLIENT_SERVICING_ROLES
+
+_FINANCE_VIEW_ROLES = {'admin', 'management', 'cs', 'finance'}
+
+
+def can_view_finance(user):
+    """True if `user` may see finance figures — money, invoicing, stuck.
+    Page access is wider: project_owner can open CS but not see finance."""
+    return getattr(user, 'role', None) in _FINANCE_VIEW_ROLES

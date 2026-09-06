@@ -3,6 +3,20 @@ VITAMIN HELIX — CHANGELOG
 ===============================================================================
 
 =======================================================================================
+v2.5 - Client Servicing Module
+=======================================================================================
+New Features:
+
+- Client servicing module added. 
+- Matches flow of the meetings: Dashboard summary -> Table Update -> Invoicing -> Calendar.
+- Added finance role and made accounts for finance team
+- Added HR role and made account for HR
+
+Adjustments:
+
+- Added HTTPS for the local IP access, ensuring speed and security.
+
+=======================================================================================
 v2.4.1, v2.4.2, v2.4.3 - Dark Mode, Digital Innovation, Profile Pics & JS/CSS Refactor
 =======================================================================================
 New Features:

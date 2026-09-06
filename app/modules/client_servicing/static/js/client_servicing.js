@@ -628,3 +628,248 @@
     syncTableScrollHeight();
     window.addEventListener('resize', syncTableScrollHeight);
 })();
+
+
+/* ── Table search + filter (client-side over the loaded rows) ────────────
+   Reads the same data-sort-value hooks the sort uses, hides non-matching
+   rows, and re-runs after each SSE live refresh. Self-contained; no server,
+   no new data. Chip options are built from the rows themselves so they
+   always match what's in the table. */
+(function () {
+    var searchInput = document.getElementById('cs-search');
+    var table = document.getElementById('cs-table');
+    var bodyWrap = document.getElementById('client-servicing-table-body');
+    if (!searchInput || !table || !bodyWrap) return;
+
+    var searchClear = document.getElementById('cs-search-clear');
+    var toggleBtn = document.getElementById('cs-filter-toggle');
+    var panel = document.getElementById('cs-filter-panel');
+    var columnsEl = document.getElementById('cs-filter-columns');
+    var countEl = document.getElementById('cs-filter-count');
+    var clearBtn = document.getElementById('cs-filter-clear');
+
+    // Filter field key = the column's data-col-key; its data-sort-value holds
+    // the value we filter on.
+    var FIELDS = [
+        { key: 'client', label: 'Client' },
+        { key: 'cs_lead', label: 'CS Contact' },
+        { key: 'project_owner', label: 'Project Owner' },
+        { key: 'status', label: 'Status' },
+        { key: 'scope', label: 'Scope' },
+        { key: 'priority', label: 'Priority' }
+    ];
+    var SEARCH_COLS = ['client', 'project', 'job_number'];
+    var BLANK = '__blank__';        // internal token for an empty cell, shown as "—"
+
+    var selected = {};           // field key -> { token: true }
+    FIELDS.forEach(function (f) { selected[f.key] = {}; });
+
+    function rows() {
+        return Array.prototype.slice.call(table.querySelectorAll('tbody tr[data-project-id]'));
+    }
+
+    function cellValue(tr, key) {
+        var td = tr.querySelector('td[data-col-key="' + key + '"]');
+        return td ? (td.getAttribute('data-sort-value') || '') : '';
+    }
+
+    function tokenOf(tr, key) {
+        var v = cellValue(tr, key);
+        return v === '' ? BLANK : v;
+    }
+
+    function matchesSearch(tr, term) {
+        if (!term) return true;
+        for (var i = 0; i < SEARCH_COLS.length; i++) {
+            if (cellValue(tr, SEARCH_COLS[i]).toLowerCase().indexOf(term) !== -1) return true;
+        }
+        return false;
+    }
+
+    function matchesField(tr, key) {
+        var sel = selected[key];
+        if (!Object.keys(sel).length) return true;
+        return !!sel[tokenOf(tr, key)];
+    }
+
+    // Passes the search plus every field EXCEPT `except` (used for faceted counts;
+    // pass null to test all fields).
+    function passes(tr, term, except) {
+        if (!matchesSearch(tr, term)) return false;
+        for (var i = 0; i < FIELDS.length; i++) {
+            var k = FIELDS[i].key;
+            if (k === except) continue;
+            if (!matchesField(tr, k)) return false;
+        }
+        return true;
+    }
+
+    function displayLabel(token) {
+        return token === BLANK ? '—' : token;
+    }
+
+    // Build the chip columns from the current rows, preserving selections.
+    function buildChips() {
+        table = document.getElementById('cs-table');
+        if (!table) return;
+        var all = rows();
+        columnsEl.innerHTML = '';
+        FIELDS.forEach(function (f) {
+            var tokens = {};
+            all.forEach(function (tr) { tokens[tokenOf(tr, f.key)] = true; });
+            var list = Object.keys(tokens).sort(function (a, b) {
+                if (a === BLANK) return 1;
+                if (b === BLANK) return -1;
+                return a.toLowerCase().localeCompare(b.toLowerCase());
+            });
+
+            var col = document.createElement('div');
+            col.className = 'cs-filter-column';
+            var label = document.createElement('div');
+            label.className = 'cs-filter-column-label';
+            label.textContent = f.label;
+            var listEl = document.createElement('div');
+            listEl.className = 'cs-filter-column-list';
+
+            list.forEach(function (token) {
+                var chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'cs-chip';
+                chip.dataset.field = f.key;
+                chip.dataset.token = token;
+                var text = document.createElement('span');
+                text.className = 'cs-chip-text';
+                text.textContent = displayLabel(token);
+                var cnt = document.createElement('span');
+                cnt.className = 'cs-chip-count';
+                chip.appendChild(text);
+                chip.appendChild(cnt);
+                listEl.appendChild(chip);
+            });
+
+            col.appendChild(label);
+            col.appendChild(listEl);
+            columnsEl.appendChild(col);
+        });
+    }
+
+    function setNoMatches(on) {
+        var tb = table.querySelector('tbody');
+        if (!tb) return;
+        var existing = tb.querySelector('.cs-no-matches');
+        if (on && !existing) {
+            var tr = document.createElement('tr');
+            tr.className = 'cs-no-matches';
+            var td = document.createElement('td');
+            td.colSpan = table.querySelectorAll('thead th').length || 1;
+            td.textContent = 'No projects match your search or filters.';
+            tr.appendChild(td);
+            tb.appendChild(tr);
+        } else if (!on && existing) {
+            existing.remove();
+        }
+    }
+
+    // Recompute chip counts (faceted) + selected states.
+    function updateChips(all, term) {
+        var chips = columnsEl.querySelectorAll('.cs-chip');
+        // base sets per field: rows passing search + all OTHER fields
+        var baseByField = {};
+        FIELDS.forEach(function (f) {
+            baseByField[f.key] = all.filter(function (tr) { return passes(tr, term, f.key); });
+        });
+        Array.prototype.forEach.call(chips, function (chip) {
+            var field = chip.dataset.field;
+            var token = chip.dataset.token;
+            var n = 0, base = baseByField[field];
+            for (var i = 0; i < base.length; i++) { if (tokenOf(base[i], field) === token) n++; }
+            chip.querySelector('.cs-chip-count').textContent = n;
+            var isSel = !!selected[field][token];
+            chip.classList.toggle('is-selected', isSel);
+        });
+    }
+
+    function updateBadge() {
+        var n = 0;
+        FIELDS.forEach(function (f) { n += Object.keys(selected[f.key]).length; });
+        toggleBtn.textContent = n ? 'Filter / ' + n : 'Filter';
+        toggleBtn.classList.toggle('is-active', n > 0);
+        return n;
+    }
+
+    function apply() {
+        table = document.getElementById('cs-table');
+        if (!table) return;
+        var term = (searchInput.value || '').trim().toLowerCase();
+        var all = rows();
+        var visible = 0;
+        all.forEach(function (tr) {
+            var show = passes(tr, term, null);
+            tr.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        setNoMatches(all.length > 0 && visible === 0);
+        updateChips(all, term);
+        var filterN = updateBadge();
+        searchClear.hidden = !term;
+        countEl.textContent = (term || filterN) ? ('Showing ' + visible + ' of ' + all.length) : 'Showing all';
+    }
+
+    // ── events ──
+    var searchTimer = null;
+    searchInput.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(apply, 120);
+    });
+    searchClear.addEventListener('click', function () {
+        searchInput.value = '';
+        apply();
+        searchInput.focus();
+    });
+
+    toggleBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        panel.hidden = !panel.hidden;
+    });
+    // Outside-click close. Bound on document (persistent across SPA nav), so
+    // bind ONCE for the session and re-resolve the current panel each click —
+    // otherwise every navigation would stack another live listener.
+    if (!window.__csFilterOutsideBound) {
+        window.__csFilterOutsideBound = true;
+        document.addEventListener('click', function (e) {
+            var p = document.getElementById('cs-filter-panel');
+            if (p && !p.hidden && !e.target.closest('.cs-filter')) p.hidden = true;
+        });
+    }
+
+    clearBtn.addEventListener('click', function () {
+        FIELDS.forEach(function (f) { selected[f.key] = {}; });
+        searchInput.value = '';
+        apply();
+    });
+
+    // Chip clicks (delegated on the columns container, which is rebuilt on
+    // refresh — the listener sits on the container, so it survives).
+    columnsEl.addEventListener('click', function (e) {
+        var chip = e.target.closest('.cs-chip');
+        if (!chip) return;
+        var field = chip.dataset.field, token = chip.dataset.token;
+        if (selected[field][token]) delete selected[field][token];
+        else selected[field][token] = true;
+        apply();
+    });
+
+    // Re-apply after the SSE live refresh swaps the table rows. Disconnect any
+    // observer from a previous SPA visit so only one is ever active.
+    if (window.__csFilterObserver) window.__csFilterObserver.disconnect();
+    var refreshTimer = null;
+    var mo = new MutationObserver(function () {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(function () { buildChips(); apply(); }, 0);
+    });
+    mo.observe(bodyWrap, { childList: true });
+    window.__csFilterObserver = mo;
+
+    buildChips();
+    apply();
+})();
