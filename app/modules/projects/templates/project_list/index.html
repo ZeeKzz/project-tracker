@@ -164,22 +164,22 @@ old separate create.html page. #}
    visit Date & Time picker was already replaced by a custom-built widget
    (.visit-datetime-picker in project_overlay.css); nothing on this page
    has called into the AirDatepicker library since. #}
-<script src="{{ url_for('static', filename='js/project_list_layout.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_list_layout.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('static', filename='js/client_directory.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_overlay_create.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_list.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_overlay.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_overlay_edit.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_overlay_create.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_list.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_overlay.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_overlay_edit.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('core.static', filename='js/avatar_picker.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('core.static', filename='js/status_picker.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/deliverable_picker.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_flags.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_details_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_deliverables_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_submissions_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_submissions_draft_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_preproduction_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_notes_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/project_chat_panel.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/deliverable_picker.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_flags.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_details_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_deliverables_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_submissions_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_submissions_draft_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_preproduction_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_notes_card.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('project_assets.static', filename='js/project_chat_panel.js') }}?v={{ config.STATIC_VERSION }}"></script>
 
 {% endblock %}

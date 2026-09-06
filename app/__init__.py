@@ -154,6 +154,7 @@ def create_app(config=Config):
     from app.modules.projects.routes.project_overlay import project_overlay_bp # Projects detail overlay
     from app.modules.projects.routes.project_preproduction import project_preproduction_bp # Pre-Production phase backend (13 Aug 2026)
     from app.modules.projects.routes.project_notes import project_notes_bp  # Project Notes & Site Visits
+    from app.modules.projects.blueprint import project_assets  # projects module static assets
     from app.modules.digital_innovation.models import DiProject, DiFeature, DiFeatureStep, DiStepTemplate, DiCostEntry, DiSetting, DiPeriodSnapshot, DiIntakeItem  # registers the tables with SQLAlchemy
     from app.modules.digital_innovation.routes import board as di_board  # registers board routes on digital_innovation_bp
     from app.modules.digital_innovation.routes import projects as di_projects  # registers project-create route on digital_innovation_bp
@@ -195,6 +196,7 @@ def create_app(config=Config):
     app.register_blueprint(project_overlay_bp)
     app.register_blueprint(project_preproduction_bp)
     app.register_blueprint(project_notes_bp)
+    app.register_blueprint(project_assets)
     app.register_blueprint(digital_innovation_bp)
     app.register_blueprint(client_servicing_bp)
 

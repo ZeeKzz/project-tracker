@@ -47,8 +47,8 @@
     silently never loads on a browser tab that reaches this page via SPA nav
     instead — exactly what was happening on the Projects page until this. #}
     <link rel="stylesheet" href="{{ url_for('core.static', filename='css/shared.css') }}?v={{ config.STATIC_VERSION }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/project_list.css') }}?v={{ config.STATIC_VERSION }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/project_overlay.css') }}?v={{ config.STATIC_VERSION }}">
+    <link rel="stylesheet" href="{{ url_for('project_assets.static', filename='css/project_list.css') }}?v={{ config.STATIC_VERSION }}">
+    <link rel="stylesheet" href="{{ url_for('project_assets.static', filename='css/project_overlay.css') }}?v={{ config.STATIC_VERSION }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/digital_innovation.css') }}?v={{ config.STATIC_VERSION }}">
     {% block extra_css %}{% endblock %}
 
