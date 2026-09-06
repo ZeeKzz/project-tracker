@@ -171,12 +171,13 @@ def create_post():
     )
     db.session.add(post)
     db.session.commit()
+    new_post_id = post.id  # read once before the background task; avoids a concurrent lazy-load race
 
     from app.modules.core.shared.services.nas import _run_in_background
     _app_obj = current_app._get_current_object()
-    _run_in_background(_app_obj, lambda: _backup_post_media_to_nas(_app_obj, post.id))
+    _run_in_background(_app_obj, lambda: _backup_post_media_to_nas(_app_obj, new_post_id))
 
-    return jsonify({'success': True, 'post_id': post.id})
+    return jsonify({'success': True, 'post_id': new_post_id})
 
 
 @blog_bp.route('/blog/posts/<int:post_id>', methods=['PUT'])
