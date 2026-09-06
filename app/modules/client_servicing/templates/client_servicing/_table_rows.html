@@ -53,6 +53,11 @@
         <tr data-project-id="{{ row.id }}" data-row-order="{{ loop.index }}">
             <td class="cs-col-open">
                 <a class="btn-secondary cs-open-btn" href="{{ url_for('project_list.index', project=row.id) }}">Open in Projects</a>
+                {% if can_close %}
+                <button type="button" class="btn-secondary cs-close-btn"
+                        data-close-url="{{ url_for('client_servicing.close_project', project_id=row.id) }}"
+                        data-project-name="{% if row.client %}{{ row.client }} — {% endif %}{{ row.name }}">Close</button>
+                {% endif %}
             </td>
             {% for col in columns %}
             {{ CELL_RENDERERS[col.key](row) }}

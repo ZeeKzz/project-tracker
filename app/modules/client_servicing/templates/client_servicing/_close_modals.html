@@ -1,0 +1,48 @@
+{# The two close prompts. Standard app modal (.modal-overlay/.modal-box),
+   toggled by the .hidden class from client_servicing_close.js. The confirm
+   modal is for a live project; the two-step one is for a cancelled project,
+   whose invoicing answer decides its closed invoice state. #}
+{% if can_close %}
+<div class="modal-overlay hidden" id="cs-close-modal">
+    <div class="modal-box">
+        <div class="modal-title">Close this project?</div>
+        <p class="cs-close-subject" id="cs-close-subject"></p>
+        <p class="cs-muted">It leaves the Table and Invoicing, keeps counting in the Monthly Summary, and stays on the Calendar as history. Closing is final.</p>
+        <p class="cs-inv-error hidden" id="cs-close-error"></p>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cs-close-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="cs-close-confirm">Close project</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" id="cs-closeout-modal">
+    <div class="modal-box">
+        <div class="modal-title" id="cs-closeout-title">Does this project need invoicing?</div>
+        <p class="cs-close-subject" id="cs-closeout-subject"></p>
+
+        <div id="cs-closeout-step1">
+            <p class="cs-muted">Answering no closes it now with nothing to invoice.</p>
+            <p class="cs-inv-error hidden" id="cs-closeout-error-1"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="cs-closeout-cancel">Cancel</button>
+                <button type="button" class="btn-secondary" id="cs-closeout-no">No</button>
+                <button type="button" class="btn-primary" id="cs-closeout-yes">Yes</button>
+            </div>
+        </div>
+
+        <div id="cs-closeout-step2" hidden>
+            <p class="cs-muted">If it has been invoiced, give the invoice date.</p>
+            <label class="cs-inv-field">Invoice date
+                <input type="date" id="cs-closeout-invoice-date">
+            </label>
+            <p class="cs-inv-error hidden" id="cs-closeout-error-2"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="cs-closeout-back">Back</button>
+                <button type="button" class="btn-secondary" id="cs-closeout-not-yet">Not yet</button>
+                <button type="button" class="btn-primary" id="cs-closeout-invoiced">Yes, invoiced</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}

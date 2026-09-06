@@ -68,10 +68,21 @@ class ClientServicing(db.Model):
     invoice_uploaded = db.Column(db.Boolean, nullable=False, default=False)
     validation_status = db.Column(db.String(20), nullable=True)
 
+    # Closed lifecycle (CS-owned). closed_at marks the project closed and
+    # buckets it into a closing month. invoice_needed carries the cancelled
+    # flow's answer; None means it was never asked.
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_by_id = db.Column(
+        db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    invoice_needed = db.Column(db.Boolean, nullable=True)
+
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
 
     project = db.relationship('Project', backref=db.backref('client_servicing', uselist=False))
     scope = db.relationship('ClientServicingScope')
+    closed_by = db.relationship('User', foreign_keys=[closed_by_id])
 
     @property
     def margin_percent(self):
@@ -93,6 +104,22 @@ class ClientServicing(db.Model):
         if anchor is None:
             return None
         return (date.today() - anchor).days
+
+    @property
+    def is_closed(self):
+        """True once the project has been closed out. Closing is final —
+        nothing clears closed_at."""
+        return self.closed_at is not None
+
+    @property
+    def close_invoice_state(self):
+        """Invoice state for the Closed page: 'not_needed' when the cancelled
+        flow answered no, 'invoiced' once invoice_date is set, else 'pending'."""
+        if self.invoice_needed is False:
+            return 'not_needed'
+        if self.invoice_date:
+            return 'invoiced'
+        return 'pending'
 
     def __repr__(self):
         return f'<ClientServicing project_id={self.project_id}>'

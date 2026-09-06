@@ -14,6 +14,9 @@
         {% endwith %}
         <main class="cs-main">
             <div class="client-servicing-page">
+                {# Cancelled projects waiting on the invoicing question —
+                   see _close_strip.html. #}
+                {% include 'client_servicing/_close_strip.html' %}
                 {# Search + filter toolbar — all client-side over the loaded
                    rows (client_servicing.js). It sits outside
                    #client-servicing-table-body so it survives the SSE row-swap;
@@ -50,6 +53,7 @@
         </main>
     </div>
 </div>
+{% include 'client_servicing/_close_modals.html' %}
 {% endblock %}
 
 {% block extra_js %}
@@ -62,4 +66,5 @@
 </script>
 <script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_nav.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_close.js') }}?v={{ config.STATIC_VERSION }}"></script>
 {% endblock %}

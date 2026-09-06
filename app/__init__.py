@@ -107,6 +107,7 @@ def create_app(config=Config):
     from app.modules.client_servicing.routes import dashboard as client_servicing_dashboard  # Dashboard landing (first rail entry)
     from app.modules.client_servicing.routes import invoicing as client_servicing_invoicing  # Invoicing sidebar section 
     from app.modules.client_servicing.routes import calendar as client_servicing_calendar  # Calendar sidebar section
+    from app.modules.client_servicing.routes import close as client_servicing_close  # close / close-out endpoint
     from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 
 

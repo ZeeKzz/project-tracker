@@ -1,0 +1,27 @@
+{# Cancelled projects nobody has closed out yet. table.py pulls them out of
+   the table rows and queues them here so none gets scrolled past. Renders
+   nothing when the queue is empty or the viewer cannot close. #}
+{% if can_close and to_close_out %}
+<div class="cs-closeout">
+    <div class="cs-closeout-head">
+        <span class="cs-closeout-title">
+            {{ to_close_out|length }} cancelled project{{ '' if to_close_out|length == 1 else 's' }} to close out
+        </span>
+        <span class="cs-closeout-note">They stay here until someone answers the invoicing question.</span>
+    </div>
+    <div class="cs-closeout-list">
+        {% for item in to_close_out %}
+        <div class="cs-closeout-row">
+            <span class="cs-closeout-client">{{ item.client or '—' }}</span>
+            <span class="cs-closeout-project">{{ item.name }}</span>
+            <span class="cs-closeout-date">
+                {%- if item.cancelled_at %}cancelled {{ item.cancelled_at.strftime('%d %b') }}{% endif -%}
+            </span>
+            <button type="button" class="btn-primary cs-closeout-btn"
+                    data-close-url="{{ url_for('client_servicing.close_project', project_id=item.id) }}"
+                    data-project-name="{% if item.client %}{{ item.client }} — {% endif %}{{ item.name }}">Close out</button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

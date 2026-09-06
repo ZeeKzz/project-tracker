@@ -98,3 +98,41 @@ def test_days_pending_none_when_no_dates(db_session):
     project = _project(db_session, 'h')
     cs = ClientServicing(project_id=project.id)
     assert cs.days_pending is None
+
+
+def test_new_row_is_not_closed(db_session):
+    project = _project(db_session, 'i')
+    cs = ClientServicing(project_id=project.id)
+    db_session.add(cs)
+    db_session.flush()
+
+    assert cs.closed_at is None
+    assert cs.closed_by_id is None
+    assert cs.invoice_needed is None
+    assert cs.is_closed is False
+
+
+def test_is_closed_once_closed_at_is_set(db_session):
+    from datetime import datetime
+    project = _project(db_session, 'j')
+    cs = ClientServicing(project_id=project.id, closed_at=datetime.utcnow())
+    assert cs.is_closed is True
+
+
+def test_close_invoice_state_covers_the_three_cases(db_session):
+    from datetime import date
+    project = _project(db_session, 'k')
+
+    not_needed = ClientServicing(project_id=project.id, invoice_needed=False)
+    assert not_needed.close_invoice_state == 'not_needed'
+
+    invoiced = ClientServicing(
+        project_id=project.id, invoice_needed=True, invoice_date=date.today(),
+    )
+    assert invoiced.close_invoice_state == 'invoiced'
+
+    pending = ClientServicing(project_id=project.id, invoice_needed=True)
+    assert pending.close_invoice_state == 'pending'
+
+    normal_close = ClientServicing(project_id=project.id, invoice_date=date.today())
+    assert normal_close.close_invoice_state == 'invoiced'

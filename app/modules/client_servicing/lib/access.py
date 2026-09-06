@@ -43,3 +43,12 @@ def can_view_finance(user):
     """True if `user` may see finance figures — money, invoicing, stuck.
     Page access is wider: project_owner can open CS but not see finance."""
     return getattr(user, 'role', None) in _FINANCE_VIEW_ROLES
+
+
+_CLOSE_ROLES = {'admin', 'management', 'cs'}
+
+
+def can_close_projects(user):
+    """True if `user` may close a project or close out a cancelled one.
+    Narrower than page access — project_owner and finance cannot close."""
+    return getattr(user, 'role', None) in _CLOSE_ROLES

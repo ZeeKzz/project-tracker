@@ -1505,3 +1505,82 @@
     padding: var(--space-6) !important;
     white-space: normal !important;
 }
+
+/* ── Close-out strip ───────────────────────────────────────────────────
+   Cancelled projects waiting on the invoicing question, above the table.
+   Canary tint mixed toward transparent so it flips with the theme; the
+   buttons are the shared .btn-* classes, already dark-ready. */
+.cs-closeout {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid color-mix(in srgb, var(--canary) 45%, var(--border));
+    background: color-mix(in srgb, var(--canary) 12%, transparent);
+    border-radius: 10px;
+}
+
+.cs-closeout-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-3);
+}
+
+.cs-closeout-title {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.cs-closeout-note {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.cs-closeout-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.cs-closeout-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.cs-closeout-client {
+    width: 180px;
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.cs-closeout-project {
+    flex-grow: 1;
+    min-width: 0;
+    color: var(--text);
+}
+
+.cs-closeout-date {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+/* The row's Close button shares the pinned Open-in-Projects cell, so it
+   sits under the link rather than beside it. */
+.cs-close-btn {
+    margin-top: var(--space-1);
+    display: block;
+    width: 100%;
+}
+
+/* Project name the prompt is about — reads as a subject line, not prose. */
+.cs-close-subject {
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 var(--space-2);
+}

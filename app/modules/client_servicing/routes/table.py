@@ -17,7 +17,9 @@ from app.modules.client_servicing.models import ClientServicing, ClientServicing
 from app.modules.client_servicing.lib.status import (
     effective_cs_status, cs_design_indicator, CS_STATUS_OPTIONS,
 )
-from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
+from app.modules.client_servicing.lib.access import (
+    can_access_client_servicing, can_close_projects, _effective_user,
+)
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 
 
@@ -192,12 +194,33 @@ def _base_projects():
     return _eager_load(Project.query).filter(Project.project_status != 'draft')
 
 
+def _awaiting_close_out(project):
+    """A cancelled project nobody has closed out yet. It leaves the table
+    rows and waits in the strip above them until CS answers the invoicing
+    question."""
+    cs = project.client_servicing
+    return project.cancelled_at is not None and not (cs is not None and cs.closed_at is not None)
+
+
+def _close_out_row(project):
+    """One entry in the close-out strip — just enough to identify the
+    project and open the prompt."""
+    return {
+        'id': project.id,
+        'client': project.client_brand.name if project.client_brand else None,
+        'name': project.name,
+        'cancelled_at': project.cancelled_at,
+    }
+
+
 def _page_context():
     """Everything a template needs: the rows, plus every dropdown's
     option list. scope/cs-lead/project-owner options are global; contact
     options are keyed by client_id since Client SPOC's choices are
     whichever client that row's project belongs to."""
-    projects = _base_projects().order_by(Project.name.asc()).all()
+    listed = _base_projects().order_by(Project.name.asc()).all()
+    to_close_out = [p for p in listed if _awaiting_close_out(p)]
+    projects = [p for p in listed if not _awaiting_close_out(p)]
 
     contact_ids = {p.contact_id for p in projects if p.contact_id}
     contacts_by_id = (
@@ -220,6 +243,8 @@ def _page_context():
         'cs_lead_options': _person_options('cs'),
         'project_owner_options': _person_options('project_owner'),
         'contacts_by_client': _contacts_by_client(client_ids),
+        'to_close_out': [_close_out_row(p) for p in to_close_out],
+        'can_close': can_close_projects(_effective_user()),
     }
 
 
