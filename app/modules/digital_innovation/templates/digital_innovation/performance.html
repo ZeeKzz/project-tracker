@@ -59,8 +59,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/digital_innovation_nav.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/digital_innovation_shell.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/digital_innovation_live.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/digital_innovation_performance.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('digital_innovation_assets.static', filename='js/digital_innovation_nav.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('digital_innovation_assets.static', filename='js/digital_innovation_shell.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('digital_innovation_assets.static', filename='js/digital_innovation_live.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('digital_innovation_assets.static', filename='js/digital_innovation_performance.js') }}?v={{ config.STATIC_VERSION }}"></script>
 {% endblock %}

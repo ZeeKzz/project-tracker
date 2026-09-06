@@ -155,6 +155,18 @@ def create_app(config=Config):
     from app.modules.projects.routes.project_preproduction import project_preproduction_bp # Pre-Production phase backend (13 Aug 2026)
     from app.modules.projects.routes.project_notes import project_notes_bp  # Project Notes & Site Visits
     from app.modules.projects.blueprint import project_assets  # projects module static assets
+    from app.modules.profile.blueprint import profile_assets
+    from app.modules.achievements.blueprint import achievements_assets
+    from app.modules.admin.blueprint import admin_assets
+    from app.modules.blog.blueprint import blog_assets
+    from app.modules.feedback.blueprint import feedback_assets
+    from app.modules.wiki.blueprint import wiki_assets
+    from app.modules.file_templates.blueprint import file_templates_assets
+    from app.modules.client_directory.blueprint import client_directory_assets
+    from app.modules.dashboard.blueprint import dashboard_assets
+    from app.modules.time_tracking.blueprint import time_tracking_assets
+    from app.modules.client_servicing.blueprint import client_servicing_assets
+    from app.modules.digital_innovation.blueprint import digital_innovation_assets
     from app.modules.digital_innovation.models import DiProject, DiFeature, DiFeatureStep, DiStepTemplate, DiCostEntry, DiSetting, DiPeriodSnapshot, DiIntakeItem  # registers the tables with SQLAlchemy
     from app.modules.digital_innovation.routes import board as di_board  # registers board routes on digital_innovation_bp
     from app.modules.digital_innovation.routes import projects as di_projects  # registers project-create route on digital_innovation_bp
@@ -197,6 +209,18 @@ def create_app(config=Config):
     app.register_blueprint(project_preproduction_bp)
     app.register_blueprint(project_notes_bp)
     app.register_blueprint(project_assets)
+    app.register_blueprint(profile_assets)
+    app.register_blueprint(achievements_assets)
+    app.register_blueprint(admin_assets)
+    app.register_blueprint(blog_assets)
+    app.register_blueprint(feedback_assets)
+    app.register_blueprint(wiki_assets)
+    app.register_blueprint(file_templates_assets)
+    app.register_blueprint(client_directory_assets)
+    app.register_blueprint(dashboard_assets)
+    app.register_blueprint(time_tracking_assets)
+    app.register_blueprint(client_servicing_assets)
+    app.register_blueprint(digital_innovation_assets)
     app.register_blueprint(digital_innovation_bp)
     app.register_blueprint(client_servicing_bp)
 

@@ -165,7 +165,7 @@ old separate create.html page. #}
    (.visit-datetime-picker in project_overlay.css); nothing on this page
    has called into the AirDatepicker library since. #}
 <script src="{{ url_for('project_assets.static', filename='js/project_list_layout.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('static', filename='js/client_directory.js') }}?v={{ config.STATIC_VERSION }}"></script>
+<script src="{{ url_for('client_directory_assets.static', filename='js/client_directory.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('project_assets.static', filename='js/project_overlay_create.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('project_assets.static', filename='js/project_list.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('project_assets.static', filename='js/project_overlay.js') }}?v={{ config.STATIC_VERSION }}"></script>

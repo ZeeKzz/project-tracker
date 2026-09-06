@@ -254,7 +254,7 @@ window.PROFILE_CUSTOMIZE = {
 {# your own profile, but achievements.js just no-ops via querySelector      #}
 {# misses when those elements aren't on the page, same as any other        #}
 {# optional-element-not-found JS pattern already used elsewhere in the app. #}
-<script src="{{ url_for('static', filename='js/achievements.js') }}"></script>
+<script src="{{ url_for('achievements_assets.static', filename='js/achievements.js') }}"></script>
 
 {# Crop modal, file inputs, and Edit Details modal are all editing tools —   #}
 {# none of them are reachable from the page unless is_own_profile is true   #}
@@ -345,5 +345,5 @@ window.PROFILE_CUSTOMIZE = {
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+<script src="{{ url_for('profile_assets.static', filename='js/profile.js') }}"></script>
 {% endblock %}

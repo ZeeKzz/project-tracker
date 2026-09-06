@@ -463,7 +463,7 @@
    selector in that file already is (`if (!el) return`), so it's a
    harmless no-op on the old dashboard.html, which doesn't render any of
    these elements. #}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-<script src="{{ url_for('static', filename='js/time_tracking.js') }}"></script>
+<script src="{{ url_for('dashboard_assets.static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('time_tracking_assets.static', filename='js/time_tracking.js') }}"></script>
 
 {% endblock %}

@@ -324,6 +324,6 @@
    submit handlers all live there). Every selector added for THIS page is
    guarded the same defensive way (`if (!el) return`), harmless no-op on
    the other two dashboard templates. #}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('dashboard_assets.static', filename='js/dashboard.js') }}"></script>
 
 {% endblock %}
