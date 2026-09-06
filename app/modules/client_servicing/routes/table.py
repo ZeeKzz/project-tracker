@@ -64,16 +64,10 @@ TABLE_KEY = 'client_servicing:table'
 
 
 def _saved_layout():
-    """The effective user's raw saved layout array for this table — a
-    list of {'key': ..., 'width': ...} dicts in display order — or [] if
-    they've never resized/reordered anything. Fetched once per request
-    and shared by _ordered_columns() and _column_widths() below so a
-    page load only queries UserTableLayout a single time.
-
-    Keyed on _effective_user(), not current_user — an admin previewing
-    the page while emulating someone else should see (and, via
-    layout.py's save_layout, persist) THAT person's own saved column
-    layout, same as project_list.py does for its own tables."""
+    """The effective user's saved layout for this table ([] if none), fetched
+    once per request and shared by _ordered_columns/_column_widths. Keyed on
+    _effective_user() so an admin emulating someone sees and saves that
+    person's layout."""
     row = UserTableLayout.query.filter_by(user_id=_effective_user().id, table_key=TABLE_KEY).first()
     if not row or not row.layout:
         return []
@@ -81,20 +75,10 @@ def _saved_layout():
 
 
 def _ordered_columns(saved):
-    """COLUMNS reordered to match the user's saved key order. A saved key
-    that no longer exists in COLUMNS (e.g. after a schema change) is
-    silently ignored; a COLUMNS key missing from the saved layout (a
-    column added since the user last dragged anything, or a first-ever
-    visit) is appended at the end in its default position — so nobody
-    ever loses a column to a stale or incomplete save.
-
-    Project is then forced back to the very front (right after the
-    pinned "Open in Projects" column, which isn't in COLUMNS at all) even
-    if a saved layout has it somewhere else — it's a sticky, pinned
-    column on the page (client_servicing.js excludes it from the
-    reorder-drag entirely, same as the Projects page pins its own Name
-    column), so the rendered order has to guarantee it's always first,
-    not just usually first."""
+    """COLUMNS in the user's saved order; unknown saved keys are dropped and
+    columns missing from the save are appended, so no column is lost. Project
+    is then forced to the front — it's the pinned, non-draggable sticky column
+    and must always render first."""
     by_key = {col['key']: col for col in COLUMNS}
     saved_keys = [entry['key'] for entry in saved if entry['key'] in by_key]
     ordered = [by_key[key] for key in saved_keys]

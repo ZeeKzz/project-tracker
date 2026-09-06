@@ -1,15 +1,10 @@
 """
-CS operational status — the CS master-sheet lifecycle laid over the
-platform's own derived status. The platform models only the
-design -> approval -> handoff stages (status_vocabulary.derive_project_status);
-production, procurement, logistics and finance stages aren't modelled yet,
-so CS carries them as a manual overlay on its own companion row.
-
-effective_cs_status() returns the manual cs_status when set (it always
-wins, sticky until cleared), else the platform-derived status re-labelled
-into CS vocabulary. Nothing here writes, and nothing touches
-Project.project_status — the projects page, dashboard and DI board are
-unaffected.
+CS operational status — the CS master-sheet lifecycle laid over the platform's
+derived status. The platform models only design→approval→handoff; production,
+procurement, logistics and finance stages aren't modelled, so CS carries them
+as a manual overlay on its companion row. effective_cs_status() returns the
+manual cs_status when set (sticky), else the derived status re-labelled into CS
+vocabulary. Never touches Project.project_status.
 """
 from app.modules.core.shared.lib.status_vocabulary import derive_project_status
 

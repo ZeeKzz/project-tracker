@@ -1,15 +1,11 @@
 """
-Client Servicing field edits — one endpoint, cell by cell.
+Client Servicing field edits — one PATCH endpoint, cell by cell.
 
-CS-only fields write straight to this project's ClientServicing row.
-Writeback fields (job number, CS lead, project owner, SPOC, installation
-date, value, due date) route through
-app/modules/projects/services/mutations.py, the Projects module's own
-public write path — same notifications and activity-log entries a change
-on the Projects overlay would produce, just reached through a broader
-permission check (any CS/management/admin user, not only that project's
-own assigned people — the CS table is meant to be edited by the whole
-team).
+CS-only fields write straight to the project's ClientServicing row. Writeback
+fields (job number, CS lead, owner, SPOC, install date, value, due date) go
+through projects/services/mutations.py, so they raise the same notifications
+and activity-log entries as a Projects-overlay edit — on a broader permission
+(any CS/management/admin user).
 """
 from datetime import date
 from decimal import Decimal, InvalidOperation
