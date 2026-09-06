@@ -1,15 +1,11 @@
 """
-Client Servicing field edits — one endpoint, cell by cell.
+Client Servicing field edits — one PATCH endpoint, cell by cell.
 
-CS-only fields write straight to this project's ClientServicing row.
-Writeback fields (job number, CS lead, project owner, SPOC, installation
-date, value, due date) route through
-app/modules/projects/services/mutations.py, the Projects module's own
-public write path — same notifications and activity-log entries a change
-on the Projects overlay would produce, just reached through a broader
-permission check (any CS/management/admin user, not only that project's
-own assigned people — the CS table is meant to be edited by the whole
-team).
+CS-only fields write straight to the project's ClientServicing row. Writeback
+fields (job number, CS lead, owner, SPOC, install date, value, due date) go
+through projects/services/mutations.py, so they raise the same notifications
+and activity-log entries as a Projects-overlay edit — on a broader permission
+(any CS/management/admin user).
 """
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -24,6 +20,10 @@ from app.modules.projects.services import mutations as project_mutations
 
 from app.modules.client_servicing.models import ClientServicing, ClientServicingScope
 from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
+from app.modules.client_servicing.lib.status import (
+    effective_cs_status, cs_design_indicator, CS_STATUS_OPTIONS,
+)
+from app.modules.client_servicing.lib.calendar import effective_risk, RISK_OPTIONS
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 from app.modules.client_servicing.routes.table import _serialize_person
 
@@ -55,6 +55,18 @@ def _parse_date(value):
         raise _FieldError('must be a valid date')
 
 
+def _parse_qty(value):
+    if value in (None, ''):
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        raise _FieldError('must be a whole number')
+    if n < 1:
+        raise _FieldError('must be at least 1')
+    return n
+
+
 def _parse_money(value):
     if value in (None, ''):
         return None
@@ -65,6 +77,24 @@ def _parse_money(value):
     if amount < 0:
         raise _FieldError('must not be negative')
     return amount
+
+
+_VALIDATION_VALUES = {'valid', 'pending', 'no_lpo', 'overdue'}
+
+
+def _parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('true', '1', 'yes', 'on')
+
+
+def _parse_validation(value):
+    if value in (None, ''):
+        return None
+    text = str(value).strip().lower()
+    if text not in _VALIDATION_VALUES:
+        raise _FieldError('must be a valid status')
+    return text
 
 
 def _parse_scope_id(value):
@@ -90,7 +120,26 @@ _EDITABLE_FIELDS = {
     'inward_cost': _parse_money,
     'scope_id': _parse_scope_id,
     'priority': _text_parser(120),
+    'next_action': _text_parser(255),
+    'action_owner': _text_parser(120),
+    'install_qty': _parse_qty,
+    'lpo_date': _parse_date,
+    'project_value': _parse_money,
+    'invoice_number': _text_parser(120),
+    'invoice_date': _parse_date,
+    'invoice_amount': _parse_money,
+    'gr_received': _parse_bool,
+    'invoice_uploaded': _parse_bool,
+    'validation_status': _parse_validation,
 }
+
+# Finance/master-control fields — editable by a NARROWER set than page
+# access (finance, CS, admin only), same gate as the Invoicing tab.
+_FINANCE_FIELDS = {
+    'lpo_date', 'project_value', 'invoice_number', 'invoice_date',
+    'invoice_amount', 'gr_received', 'invoice_uploaded', 'validation_status',
+}
+_FINANCE_EDIT_ROLES = {'admin', 'cs', 'finance'}
 
 
 def _display_value(field, value):
@@ -103,6 +152,10 @@ def _display_value(field, value):
     if field == 'scope_id':
         scope = ClientServicingScope.query.get(value)
         return scope.name if scope else None
+    if field in ('lpo_date', 'invoice_date'):
+        return value.strftime('%d %b')
+    if field in ('project_value', 'invoice_amount'):
+        return '{:,.0f}'.format(value)
     return value
 
 
@@ -159,6 +212,56 @@ def _save_cs_only_field(project, field, raw_value):
     }), None
 
 
+
+_CS_STATUS_SET = set(CS_STATUS_OPTIONS)
+
+def _save_cs_status(project, raw_value):
+    """Manual operational-status overlay. Stores on the CS row only —
+    never Project.project_status. An empty value clears it back to the
+    derived status. Returns the recomputed effective status so the cell
+    can re-render pill + indicator chips + the auto hint."""
+    value = (raw_value or '').strip()
+    if value and value not in _CS_STATUS_SET:
+        return None, 'must be a valid status'
+    cs = project.client_servicing
+    if cs is None:
+        cs = ClientServicing(project_id=project.id)
+        db.session.add(cs)
+    cs.cs_status = value or None
+    db.session.commit()
+
+    label, modifier, is_auto = effective_cs_status(project)
+    indicators = cs_design_indicator(project) if (is_auto and label == 'In Design') else []
+    return jsonify({
+        'field': 'cs_status',
+        'value': cs.cs_status or '',
+        'status': {'label': label, 'modifier': modifier, 'is_auto': is_auto, 'indicators': indicators},
+    }), None
+
+
+_RISK_SET = set(RISK_OPTIONS)
+
+def _save_cs_risk(project, raw_value):
+    """Manual installation-risk override. Stores on the CS row only; empty
+    clears it back to the derived risk. Returns the recomputed effective
+    risk so the calendar cell can re-render."""
+    value = (raw_value or '').strip()
+    if value and value not in _RISK_SET:
+        return None, 'must be a valid risk'
+    cs = project.client_servicing
+    if cs is None:
+        cs = ClientServicing(project_id=project.id)
+        db.session.add(cs)
+    cs.risk = value or None
+    db.session.commit()
+    label, modifier, is_auto = effective_risk(project)
+    return jsonify({
+        'field': 'risk',
+        'value': cs.risk or '',
+        'risk': {'label': label, 'modifier': modifier, 'is_auto': is_auto},
+    }), None
+
+
 @client_servicing_bp.route('/<int:project_id>', methods=['PATCH'])
 @login_required
 def update_field(project_id):
@@ -174,6 +277,21 @@ def update_field(project_id):
     data = request.get_json(silent=True) or {}
     field = data.get('field')
     raw_value = data.get('value')
+
+    if field in _FINANCE_FIELDS and getattr(actor, 'role', None) not in _FINANCE_EDIT_ROLES:
+        abort(403)
+
+    if field == 'cs_status':
+        response, error = _save_cs_status(project, raw_value)
+        if error:
+            return jsonify({'error': error}), 400
+        return response
+
+    if field == 'risk':
+        response, error = _save_cs_risk(project, raw_value)
+        if error:
+            return jsonify({'error': error}), 400
+        return response
 
     if field in _EDITABLE_FIELDS:
         response, error = _save_cs_only_field(project, field, raw_value)

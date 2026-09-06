@@ -3,7 +3,7 @@ VITAMIN HELIX — CHANGELOG
 ===============================================================================
 
 ================================================================================
-v2.4.1
+v2.4.3 - Dark Mode, Digital Innovation & Client Servicing
 ================================================================================
 New Features:
 
@@ -15,21 +15,28 @@ Adjustments:
 
 - SPA navigation done for projects tabs & filtering navigations.
 - Loading bar added for in app navigation.
-
+- Wiki, references and blog updated to support video and audio files.
+- Updated everyone's profile pictures
+- Removed design outing page
+- Updated all employees profile pictures
+- Finished moving all features into modules.
 
 
 Bug Fixes:
 
 - Fixed deliverables page loading extremely slowly.
+- Fixed page hangs when navigating quickly
 
 ================================================================================
-v2.4
+v2.4 - Escalations & Projects Revamp
 ================================================================================
 New Features:
 
 - Escalations in the dashboard now have chat threads can be used to gather more information by both parties.
 - Escalation history has been added for CS and Management roles
 - Implemented daily backups of the database
+- Projects has been revamped completely to be more focused and better UI/UX
+- Added global themes to the platform, ensuring visual consistency across the platform
 
 Adjustments:
 

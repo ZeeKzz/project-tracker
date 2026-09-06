@@ -1,52 +1,20 @@
-// Client Servicing page. This file's script tag lives in the page's own
-// {% block extra_js %}, so it re-executes fresh on every SPA navigation
-// onto this page (see app/__init__.py's spa_strip_response) — no
-// helix:navigated listener needed here.
+// Client Servicing table page. This script re-executes on every SPA
+// navigation onto the page (its tag is in {% block extra_js %}), so it needs
+// no helix:navigated listener. polling.js calls
+// window.helixRefreshClientServicingTable() on each SSE ping to swap the rows.
 //
-// polling.js opens a stream to /sse/dashboard (the generic "some project
-// changed somewhere" doorbell) whenever .client-servicing-page is on
-// screen, and calls window.helixRefreshClientServicingTable() on every
-// ping — same convention as project_list.js's helixRefreshProjectTable.
-//
-// Cell editing: every .cs-editable <td> edits in place — click it, it
-// turns into the right input, saves on blur. No overlay, no modal, no
-// popover; the whole thing happens inside the table cell. Click handling
-// is delegated on #client-servicing-table-body (never replaced itself,
-// only its innerHTML), so it survives every live-refresh swap without
-// needing to be rebound.
-//
-// Scope and Client SPOC can also be created inline: their
-// select gets a trailing "+ Add new..." option; picking it swaps the
-// select for a tiny name field + Add/Cancel, still inside the same td.
-// On Add it posts to the field's own quick-add endpoint, then saves the
-// new record's id through the normal saveField() path — same PATCH,
-// same error handling, nothing duplicated.
-//
-// Click-to-sort: click a header to sort by that
-// column, click again to reverse, a third click clears back to the
-// server's default order (Project name, A-Z). Deliberately lighter than
-// the Projects page's Sort popout — no query params, no multi-field
-// sort, nothing saved to the server — just a live re-order of the rows
-// already on screen, entirely in this module-scope `currentSort`
-// variable. That also means it resets on every page load/SPA
-// navigation for free (this whole file re-executes fresh each time, per
-// the top-of-file note), matching what Ezekiel asked for; it does
-// survive a live SSE refresh, since applySort() re-runs after every
-// helixRefreshClientServicingTable() swap so a background edit from
-// someone else doesn't silently undo the sort you're mid-review of.
+// Cell editing: every .cs-editable <td> edits in place (click → input → save
+// on blur), delegated on #client-servicing-table-body so it survives refresh
+// swaps. Scope and Client SPOC can also be created inline via a "+ Add new..."
+// option. Click-to-sort is client-side only (module-scope `currentSort`), not
+// persisted; it resets on reload and re-applies after a live refresh.
 (function () {
     var body = document.getElementById('client-servicing-table-body');
     if (!body) return;
 
-    // Sticky Project-name column, mirroring the Projects page's pinned
-    // Expand+Name pair: "Open in Projects" and Project both stay put as
-    // the table scrolls right (CSS below). Project's sticky "left" has
-    // to equal the Open column's actual rendered width — unlike the
-    // Projects page's fixed-size icon-only Expand column, "Open in
-    // Projects" is a text button with no fixed width to hard-code, so
-    // it's measured here instead and handed to the CSS as a custom
-    // property. Re-run after every refresh, since the whole <table> (and
-    // any inline style on it) is replaced wholesale each time.
+    // Sticky Project column: its left offset must equal the "Open in Projects"
+    // column's rendered width, measured here and handed to the CSS as a custom
+    // property. Re-run after every refresh (the whole table is replaced).
     function syncStickyProjectOffset() {
         var table = document.getElementById('cs-table');
         var openHeaderCell = table && table.querySelector('thead th.cs-col-open');
@@ -156,6 +124,7 @@
     // row's client, resolved from the td's data-client-id at build time.
     var SELECT_FIELDS = {
         scope_id: function () { return window.__csScopeOptions || []; },
+        cs_status: function () { return window.__csStatusOptions || []; },
         cs_lead_id: function () { return window.__csLeadOptions || []; },
         project_owner_id: function () { return window.__csProjectOwnerOptions || []; },
         contact_id: function (td) {
@@ -266,6 +235,33 @@
         return input;
     }
 
+    // Rebuilds the status cell (pill + indicator chips + auto hint) from
+    // the effective status the edit endpoint returns, so a cs_status edit
+    // shows manual-vs-auto and the right chips immediately.
+    var STATUS_CHIP_VARIANT = { '2D': '2d', '3D': '3d', 'Technical': 'technical' };
+    function renderStatusCell(td, status) {
+        td.innerHTML = '';
+        td.dataset.sortValue = status.label || '';
+        var pill = document.createElement('span');
+        pill.className = 'status-pill status-pill--' + status.modifier;
+        pill.textContent = status.label;
+        td.appendChild(pill);
+        (status.indicators || []).forEach(function (chip) {
+            td.appendChild(document.createTextNode(' '));
+            var t = document.createElement('span');
+            t.className = 'tag tag--' + (STATUS_CHIP_VARIANT[chip] || 'muted');
+            t.textContent = chip;
+            td.appendChild(t);
+        });
+        if (status.is_auto) {
+            td.appendChild(document.createTextNode(' '));
+            var auto = document.createElement('small');
+            auto.className = 'cs-muted';
+            auto.textContent = 'auto';
+            td.appendChild(auto);
+        }
+    }
+
     // Builds the same .person-chip markup the server's person_chip()
     // Jinja macro renders, so a CS Lead/Project Owner edit shows the real
     // avatar immediately instead of plain text until the next refresh.
@@ -328,7 +324,9 @@
                 }
                 td.removeAttribute('title');
                 td.dataset.value = rawInputValue;
-                if (result.data.person) {
+                if (result.data.status) {
+                    renderStatusCell(td, result.data.status);
+                } else if (result.data.person) {
                     td.innerHTML = '';
                     td.appendChild(renderPersonChip(result.data.person));
                 } else {
@@ -350,13 +348,9 @@
             });
     }
 
-    // Small inline "name + Add/Cancel" form, replacing the select inside
-    // the same td — used when someone picks "+ Add new..." instead of an
-    // existing option. On Add, creates the record via quickAdd.create()
-    // then hands the new id to onCreated (which saves it like any other
-    // edit). Never leaves the page without a value: Cancel/Escape/a
-    // failed create all restore the cell to what it was before editing
-    // started.
+    // Inline "name + Add/Cancel" form replacing the select when "+ Add new..."
+    // is picked. On Add, creates the record then saves the new id like any
+    // edit; Cancel/Escape/failure restore the cell.
     function startQuickAdd(td, quickAdd, originalHtml, onCreated) {
         td.innerHTML = '';
 
@@ -484,11 +478,8 @@
     });
 
     // ── Column resize ─────────────────────────────────────────────
-    // Delegated on `body`, not the <table> itself — the whole table gets
-    // replaced wholesale on every live refresh (same reasoning as the
-    // click-to-edit handler above), so a listener bound to individual
-    // .cs-resize-handle elements would stop working after the first
-    // refresh.
+    // Delegated on `body`, not the table — the table is replaced on every
+    // live refresh, so a handle-bound listener would stop working after one.
     var MIN_COL_WIDTH = 60;
     var layoutSaveTimer = null;
 
@@ -539,25 +530,14 @@
     });
 
     // ── Column reorder ────────────────────────────────────────────
-    // Same delegation reasoning as resize above: bound on `body`, not the
-    // <table>, so it survives every live-refresh swap. Guards against the
-    // resize handle's own mousedown — the handle sits inside its <th>, so
-    // without that check every resize-drag would also start a reorder.
-    //
-    // Moves the dragged column's <th> (thead), <col> (colgroup), and every
-    // row's <td> (tbody) live via insertBefore as the user drags. Like
-    // resize, the server render is the ultimate source of truth:
-    // scheduleLayoutSave() (above) persists whatever order the colgroup
-    // ends up in, and the next full refresh re-renders in that saved
-    // order via table.py's _ordered_columns() — these DOM moves just keep
-    // the current view honest until that happens.
+    // Delegated on `body` (survives refresh swaps); skips the resize handle's
+    // own mousedown. Moves the dragged column's <th>/<col>/<td>s live via
+    // insertBefore; scheduleLayoutSave() persists the order and the next
+    // refresh re-renders it via table.py's _ordered_columns().
     var DRAG_THRESHOLD = 4; // px of movement before a mousedown becomes a drag, not a stray click
 
-    // A plain click on a header (no movement past DRAG_THRESHOLD) sorts
-    // instead of reordering — set right before the browser's own 'click'
-    // event fires for a drag that DID move, so that click handler below
-    // can tell "just dragged" apart from "just clicked" using the same
-    // mousedown/mouseup pair the reorder logic already tracked.
+    // A header click sorts; a drag reorders. Set when a real drag ends so the
+    // click handler below can tell the two apart from the same mouse pair.
     var suppressNextClick = false;
 
     function findColumnCells(table, key) {
@@ -630,10 +610,8 @@
         document.addEventListener('mouseup', onUp);
     });
 
-    // A click that wasn't a drag sorts by that column. Delegated the same
-    // way as every other handler here (survives live-refresh swaps);
-    // covers Project too, even though Project is excluded from the
-    // reorder-drag above — it's still sortable, just not draggable.
+    // A non-drag click sorts by that column. Covers Project too — sortable
+    // though not draggable.
     body.addEventListener('click', function (e) {
         if (suppressNextClick) { suppressNextClick = false; return; }
         if (e.target.closest('.cs-resize-handle')) return;
@@ -646,10 +624,7 @@
     syncStickyProjectOffset();
     window.addEventListener('resize', syncStickyProjectOffset);
 
-    // Runs after syncStickyProjectOffset (harmless either order, kept
-    // together since both are "measure real chrome, don't guess"
-    // fixes) — see the function's own comment above for why this
-    // exists instead of a fixed CSS value.
+    // Measure-real-chrome height sync (see syncTableScrollHeight above).
     syncTableScrollHeight();
     window.addEventListener('resize', syncTableScrollHeight);
 })();

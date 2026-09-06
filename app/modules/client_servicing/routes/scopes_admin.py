@@ -1,24 +1,9 @@
 """
-Admin management of the CS Scope option list. Separate from the
-per-row field edit endpoint in edit.py — this is reference-data CRUD for
-the Scope dropdown itself, not editing a project's row.
-
-Full CRUD (list/create/rename/deactivate) is admin-only, driven by the
-"CS Scopes" tab in the shared Admin Panel (base.html + admin.js) — mirrors
-the existing Design Types/Directions tabs there, which follow the same
-list/create/rename/delete shape. Deactivate, not delete, here:
-`ClientServicingScope.active` is the flag `_scope_options()` (table.py)
-and `_parse_scope_id` (edit.py) already filter on, so a deactivated scope
-just drops out of future selection without breaking any row that already
-has it — same pattern as deactivating a user account elsewhere in the app.
-
-quick_add_scope is the CS table's own inline "+ Add new scope..." flow —
-same cs/management/admin gate as the rest of this module (not admin-only),
-idempotent like the app's existing design-type/design-direction quick-add
-endpoints. It reactivates a name that matches a deactivated scope, since
-returning an inactive scope's id here would otherwise let someone "add"
-a scope from the table that then fails to save (edit.py's _parse_scope_id
-only accepts active scopes) — a confusing dead end for no reason.
+Admin CRUD for the CS Scope option list — separate from per-row cell edits
+(edit.py). Full CRUD is admin-only (Admin Panel "CS Scopes" tab); quick_add_scope
+is the table's inline "+ Add scope" on the CS/management/admin gate. Scopes
+deactivate rather than delete (rows keep a dropped scope), and quick-add
+reactivates a deactivated name so it never returns an unusable id.
 """
 from flask import request, jsonify, abort
 from flask_login import login_required

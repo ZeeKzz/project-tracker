@@ -11,10 +11,12 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.modules.core.shared.models import Project, ProjectDesigner, Contact, UserTableLayout
 from app.modules.core.shared.lib.users import active_users
-from app.modules.core.shared.lib.status_vocabulary import derive_project_status
 from app.modules.core.shared.services.status_tracking import bulk_project_client_approved_at
 
 from app.modules.client_servicing.models import ClientServicing, ClientServicingScope
+from app.modules.client_servicing.lib.status import (
+    effective_cs_status, cs_design_indicator, CS_STATUS_OPTIONS,
+)
 from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 
@@ -62,16 +64,10 @@ TABLE_KEY = 'client_servicing:table'
 
 
 def _saved_layout():
-    """The effective user's raw saved layout array for this table — a
-    list of {'key': ..., 'width': ...} dicts in display order — or [] if
-    they've never resized/reordered anything. Fetched once per request
-    and shared by _ordered_columns() and _column_widths() below so a
-    page load only queries UserTableLayout a single time.
-
-    Keyed on _effective_user(), not current_user — an admin previewing
-    the page while emulating someone else should see (and, via
-    layout.py's save_layout, persist) THAT person's own saved column
-    layout, same as project_list.py does for its own tables."""
+    """The effective user's saved layout for this table ([] if none), fetched
+    once per request and shared by _ordered_columns/_column_widths. Keyed on
+    _effective_user() so an admin emulating someone sees and saves that
+    person's layout."""
     row = UserTableLayout.query.filter_by(user_id=_effective_user().id, table_key=TABLE_KEY).first()
     if not row or not row.layout:
         return []
@@ -79,20 +75,10 @@ def _saved_layout():
 
 
 def _ordered_columns(saved):
-    """COLUMNS reordered to match the user's saved key order. A saved key
-    that no longer exists in COLUMNS (e.g. after a schema change) is
-    silently ignored; a COLUMNS key missing from the saved layout (a
-    column added since the user last dragged anything, or a first-ever
-    visit) is appended at the end in its default position — so nobody
-    ever loses a column to a stale or incomplete save.
-
-    Project is then forced back to the very front (right after the
-    pinned "Open in Projects" column, which isn't in COLUMNS at all) even
-    if a saved layout has it somewhere else — it's a sticky, pinned
-    column on the page (client_servicing.js excludes it from the
-    reorder-drag entirely, same as the Projects page pins its own Name
-    column), so the rendered order has to guarantee it's always first,
-    not just usually first."""
+    """COLUMNS in the user's saved order; unknown saved keys are dropped and
+    columns missing from the save are appended, so no column is lost. Project
+    is then forced to the front — it's the pinned, non-draggable sticky column
+    and must always render first."""
     by_key = {col['key']: col for col in COLUMNS}
     saved_keys = [entry['key'] for entry in saved if entry['key'] in by_key]
     ordered = [by_key[key] for key in saved_keys]
@@ -132,13 +118,15 @@ def _eager_load(query):
         joinedload(Project.client_brand),
         selectinload(Project.assigned_designers).joinedload(ProjectDesigner.designer),
         joinedload(Project.client_servicing).joinedload(ClientServicing.scope),
+        selectinload(Project.project_deliverables),
     )
 
 
 def _serialize_row(p, contacts_by_id, client_approved_at):
     cs = p.client_servicing
     contact = contacts_by_id.get(p.contact_id) if p.contact_id else None
-    status_label, status_class = derive_project_status(p)
+    status_label, status_class, status_is_auto = effective_cs_status(p)
+    status_indicators = cs_design_indicator(p) if (status_is_auto and status_label == 'In Design') else []
     designers = [_serialize_person(pd.designer) for pd in p.assigned_designers]
     return {
         'id': p.id,
@@ -154,6 +142,9 @@ def _serialize_row(p, contacts_by_id, client_approved_at):
         'client_approved_at': client_approved_at.get(p.id),
         'status_label': status_label,
         'status_class': status_class,
+        'status_is_auto': status_is_auto,
+        'status_indicators': status_indicators,
+        'cs_status': cs.cs_status if cs else None,
         'job_number': p.job_number,
         'contact_id': p.contact_id,
         'cs_lead': _serialize_person(p.cs_lead),
@@ -195,12 +186,18 @@ def _contacts_by_client(client_ids):
     return by_client
 
 
+def _base_projects():
+    """The projects the CS module lists — drafts excluded (a draft isn't a
+    real project yet). Shared by the table and the Invoicing tab."""
+    return _eager_load(Project.query).filter(Project.project_status != 'draft')
+
+
 def _page_context():
     """Everything a template needs: the rows, plus every dropdown's
     option list. scope/cs-lead/project-owner options are global; contact
     options are keyed by client_id since Client SPOC's choices are
     whichever client that row's project belongs to."""
-    projects = _eager_load(Project.query).order_by(Project.name.asc()).all()
+    projects = _base_projects().order_by(Project.name.asc()).all()
 
     contact_ids = {p.contact_id for p in projects if p.contact_id}
     contacts_by_id = (
@@ -219,6 +216,7 @@ def _page_context():
         'table_key': TABLE_KEY,
         'column_widths': _column_widths(saved),
         'scope_options': _scope_options(),
+        'status_options': [{'id': label, 'name': label} for label in CS_STATUS_OPTIONS],
         'cs_lead_options': _person_options('cs'),
         'project_owner_options': _person_options('project_owner'),
         'contacts_by_client': _contacts_by_client(client_ids),
