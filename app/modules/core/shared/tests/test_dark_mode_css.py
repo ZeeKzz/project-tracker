@@ -1,6 +1,7 @@
 """Regression test for the 2.4.1 dark-mode colour sweep: the swept
 stylesheets must route every hex colour through a CSS variable (so a dark
 override actually reaches it) instead of hard-coding it again."""
+import glob
 import os
 import re
 
@@ -33,11 +34,18 @@ def _root_block_ranges(text):
     return ranges
 
 
+def _swept_path(app, fn):
+    """Locate a swept CSS file wherever it now lives — assets are moving into
+    per-module static folders (2.4.3), so search app/**/static/css/."""
+    matches = glob.glob(os.path.join(app.root_path, '**', 'static', 'css', fn), recursive=True)
+    assert matches, f"swept CSS file not found under app/: {fn}"
+    return matches[0]
+
+
 def test_no_hardcoded_hex_outside_tokens(app):
-    css_dir = os.path.join(app.static_folder, 'css')
     offenders = {}
     for fn in SWEPT_FILES:
-        path = os.path.join(css_dir, fn)
+        path = _swept_path(app, fn)
         text = open(path, encoding='utf-8').read()
         roots = _root_block_ranges(text) if fn == "main.css" else []
         hits = [m.group(0) for m in HEX_RE.finditer(text)

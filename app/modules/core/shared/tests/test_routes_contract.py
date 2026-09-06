@@ -1,6 +1,6 @@
 """
 Route contract: the live url_map must match the commited baseline
-(refactor/route_baseline.txt). This is the refactor's automated 
+(refactor/route_baseline.txt). This is the refactor's automated
 safety net - any step that drops, renames or unexpectedly adds a
 route fails here.
 
@@ -15,6 +15,10 @@ def _baseline_path(app):
 def _current_routes(app):
     routes = set()
     for r in app.url_map.iter_rules():
+        # Static routes (app + per-blueprint) are infrastructure, not part of
+        # the contract — 2.4.3 adds one per module as assets move in.
+        if r.endpoint == 'static' or r.endpoint.endswith('.static'):
+            continue
         methods = ','.join(sorted(m for m in r.methods if m not in {'HEAD', 'OPTIONS'}))
         routes.add(f'{r.rule}\t{methods}\t{r.endpoint}')
     return routes
@@ -27,4 +31,4 @@ def test_route_contract_matches_baseline(app):
     added = current - baseline
     assert not missing, f"Routes in baseline but gone now: {sorted(missing)}"
     assert not added, f"Routes present now but not in baseline: {sorted(added)}"
-    print(f"route contract OK \u2014 {len(current)} routes match baseline")
+    print(f"route contract OK — {len(current)} routes match baseline")

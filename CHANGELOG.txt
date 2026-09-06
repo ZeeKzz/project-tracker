@@ -15,10 +15,9 @@ Adjustments:
 - SPA navigation done for projects tabs & filtering navigations.
 - Loading bar added for in app navigation.
 - Wiki, references and blog updated to support video and audio files.
-- Updated everyone's profile pictures
 - Removed design outing page
 - Updated all employees profile pictures
-- Finished moving all features into modules.
+- Finished moving all features (CSS/JS Files) into modules.
 
 
 Bug Fixes:
