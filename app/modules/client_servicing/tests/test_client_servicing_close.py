@@ -17,10 +17,14 @@ def _user(db_session, tag, role='cs'):
     return user
 
 
-def _project(db_session, user, name='Closable Project', cancelled=False):
+def _project(db_session, user, name='Closable Project', cancelled=False, value=None):
+    # value is the shared project value (a Float on Project, not a CS field) —
+    # seed it when a test needs the close-out NOT to stop and ask for one.
     project = Project(
         name=name, cs_lead_id=user.id, created_by_id=user.id, project_status='briefed',
     )
+    if value is not None:
+        project.value = value
     if cancelled:
         project.cancelled_at = datetime.utcnow()
     db_session.add(project)
@@ -108,7 +112,7 @@ def test_cancelled_project_with_nothing_to_invoice(app, client, db_session):
 def test_cancelled_project_already_invoiced_stores_the_date(app, client, db_session):
     user = _user(db_session, 'g')
     # Already has a value, so the close-out isn't asked for one.
-    project = _project(db_session, user, cancelled=True, value=Decimal('5000'))
+    project = _project(db_session, user, cancelled=True, value=5000)
     login_as(client, app, user, 'password123')
 
     resp = client.post(
@@ -125,7 +129,7 @@ def test_cancelled_project_already_invoiced_stores_the_date(app, client, db_sess
 def test_cancelled_project_not_invoiced_yet_is_pending(app, client, db_session):
     user = _user(db_session, 'h')
     # Already has a value, so the close-out isn't asked for one.
-    project = _project(db_session, user, cancelled=True, value=Decimal('5000'))
+    project = _project(db_session, user, cancelled=True, value=5000)
     login_as(client, app, user, 'password123')
 
     resp = client.post(_close_url(app, project), json={'invoice_needed': True})

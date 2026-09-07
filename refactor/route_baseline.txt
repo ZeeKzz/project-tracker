@@ -5,7 +5,6 @@
 /account/pinned-achievements	POST	profile.save_pinned_achievements
 /account/sound-prefs	POST	auth.save_sound_prefs
 /account/theme-prefs	POST	auth.save_theme_prefs
-/achievements/static/<path:filename>	GET	achievements_assets.static
 /admin/api/achievement-borders	GET	admin_achievements.list_achievement_borders
 /admin/api/achievement-borders	POST	admin_achievements.create_achievement_border
 /admin/api/achievement-borders/<int:border_id>	DELETE	admin_achievements.delete_achievement_border
@@ -63,7 +62,6 @@
 /admin/api/users/<int:user_id>/reset-password	POST	admin.admin_reset_password
 /admin/emulate/<int:user_id>	POST	admin.start_emulation
 /admin/emulate/exit	POST	admin.exit_emulation
-/admin/static/<path:filename>	GET	admin_assets.static
 /admin/users	GET	auth.admin_users
 /admin/users/<int:user_id>/reset-password	POST	auth.reset_password
 /api/clients/<int:client_id>/contacts	GET	api.client_contacts
@@ -84,7 +82,6 @@
 /blog/posts/<int:post_id>	DELETE	blog.delete_post
 /blog/posts/<int:post_id>	PUT	blog.update_post
 /blog/posts/<int:post_id>/publish	POST	blog.toggle_publish
-/blog/static/<path:filename>	GET	blog_assets.static
 /blog/upload-media	POST	blog.upload_media
 /bug-reports	GET	feedback.bug_reports
 /bug-reports	POST	feedback.submit_bug
@@ -95,10 +92,14 @@
 /bug-reports/comments/<int:comment_id>	DELETE	feedback.delete_bug_comment
 /client-servicing/	GET	client_servicing.index
 /client-servicing/<int:project_id>	PATCH	client_servicing.update_field
+/client-servicing/<int:project_id>/close	POST	client_servicing.close_project
 /client-servicing/calendar	GET	client_servicing.calendar
 /client-servicing/calendar/day/<datestr>	GET	client_servicing.calendar_day
+/client-servicing/closed	GET	client_servicing.closed
+/client-servicing/dashboard-panels	GET	client_servicing.dashboard_panels
 /client-servicing/invoicing	GET	client_servicing.invoicing
 /client-servicing/invoicing/day-thresholds	POST	client_servicing.save_day_thresholds
+/client-servicing/invoicing/export.csv	GET	client_servicing.invoicing_export
 /client-servicing/invoicing/summary	GET	client_servicing.invoicing_summary
 /client-servicing/layout	POST	client_servicing.save_layout
 /client-servicing/scopes	GET	client_servicing.list_scopes
@@ -107,9 +108,6 @@
 /client-servicing/scopes/quick-add	POST	client_servicing.quick_add_scope
 /client-servicing/table	GET	client_servicing.table
 /client-servicing/table-rows	GET	client_servicing.table_rows
-/client_directory/static/<path:filename>	GET	client_directory_assets.static
-/client_servicing/static/<path:filename>	GET	client_servicing_assets.static
-/core/static/<path:filename>	GET	core.static
 /dashboard	GET	projects.index
 /dashboard/api/active-projects	GET	projects.api_active_projects
 /dashboard/api/clashes	GET	projects.api_clashes
@@ -126,7 +124,6 @@
 /dashboard/api/time-tracking-rows	GET	projects.api_time_tracking_rows
 /dashboard/api/waiting-on-others	GET	projects.api_waiting_on_others
 /dashboard/api/what-changed	GET	projects.api_what_changed
-/dashboard/static/<path:filename>	GET	dashboard_assets.static
 /deliverables/<int:deliverable_id>/nas-folder-link	GET	project_preproduction.deliverable_nas_folder_link
 /deliverables/<int:deliverable_id>/preproduction/approve	POST	project_preproduction.approve_stream
 /deliverables/<int:deliverable_id>/preproduction/assign	POST	project_preproduction.assign_stream
@@ -169,7 +166,6 @@
 /digital-innovation/templates	GET	digital_innovation.templates_screen
 /digital-innovation/templates/<stage>/steps	POST	digital_innovation.add_template_step
 /digital-innovation/templates/body	GET	digital_innovation.templates_body_fragment
-/digital_innovation/static/<path:filename>	GET	digital_innovation_assets.static
 /directory/clients	GET	client_directory.index
 /directory/clients/companies	POST	client_directory.save_company
 /directory/clients/contacts	POST	client_directory.save_contact
@@ -181,13 +177,11 @@
 /feature-requests/<int:feature_id>/status	PATCH	feedback.update_fr_status
 /feature-requests/<int:feature_id>/upvote	POST	feedback.toggle_upvote
 /feature-requests/comments/<int:comment_id>	DELETE	feedback.delete_fr_comment
-/feedback/static/<path:filename>	GET	feedback_assets.static
 /file-templates	GET	file_templates.index
 /file-templates/download-all/customer/<int:customer_id>	GET	file_templates.download_all_customer_templates
 /file-templates/download-all/region/<region_key>	GET	file_templates.download_all_region_templates
 /file-templates/download/<int:deliverable_type_id>	GET	file_templates.download_template
 /file-templates/simulatin-files-link	GET	file_templates.get_simulation_files_link
-/file_templates/static/<path:filename>	GET	file_templates_assets.static
 /login	GET,POST	auth.login
 /logout	GET	auth.logout
 /notifications/<int:notification_id>/archive	POST	notifications.archive_notification
@@ -203,7 +197,6 @@
 /profile/banner	POST	profile.upload_banner
 /profile/bio	POST	profile.update_profile_bio
 /profile/details	POST	profile.update_profile_details
-/profile/static/<path:filename>	GET	profile_assets.static
 /project-customers/<int:project_customer_id>/cancel	POST	project_overlay.overlay_cancel_customer
 /project-customers/<int:project_customer_id>/uncancel	POST	project_overlay.overlay_uncancel_customer
 /projects-new/	GET	project_list.index
@@ -285,7 +278,6 @@
 /projects/notes/<int:note_id>/react	POST	project_notes.toggle_reaction
 /projects/overlay/drafts	GET	project_overlay.list_drafts
 /projects/overlay/new	POST	project_overlay.overlay_create_draft
-/projects/static/<path:filename>	GET	project_assets.static
 /projects/submission/<int:submission_id>/download	GET	project_overlay.download_submission
 /projects/submission/<int:submission_id>/preview	GET	project_overlay.preview_submission
 /projects/submission/file/<int:file_id>/download	GET	project_overlay.download_submission_file
@@ -297,9 +289,7 @@
 /sse/digital-innovation/<int:di_project_id>	GET	sse.di_project_stream
 /sse/notifications	GET	sse.notifications_stream
 /sse/projects/<int:project_id>	GET	sse.project_stream
-/static/<path:filename>	GET	static
 /time-tracking	GET	time_tracking.index
-/time_tracking/static/<path:filename>	GET	time_tracking_assets.static
 /wiki	GET	wiki.index
 /wiki/article/<int:article_id>	GET	wiki.get_article
 /wiki/editor	GET	wiki.editor_dashboard
@@ -313,7 +303,6 @@
 /wiki/editor/section/<int:section_id>/toggle-publish	POST	wiki.toggle_section_publish
 /wiki/editor/section/new	GET	wiki.new_section
 /wiki/editor/section/save	POST	wiki.save_section
-/wiki/static/<path:filename>	GET	wiki_assets.static
 /wiki/upload-image	POST	wiki.upload_image
 /wiki/upload-video	POST	wiki.upload_video
 /wizard/complete	POST	wizard.complete
