@@ -68,7 +68,7 @@
 
 {% macro cell_removal_date(row) %}<td data-col-key="removal_date" class="cs-editable" data-field="removal_date" data-value="{{ row.removal_date.isoformat() if row.removal_date else '' }}" data-sort-value="{{ row.removal_date.isoformat() if row.removal_date else '' }}">{{ row.removal_date.strftime('%d %b %Y') if row.removal_date else '—' }}</td>{% endmacro %}
 
-{% macro cell_invoice_month(row) %}<td data-col-key="invoice_month" class="cs-editable" data-field="invoice_month" data-value="{{ row.invoice_month or '' }}" data-sort-value="{{ row.invoice_month or '' }}">{{ row.invoice_month or '—' }}</td>{% endmacro %}
+{% macro cell_invoice_month(row) %}<td data-col-key="invoice_month" class="cs-editable" data-field="invoice_month_date" data-value="{{ row.invoice_month.strftime('%Y-%m') if row.invoice_month else '' }}" data-sort-value="{{ row.invoice_month.isoformat() if row.invoice_month else '' }}">{{ row.invoice_month.strftime('%b %Y') if row.invoice_month else '—' }}</td>{% endmacro %}
 
 {% macro cell_cost_to_client(row) %}<td data-col-key="cost_to_client" class="cs-editable" data-field="cost_to_client" data-value="{{ row.cost_to_client if row.cost_to_client is not none else '' }}" data-sort-value="{{ row.cost_to_client if row.cost_to_client is not none else '' }}">{{ '{:,.2f}'.format(row.cost_to_client) if row.cost_to_client is not none else '—' }}</td>{% endmacro %}
 

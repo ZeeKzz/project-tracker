@@ -222,7 +222,7 @@
         var input = document.createElement('input');
         if (field === 'removal_date' || field === 'installation_date' || field === 'first_output_deadline') {
             input.type = 'date';
-        } else if (field === 'invoice_month') {
+        } else if (field === 'invoice_month_date') {
             input.type = 'month';
         } else if (field === 'cost_to_client' || field === 'inward_cost' || field === 'value') {
             input.type = 'number';
@@ -621,12 +621,20 @@
     });
 
     // ── Sticky column wiring ──────────────────────────────────────────
+    // Both run now, for this visit's freshly-swapped table.
     syncStickyProjectOffset();
-    window.addEventListener('resize', syncStickyProjectOffset);
-
-    // Measure-real-chrome height sync (see syncTableScrollHeight above).
     syncTableScrollHeight();
-    window.addEventListener('resize', syncTableScrollHeight);
+
+    // Bound once for the session. This file re-executes on every SPA nav
+    // (execScripts re-runs the fragment's script tags), and both handlers
+    // re-query the DOM on each call, so one registration serves every visit —
+    // without the guard each navigation stacked another pair. Same reasoning
+    // as the filter panel's outside-click listener below.
+    if (!window.__csTableResizeBound) {
+        window.__csTableResizeBound = true;
+        window.addEventListener('resize', syncStickyProjectOffset);
+        window.addEventListener('resize', syncTableScrollHeight);
+    }
 })();
 
 

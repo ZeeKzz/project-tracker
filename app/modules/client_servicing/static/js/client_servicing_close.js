@@ -1,11 +1,16 @@
-/* Close / close-out prompts on the CS table. IIFE + direct init so it
-   re-runs on SPA nav; no-ops when the modals aren't on the page (a viewer
-   who can't close never gets them rendered). Closing is final, so both
-   prompts confirm before posting, and a success just reloads the page. */
+/* Close / close-out prompts on the CS table. IIFE + direct init, and the
+   tag lives inside the content block so an SPA swap re-runs it; no-ops when
+   the modals aren't on the page (a viewer who can't close never gets them
+   rendered). Closing is final, so both prompts confirm before posting, and
+   a success just reloads the page. */
 (function () {
+    // Scoped to .cs-page, not document: this file re-executes on every SPA
+    // swap, and a listener on the swapped-in element dies with it instead of
+    // stacking a fresh copy each visit.
+    var page = document.querySelector('.cs-page');
     var closeModal = document.getElementById('cs-close-modal');
     var outModal = document.getElementById('cs-closeout-modal');
-    if (!closeModal || !outModal) return;
+    if (!page || !closeModal || !outModal) return;
 
     var pending = null;  // the close URL the open prompt is acting on
 
@@ -39,7 +44,7 @@
     var confirmBtn = document.getElementById('cs-close-confirm');
     var closeCancel = document.getElementById('cs-close-cancel');
 
-    document.addEventListener('click', function (e) {
+    page.addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('.cs-close-btn') : null;
         if (!btn) return;
         pending = btn.dataset.closeUrl;
@@ -63,6 +68,8 @@
     var error1 = document.getElementById('cs-closeout-error-1');
     var error2 = document.getElementById('cs-closeout-error-2');
     var invoiceDate = document.getElementById('cs-closeout-invoice-date');
+    var valueField = document.getElementById('cs-closeout-value-field');
+    var valueInput = document.getElementById('cs-closeout-value');
     var outCancel = document.getElementById('cs-closeout-cancel');
     var noBtn = document.getElementById('cs-closeout-no');
     var yesBtn = document.getElementById('cs-closeout-yes');
@@ -86,12 +93,15 @@
         clearError(error2);
     }
 
-    document.addEventListener('click', function (e) {
+    page.addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('.cs-closeout-btn') : null;
         if (!btn) return;
         pending = btn.dataset.closeUrl;
         outSubject.textContent = btn.dataset.projectName || '';
         invoiceDate.value = '';
+        valueInput.value = '';
+        // Only ask for a value when this project hasn't got one.
+        valueField.hidden = btn.dataset.hasValue === '1';
         toStep1();
         show(outModal);
     });
@@ -105,8 +115,23 @@
         post(pending, { invoice_needed: false }, error1, [noBtn, yesBtn]);
     });
 
+    /* Both step-2 answers mean the project is invoiceable, so both need a
+       value when it hasn't got one. Returns null when the field is asking
+       and empty, having shown the error. */
+    function valuePayload(errorBox) {
+        if (valueField.hidden) return {};
+        if (!valueInput.value) {
+            showError(errorBox, 'Enter the project value.');
+            return null;
+        }
+        return { project_value: valueInput.value };
+    }
+
     notYetBtn.addEventListener('click', function () {
-        post(pending, { invoice_needed: true }, error2, [backBtn, notYetBtn, invoicedBtn]);
+        var extra = valuePayload(error2);
+        if (!extra) return;
+        extra.invoice_needed = true;
+        post(pending, extra, error2, [backBtn, notYetBtn, invoicedBtn]);
     });
 
     invoicedBtn.addEventListener('click', function () {
@@ -114,7 +139,10 @@
             showError(error2, 'Enter the invoice date, or choose Not yet.');
             return;
         }
-        post(pending, { invoice_needed: true, invoice_date: invoiceDate.value },
-             error2, [backBtn, notYetBtn, invoicedBtn]);
+        var extra = valuePayload(error2);
+        if (!extra) return;
+        extra.invoice_needed = true;
+        extra.invoice_date = invoiceDate.value;
+        post(pending, extra, error2, [backBtn, notYetBtn, invoicedBtn]);
     });
 })();

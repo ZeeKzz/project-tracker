@@ -1,0 +1,58 @@
+{# The closed months. One tbody per closing month, newest first, each with
+   a header row carrying that month's count and value. Marking a pending
+   project invoiced PATCHes edit.py's field endpoint (invoice_date), so
+   this page adds no permission logic of its own. #}
+<div class="cs-inv-tablewrap">
+    <table class="cs-inv-table cs-inv-sumtable cs-closed-table" id="cs-closed-table">
+        <thead>
+            <tr>
+                <th>Client</th>
+                <th>Project</th>
+                <th>CS</th>
+                <th>Value AED</th>
+                <th>Closed</th>
+                <th>Closed by</th>
+                <th>Invoice state</th>
+            </tr>
+        </thead>
+        {% for group in groups %}
+        <tbody class="cs-closed-group">
+            <tr class="cs-closed-grouprow">
+                <th colspan="7">
+                    <span class="cs-closed-month">{{ group.label }}</span>
+                    <span class="cs-closed-meta">{{ group.count }} closed · AED {{ '{:,.0f}'.format(group.total) }}</span>
+                </th>
+            </tr>
+            {% for row in group.rows %}
+            <tr data-search="{{ (row.client ~ ' ' if row.client) }}{{ row.name }} {{ row.cs or '' }}" data-project-id="{{ row.id }}">
+                <td>{{ row.client or '—' }}</td>
+                <td class="cs-closed-proj">{{ row.name }}</td>
+                <td>{{ row.cs or '—' }}</td>
+                <td class="cs-inv-num">{{ '{:,.0f}'.format(row.value) if row.value is not none else '—' }}</td>
+                <td class="cs-inv-muted">{{ row.closed_at.strftime('%d %b') }}</td>
+                <td>{{ row.closed_by or '—' }}</td>
+                <td>
+                    {% if row.state == 'invoiced' %}
+                    <span class="status-pill cs-inv-badge status-pill--clover">Invoiced</span>
+                    {% elif row.state == 'pending' %}
+                    <span class="status-pill cs-inv-badge status-pill--canary">Pending</span>
+                    {% if can_edit_finance %}
+                    <button type="button" class="cs-closed-mark"
+                            data-edit-url="{{ url_for('client_servicing.update_field', project_id=row.id) }}"
+                            data-has-value="{{ '0' if row.value is none else '1' }}"
+                            data-project-name="{% if row.client %}{{ row.client }} — {% endif %}{{ row.name }}">Mark invoiced</button>
+                    {% endif %}
+                    {% else %}
+                    <span class="cs-inv-none">Not needed</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        {% else %}
+        <tbody>
+            <tr><td colspan="7" class="cs-empty">Nothing closed in this period.</td></tr>
+        </tbody>
+        {% endfor %}
+    </table>
+</div>

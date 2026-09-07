@@ -7,7 +7,6 @@
         <span class="cs-closeout-title">
             {{ to_close_out|length }} cancelled project{{ '' if to_close_out|length == 1 else 's' }} to close out
         </span>
-        <span class="cs-closeout-note">They stay here until someone answers the invoicing question.</span>
     </div>
     <div class="cs-closeout-list">
         {% for item in to_close_out %}
@@ -19,6 +18,7 @@
             </span>
             <button type="button" class="btn-primary cs-closeout-btn"
                     data-close-url="{{ url_for('client_servicing.close_project', project_id=item.id) }}"
+                    data-has-value="{{ '1' if item.has_value else '0' }}"
                     data-project-name="{% if item.client %}{{ item.client }} — {% endif %}{{ item.name }}">Close out</button>
         </div>
         {% endfor %}

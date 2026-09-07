@@ -24,6 +24,7 @@ from app.modules.client_servicing.lib.status import (
     effective_cs_status, cs_design_indicator, CS_STATUS_OPTIONS,
 )
 from app.modules.client_servicing.lib.calendar import effective_risk, RISK_OPTIONS
+from app.modules.client_servicing.lib.months import parse_month, format_month
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 from app.modules.client_servicing.routes.table import _serialize_person
 
@@ -97,6 +98,17 @@ def _parse_validation(value):
     return text
 
 
+def _parse_invoice_month(value):
+    """The month picker sends YYYY-MM; anything a person pasted goes through
+    the same reader the migration used."""
+    if value in (None, ''):
+        return None
+    parsed = parse_month(value)
+    if parsed is None:
+        raise _FieldError('must be a month')
+    return parsed
+
+
 def _parse_scope_id(value):
     if value in (None, ''):
         return None
@@ -115,7 +127,7 @@ _EDITABLE_FIELDS = {
     'lpo': _text_parser(120),
     'store_location': _text_parser(255),
     'removal_date': _parse_date,
-    'invoice_month': _text_parser(20),
+    'invoice_month_date': _parse_invoice_month,
     'cost_to_client': _parse_money,
     'inward_cost': _parse_money,
     'scope_id': _parse_scope_id,
@@ -124,7 +136,6 @@ _EDITABLE_FIELDS = {
     'action_owner': _text_parser(120),
     'install_qty': _parse_qty,
     'lpo_date': _parse_date,
-    'project_value': _parse_money,
     'invoice_number': _text_parser(120),
     'invoice_date': _parse_date,
     'invoice_amount': _parse_money,
@@ -136,7 +147,7 @@ _EDITABLE_FIELDS = {
 # Finance/master-control fields — editable by a NARROWER set than page
 # access (finance, CS, admin only), same gate as the Invoicing tab.
 _FINANCE_FIELDS = {
-    'lpo_date', 'project_value', 'invoice_number', 'invoice_date',
+    'lpo_date', 'invoice_number', 'invoice_date',
     'invoice_amount', 'gr_received', 'invoice_uploaded', 'validation_status',
 }
 _FINANCE_EDIT_ROLES = {'admin', 'cs', 'finance'}
@@ -152,9 +163,11 @@ def _display_value(field, value):
     if field == 'scope_id':
         scope = ClientServicingScope.query.get(value)
         return scope.name if scope else None
+    if field == 'invoice_month_date':
+        return format_month(value)
     if field in ('lpo_date', 'invoice_date'):
         return value.strftime('%d %b')
-    if field in ('project_value', 'invoice_amount'):
+    if field == 'invoice_amount':
         return '{:,.0f}'.format(value)
     return value
 

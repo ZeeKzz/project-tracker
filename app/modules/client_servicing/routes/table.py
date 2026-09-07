@@ -160,7 +160,7 @@ def _serialize_row(p, contacts_by_id, client_approved_at):
         'lpo': cs.lpo if cs else None,
         'store_location': cs.store_location if cs else None,
         'removal_date': cs.removal_date if cs else None,
-        'invoice_month': cs.invoice_month if cs else None,
+        'invoice_month': cs.invoice_month_date if cs else None,
         'cost_to_client': cs.cost_to_client if cs else None,
         'inward_cost': cs.inward_cost if cs else None,
         'margin_percent': cs.margin_percent if cs else None,
@@ -194,6 +194,16 @@ def _base_projects():
     return _eager_load(Project.query).filter(Project.project_status != 'draft')
 
 
+def _open_projects():
+    """The projects still being worked — _base_projects() minus anything
+    closed. Left join, so a project with no CS row yet still lists. The
+    Monthly Summary and the Calendar deliberately keep closed projects and
+    stay on _base_projects()."""
+    return _base_projects().outerjoin(
+        ClientServicing, ClientServicing.project_id == Project.id,
+    ).filter(ClientServicing.closed_at.is_(None))
+
+
 def _awaiting_close_out(project):
     """A cancelled project nobody has closed out yet. It leaves the table
     rows and waits in the strip above them until CS answers the invoicing
@@ -205,11 +215,14 @@ def _awaiting_close_out(project):
 def _close_out_row(project):
     """One entry in the close-out strip — just enough to identify the
     project and open the prompt."""
+    cs = project.client_servicing
     return {
         'id': project.id,
         'client': project.client_brand.name if project.client_brand else None,
         'name': project.name,
         'cancelled_at': project.cancelled_at,
+        # The prompt asks for a value only when there isn't one yet.
+        'has_value': cs is not None and cs.project_value is not None,
     }
 
 
@@ -218,7 +231,7 @@ def _page_context():
     option list. scope/cs-lead/project-owner options are global; contact
     options are keyed by client_id since Client SPOC's choices are
     whichever client that row's project belongs to."""
-    listed = _base_projects().order_by(Project.name.asc()).all()
+    listed = _open_projects().order_by(Project.name.asc()).all()
     to_close_out = [p for p in listed if _awaiting_close_out(p)]
     projects = [p for p in listed if not _awaiting_close_out(p)]
 

@@ -29,17 +29,17 @@
         </thead>
         <tbody>
             {% for row in rows %}
-            <tr{% if edit %} data-project-id="{{ row.id }}" data-edit-url="{{ url_for('client_servicing.update_field', project_id=row.id) }}"{% endif %}>
+            <tr data-search="{{ row.project }} {{ row.client or '' }} {{ row.lpo or '' }} {{ row.invoice_number or '' }}" data-project-id="{{ row.id }}"{% if edit %} data-edit-url="{{ url_for('client_servicing.update_field', project_id=row.id) }}"{% endif %}>
                 <td class="cs-inv-name cs-inv-proj">{{ row.project }}</td>
                 <td>{{ row.client or '—' }}</td>
 
                 <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-muted' if row.lpo else 'cs-inv-none' }}"{% if edit %} data-field="lpo" data-type="text" data-value="{{ row.lpo or '' }}"{% endif %}>{{ row.lpo or '—' }}</td>
                 <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-muted' if row.lpo_date else 'cs-inv-none' }}"{% if edit %} data-field="lpo_date" data-type="date" data-value="{{ row.lpo_date_iso }}"{% endif %}>{{ row.lpo_date or '—' }}</td>
-                <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-num' if row.project_value else 'cs-inv-none' }}"{% if edit %} data-field="project_value" data-type="money" data-value="{{ row.project_value_raw }}"{% endif %}>{{ row.project_value or '—' }}</td>
+                <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-num' if row.project_value else 'cs-inv-none' }}"{% if edit %} data-field="value" data-type="money" data-value="{{ row.project_value_raw }}"{% endif %}>{{ row.project_value or '—' }}</td>
                 <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-num' if row.invoice_number else 'cs-inv-none' }}"{% if edit %} data-field="invoice_number" data-type="num" data-value="{{ row.invoice_number or '' }}"{% endif %}>{{ row.invoice_number or '—' }}</td>
                 <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-muted' if row.invoice_date else 'cs-inv-none' }}"{% if edit %} data-field="invoice_date" data-type="date" data-value="{{ row.invoice_date_iso }}"{% endif %}>{{ row.invoice_date or '—' }}</td>
                 <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-num' if row.invoice_amount else 'cs-inv-none' }}"{% if edit %} data-field="invoice_amount" data-type="money" data-value="{{ row.invoice_amount_raw }}"{% endif %}>{{ row.invoice_amount or '—' }}</td>
-                <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-muted' if row.invoice_month else 'cs-inv-none' }}"{% if edit %} data-field="invoice_month" data-type="text" data-value="{{ row.invoice_month or '' }}"{% endif %}>{{ row.invoice_month or '—' }}</td>
+                <td class="cs-inv-fin{% if edit %} cs-inv-editable{% endif %} {{ 'cs-inv-muted' if row.invoice_month else 'cs-inv-none' }}"{% if edit %} data-field="invoice_month_date" data-type="month" data-value="{{ row.invoice_month_raw }}"{% endif %}>{{ row.invoice_month or '—' }}</td>
 
                 <td class="cs-inv-fin {{ 'cs-inv-num' if row.margin else 'cs-inv-none' }}">{{ row.margin or '—' }}</td>
                 <td class="cs-inv-fin">

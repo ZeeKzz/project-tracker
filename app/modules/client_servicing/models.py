@@ -36,7 +36,9 @@ class ClientServicing(db.Model):
     lpo = db.Column(db.String(120), nullable=True)
     store_location = db.Column(db.String(255), nullable=True)
     removal_date = db.Column(db.Date, nullable=True)
-    invoice_month = db.Column(db.String(20), nullable=True)
+    # The month this gets invoiced in, stored as the 1st of that month. The
+    # Monthly Summary buckets by it.
+    invoice_month_date = db.Column(db.Date, nullable=True)
     cost_to_client = db.Column(db.Numeric(12, 2), nullable=True)
     inward_cost = db.Column(db.Numeric(12, 2), nullable=True)
     scope_id = db.Column(

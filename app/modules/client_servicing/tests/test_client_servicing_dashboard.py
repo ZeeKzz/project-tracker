@@ -157,7 +157,9 @@ def test_feed_for_hides_finance_from_non_finance(app, db_session):
     lead = _user(db_session, 'ff', role='cs')
     owner = _user(db_session, 'ffo', role='project_owner')
     _project(db_session, 'ff_ins', lead, install=today + timedelta(days=3), cs_status='Briefing')
-    _project(db_session, 'ff_fin', lead, due=today.replace(day=1),
+    # Billed by its invoice month — first_output_deadline is the design
+    # deadline and no longer buckets anything.
+    _project(db_session, 'ff_fin', lead, invoice_month_date=today.replace(day=1),
              project_value=Decimal('500'), validation_status='overdue')
     with app.test_request_context():
         cs_kinds = {i['kind'] for i in feed_for(lead)}
@@ -212,16 +214,16 @@ def test_dashboard_renders_and_gates_finance_in_page(app, client, db_session):
     lead = _user(db_session, 'pr', role='cs')
     owner = _user(db_session, 'pro', role='project_owner')
     _project(db_session, 'pr_ins', lead, install=today + timedelta(days=1), cs_status='Briefing')
-    _project(db_session, 'pr_fin', lead, due=today.replace(day=1),
+    _project(db_session, 'pr_fin', lead, invoice_month_date=today.replace(day=1),
              project_value=Decimal('750'), validation_status='overdue')
     with app.test_request_context():
         url = url_for('client_servicing.index')
 
     login_as(client, app, lead, 'password123')
-    assert 'Pipeline:' in client.get(url).get_data(as_text=True)         # finance viewer sees it
+    assert 'Pipeline ·' in client.get(url).get_data(as_text=True)         # finance viewer sees it
 
     login_as(client, app, owner, 'password123')
-    assert 'Pipeline:' not in client.get(url).get_data(as_text=True)     # project_owner: hidden
+    assert 'Pipeline ·' not in client.get(url).get_data(as_text=True)     # project_owner: hidden
 
 
 def test_dashboard_context_is_n_plus_1_free(app, db_session):

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Client Servicing — Closed{% endblock %}
+
+{% block content %}
+{# Closed Projects — history, read-only apart from marking a pending
+   project invoiced. Filters are server-side GET selects (same pattern as
+   the Monthly Summary); the search box filters the loaded rows. #}
+<div class="cs-page">
+    <div class="cs-shell">
+        {% with active_nav = 'closed' %}
+        {% include "client_servicing/_sidebar.html" %}
+        {% endwith %}
+        <div class="cs-main">
+            <div class="client-servicing-page">
+                <div class="cs-closed-head">
+                    <h1 class="cs-closed-title">Closed</h1>
+                </div>
+
+                <div class="cs-inv-kpis">
+                    {% for card in kpis %}
+                    <div class="cs-inv-kpi">
+                        <div class="cs-inv-kpi-label">{{ card.label }}</div>
+                        <div class="cs-inv-kpi-value">{{ card.count }}</div>
+                        <div class="cs-closed-kpi-value">AED {{ '{:,.0f}'.format(card.value) }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="cs-closed-toolbar">
+                    <form class="cs-inv-selectors" method="get" action="{{ url_for('client_servicing.closed') }}">
+                        <select name="year" onchange="this.form.submit()">
+                            {% for y in years %}<option value="{{ y }}"{% if y == year %} selected{% endif %}>{{ y }}</option>{% endfor %}
+                        </select>
+                        <select name="quarter" onchange="this.form.submit()">
+                            <option value="0">All quarters</option>
+                            {% for q in [1, 2, 3, 4] %}<option value="{{ q }}"{% if q == quarter %} selected{% endif %}>Q{{ q }}</option>{% endfor %}
+                        </select>
+                        <select name="month" onchange="this.form.submit()">
+                            <option value="0">All months</option>
+                            {% for m, mlabel in months %}<option value="{{ m }}"{% if m == month %} selected{% endif %}>{{ mlabel }}</option>{% endfor %}
+                        </select>
+                        <noscript><button type="submit" class="cs-inv-ghost">Go</button></noscript>
+                    </form>
+                    <input type="text" id="cs-closed-search" class="cs-search-input cs-closed-search"
+                           placeholder="Search client, project or CS…" autocomplete="off">
+                    <span class="cs-closed-count" id="cs-closed-count">{{ shown }} closed project{{ '' if shown == 1 else 's' }}</span>
+                </div>
+
+                {% include "client_servicing/_closed_table.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if can_edit_finance %}
+{# Marking invoiced asks for the real invoice date — the same rule the
+   close-out prompt follows. #}
+<div class="modal-overlay hidden" id="cs-closed-invoiced-modal">
+    <div class="modal-box">
+        <div class="modal-title">Mark as invoiced</div>
+        <p class="cs-close-subject" id="cs-closed-invoiced-subject"></p>
+        {# Shown by client_servicing_closed.js only for a row with no value —
+           an invoiced project has to carry one. #}
+        <label class="cs-inv-field" id="cs-closed-value-field" hidden>Project value (AED)
+            <input type="number" min="0" step="0.01" id="cs-closed-value">
+        </label>
+        <label class="cs-inv-field">Invoice date
+            <input type="date" id="cs-closed-invoice-date">
+        </label>
+        <p class="cs-inv-error hidden" id="cs-closed-invoiced-error"></p>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cs-closed-invoiced-cancel">Cancel</button>
+            <button type="button" class="btn-primary" id="cs-closed-invoiced-save">Save</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+{# Page-specific JS, inside the content block with the modal it wires.
+   The shell above is a <div class="cs-main">, not a nested <main> — the SPA
+   slice stops at the first </main> and would cut this out. #}
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_closed.js') }}?v={{ config.STATIC_VERSION }}"></script>
+{# Scrolls to and flashes the row the Dashboard linked to (?project=). #}
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_focus.js') }}?v={{ config.STATIC_VERSION }}"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_nav.js') }}?v={{ config.STATIC_VERSION }}"></script>
+{% endblock %}

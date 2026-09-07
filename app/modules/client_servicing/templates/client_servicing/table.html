@@ -12,7 +12,7 @@
         {% with active_nav = 'table' %}
         {% include "client_servicing/_sidebar.html" %}
         {% endwith %}
-        <main class="cs-main">
+        <div class="cs-main">
             <div class="client-servicing-page">
                 {# Cancelled projects waiting on the invoicing question —
                    see _close_strip.html. #}
@@ -50,10 +50,17 @@
                     </div>
                 </div>
             </div>
-        </main>
+        </div>
     </div>
 </div>
 {% include 'client_servicing/_close_modals.html' %}
+{# Page-specific JS, inside the content block with the modals it wires.
+   The shell above is a <div class="cs-main">, not a nested <main> — the SPA
+   slice in spa_strip_response() stops at the first </main>, so a nested one
+   would cut everything below it out of the swapped fragment. #}
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_close.js') }}?v={{ config.STATIC_VERSION }}"></script>
+{# Scrolls to and flashes the row the Dashboard linked to (?project=). #}
+<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_focus.js') }}?v={{ config.STATIC_VERSION }}"></script>
 {% endblock %}
 
 {% block extra_js %}
@@ -66,5 +73,4 @@
 </script>
 <script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_nav.js') }}?v={{ config.STATIC_VERSION }}"></script>
 <script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing.js') }}?v={{ config.STATIC_VERSION }}"></script>
-<script src="{{ url_for('client_servicing_assets.static', filename='js/client_servicing_close.js') }}?v={{ config.STATIC_VERSION }}"></script>
 {% endblock %}

@@ -4,7 +4,7 @@ gates through this, never an inline role check. Same pattern as the
 Digital Innovation module's access.py. When CS gets its own role, adding
 it here is the only change needed anywhere.
 """
-from flask import session
+from flask import current_app, session
 from flask_login import current_user
 
 _CLIENT_SERVICING_ROLES = {
@@ -30,11 +30,25 @@ def _effective_user():
     return current_user
 
 
+# While the review lock is on the module narrows to these two. Kept separate
+# from _CLIENT_SERVICING_ROLES above so the permanent role model survives the
+# review intact — clearing the flag restores it with no code change.
+_REVIEW_ROLES = {'admin', 'management'}
+
+
 def can_access_client_servicing(user):
     """True if `user` may view/use the Client Servicing page. Pass the
     _effective_user() result; getattr guards the logged-out case, which
-    has no .role."""
-    return getattr(user, 'role', None) in _CLIENT_SERVICING_ROLES
+    has no .role.
+
+    While config CLIENT_SERVICING_REVIEW_ONLY is on, the module is under
+    management review and only _REVIEW_ROLES get in."""
+    role = getattr(user, 'role', None)
+    if role not in _CLIENT_SERVICING_ROLES:
+        return False
+    if current_app.config.get('CLIENT_SERVICING_REVIEW_ONLY'):
+        return role in _REVIEW_ROLES
+    return True
 
 _FINANCE_VIEW_ROLES = {'admin', 'management', 'cs', 'finance'}
 

@@ -164,7 +164,7 @@ def test_management_and_owner_cannot_edit_finance_fields(app, client, db_session
         user = _user(db_session, 'finx-' + role, role=role)
         project = _project(db_session, 'finx-' + role, user)
         login_as(client, app, user, 'password123')
-        resp = _patch(client, app, project.id, 'project_value', '5000')
+        resp = _patch(client, app, project.id, 'invoice_amount', '5000')
         assert resp.status_code == 403, role
 
 

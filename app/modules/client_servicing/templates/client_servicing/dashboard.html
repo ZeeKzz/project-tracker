@@ -8,7 +8,7 @@
     {% with active_nav = 'dashboard' %}
     {% include "client_servicing/_sidebar.html" %}
     {% endwith %}
-    <main class="cs-main">
+    <div class="cs-main">
       {# .cs-dash is the live-refresh marker polling.js looks for; #cs-dash-panels
          is what the SSE refresh swaps (client_servicing_dashboard.js). #}
       <div class="cs-dash">
@@ -16,7 +16,7 @@
           {% include "client_servicing/_dashboard_panels.html" %}
         </div>
       </div>
-    </main>
+    </div>
   </div>
 </div>
 {% endblock %}

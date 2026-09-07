@@ -16,7 +16,7 @@ from app.modules.client_servicing.lib.access import (
 )
 from app.modules.client_servicing.lib.status import effective_cs_status
 from app.modules.client_servicing.lib.calendar import effective_risk, build_install
-from app.modules.client_servicing.lib.summary import year_summary, due_this_month
+from app.modules.client_servicing.lib.summary import year_summary, due_this_month, stuck_this_month
 from app.modules.client_servicing.routes.table import _base_projects
 
 
@@ -54,9 +54,13 @@ def _signal_sort(item):
 
 
 def _active(projects):
-    """The board's active set — cancelled projects drop out (drafts already
-    excluded upstream)."""
-    return [p for p in projects if p.cancelled_at is None]
+    """The board's active set — cancelled and closed projects drop out
+    (drafts already excluded upstream)."""
+    return [
+        p for p in projects
+        if p.cancelled_at is None
+        and not (p.client_servicing is not None and p.client_servicing.closed_at is not None)
+    ]
 
 
 def _snapshot(active, today):
@@ -74,6 +78,35 @@ def _snapshot(active, today):
 
 def _projects_link(project_id):
     return url_for('project_list.index', project=project_id)
+
+
+def _table_link(project_id):
+    """The CS table, focused on one project. Install date and value are
+    edited there, not on the Projects page."""
+    return url_for('client_servicing.table', project=project_id)
+
+
+def _invoicing_project_link(project_id):
+    """Invoicing's By Project tab, focused on one project."""
+    return url_for('client_servicing.invoicing', project=project_id)
+
+
+def _closed_project_link(project_id, closed_at):
+    """The Closed page, filtered to that project's closing month so the row
+    is actually on screen, and focused on it."""
+    params = {'project': project_id}
+    if closed_at is not None:
+        params['year'] = closed_at.year
+        params['month'] = closed_at.month
+    return url_for('client_servicing.closed', **params)
+
+
+def _stuck_link(row):
+    """A stuck project sits on the Invoicing table until it's closed, and on
+    the Closed page after. Link to whichever one actually has the row."""
+    if row['closed']:
+        return _closed_project_link(row['id'], row['closed_at'])
+    return _invoicing_project_link(row['id'])
 
 
 def _calendar_link(d):
@@ -186,7 +219,7 @@ def _urgent_actions(snap, due, today, show_finance):
         if gaps:
             items.append({
                 'source': 'client_servicing', 'kind': 'data_gap', 'title': p.name,
-                'detail': 'Missing ' + ', '.join(gaps), 'link': _projects_link(p.id),
+                'detail': 'Missing ' + ', '.join(gaps), 'link': _table_link(p.id),
                 'urgency': 'info', 'date': None,
             })
     if show_finance:
@@ -221,10 +254,16 @@ def dashboard_context(user):
     snap = _snapshot(_active(_base_projects().all()), today)
 
     month_row = due = None
+    stuck = []
     if show_finance:
         rows, _ = year_summary(today.year)
         month_row = rows[today.month - 1]
         due = due_this_month(today.year, today.month)
+        # The panel names them rather than only counting them. Same set the
+        # rollup counted, so the number and the names agree; each row links
+        # to wherever that project actually lives now.
+        stuck = [dict(row, link=_stuck_link(row)) for row in
+                 stuck_this_month(today.year, today.month)]
 
     return {
         'show_finance': show_finance,
@@ -235,6 +274,7 @@ def dashboard_context(user):
         'upcoming': _upcoming(snap, today),
         'urgent_actions': _urgent_actions(snap, due or [], today, show_finance),
         'invoicing_health': month_row,
+        'stuck_projects': stuck,
     }
 
 

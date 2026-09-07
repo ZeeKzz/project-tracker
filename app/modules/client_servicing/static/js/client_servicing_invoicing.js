@@ -59,7 +59,8 @@
     function editText(cell) {
         var type = cell.dataset.type;
         var input = document.createElement('input');
-        input.type = type === 'date' ? 'date' : (type === 'money' ? 'number' : 'text');
+        var INPUT_TYPES = { date: 'date', month: 'month', money: 'number' };
+        input.type = INPUT_TYPES[type] || 'text';
         if (type === 'money') { input.step = '0.01'; input.min = '0'; }
         input.className = 'cs-inv-edit-input';
         input.value = cell.dataset.value || '';
@@ -160,6 +161,32 @@
         });
     }
 
+    // ── Toolbar search ────────────────────────────────────────────────
+    /* Filters the loaded rows as you type — the two selects next to it are
+       server-side, since the Export link reuses their filtering. */
+    function initSearch() {
+        var input = document.getElementById('cs-inv-search');
+        var table = document.querySelector('.cs-inv-table');
+        if (!input || !table) return;
+
+        var count = document.getElementById('cs-inv-count');
+        var rows = Array.prototype.slice.call(table.querySelectorAll('tr[data-search]'));
+
+        input.addEventListener('input', function () {
+            var term = (input.value || '').trim().toLowerCase();
+            var shown = 0;
+            rows.forEach(function (tr) {
+                var hit = !term || tr.dataset.search.toLowerCase().indexOf(term) !== -1;
+                tr.hidden = !hit;
+                if (hit) shown += 1;
+            });
+            if (count) {
+                count.textContent = shown + ' project' + (shown === 1 ? '' : 's');
+            }
+        });
+    }
+
     initThresholds();
     initInlineEdit();
+    initSearch();
 })();

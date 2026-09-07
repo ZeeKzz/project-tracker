@@ -19,6 +19,7 @@ from app.modules.client_servicing.lib.access import (
     can_access_client_servicing, can_close_projects, _effective_user,
 )
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
+from app.modules.client_servicing.routes.edit import _FieldError, _parse_money
 
 
 @client_servicing_bp.route('/<int:project_id>/close', methods=['POST'])
@@ -43,6 +44,20 @@ def close_project(project_id):
     if project.cancelled_at is not None and invoice_needed is None:
         return jsonify({'error': 'Answer the invoicing question first.'}), 400
 
+    # A project that still needs invoicing must carry a value — it lands on
+    # the Closed page's Value column and in the month's total. Enforced here,
+    # not only in the prompt, so the rule holds for any caller.
+    project_value = None
+    raw_value = data.get('project_value')
+    if raw_value not in (None, ''):
+        try:
+            project_value = _parse_money(raw_value)
+        except _FieldError as e:
+            return jsonify({'error': 'Project value {}.'.format(e)}), 400
+    has_value = project_value is not None or project.value is not None
+    if invoice_needed and not has_value:
+        return jsonify({'error': 'Enter the project value.'}), 400
+
     invoice_date = None
     raw_date = (data.get('invoice_date') or '').strip()
     if raw_date:
@@ -59,6 +74,11 @@ def close_project(project_id):
     cs.closed_at = datetime.utcnow()
     cs.closed_by_id = actor.id
     cs.invoice_needed = invoice_needed
+    if project_value is not None:
+        # Written straight onto the project: this is a data fill during a
+        # close-out, not a value change anyone needs notifying about, and the
+        # close already writes its own activity entry.
+        project.value = float(project_value)
     if invoice_date is not None:
         cs.invoice_date = invoice_date
     db.session.commit()

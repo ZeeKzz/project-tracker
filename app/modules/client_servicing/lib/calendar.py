@@ -86,6 +86,9 @@ def build_install(project, today):
     risk_label, risk_class, risk_is_auto = effective_risk(project, status_label, today)
     return {
         'id': project.id,
+        # Closed jobs stay on the calendar as history — faded, and with no
+        # editable cells rendered at all.
+        'closed': cs is not None and cs.closed_at is not None,
         'client': project.client_brand.name if project.client_brand else project.name,
         'name': project.name,
         'scope': cs.scope.name if (cs and cs.scope) else None,

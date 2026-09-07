@@ -8,7 +8,7 @@
         {% with active_nav = 'calendar' %}
         {% include "client_servicing/_sidebar.html" %}
         {% endwith %}
-        <main class="cs-main">
+        <div class="cs-main">
             <div class="client-servicing-page cs-cal-page">
                 {{ cal_header('agenda', kpis) }}
 
@@ -40,7 +40,7 @@
                     {% endif %}
                 </div>
             </div>
-        </main>
+        </div>
     </div>
 </div>
 {% endblock %}

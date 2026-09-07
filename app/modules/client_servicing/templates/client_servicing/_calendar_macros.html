@@ -20,24 +20,28 @@
 {% endmacro %}
 
 {% macro risk_chip(it) %}
-<span class="cs-cal-risk cs-cal-risk--{{ it.risk_class }} cs-editable" data-field="risk" data-value="{{ it.risk or '' }}"><span class="cs-cal-rd cs-cal-rd--{{ it.risk_class }}"></span>{{ it.risk_label }}{% if it.risk_is_auto %} <span class="cs-cal-risk-auto">auto</span>{% endif %}</span>
+<span class="cs-cal-risk cs-cal-risk--{{ it.risk_class }}{{ '' if it.closed else ' cs-editable' }}" data-field="risk" data-value="{{ it.risk or '' }}"><span class="cs-cal-rd cs-cal-rd--{{ it.risk_class }}"></span>{{ it.risk_label }}{% if it.risk_is_auto %} <span class="cs-cal-risk-auto">auto</span>{% endif %}</span>
 {% endmacro %}
 
 {% macro job_card(it) %}
-<div class="cs-cal-job cs-cal-job--{{ it.risk_class }}" data-project-id="{{ it.id }}" data-risk-class="{{ it.risk_class }}">
+{# A closed job is history: `ed` empties the cs-editable class everywhere
+   below, so the inline-edit JS finds nothing to hook. #}
+{% set ed = '' if it.closed else ' cs-editable' %}
+<div class="cs-cal-job cs-cal-job--{{ it.risk_class }}{{ ' cs-cal-job--closed' if it.closed else '' }}" data-project-id="{{ it.id }}" data-risk-class="{{ it.risk_class }}">
     <div class="cs-cal-job-top">
         <span class="cs-cal-job-cl">{{ it.client }}</span>
+        {% if it.closed %}<span class="cs-cal-closed-tag">Closed</span>{% endif %}
         <a class="cs-cal-goto" href="{{ url_for('project_list.index', project=it.id) }}" title="Open in Projects"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg></a>
     </div>
-    <div class="cs-cal-job-sc">{{ it.scope or '—' }}{% if it.partial %} · partial install{% endif %} · {% if it.qty %}<span class="cs-cal-qty cs-editable" data-field="install_qty" data-value="{{ it.qty }}">Qty {{ it.qty }}</span>{% else %}<span class="cs-cal-qty cs-cal-qty--empty cs-editable" data-field="install_qty" data-value="">Set qty</span>{% endif %}</div>
+    <div class="cs-cal-job-sc">{{ it.scope or '—' }}{% if it.partial %} · partial install{% endif %} · {% if it.qty %}<span class="cs-cal-qty{{ ed }}" data-field="install_qty" data-value="{{ it.qty }}">Qty {{ it.qty }}</span>{% else %}<span class="cs-cal-qty cs-cal-qty--empty{{ ed }}" data-field="install_qty" data-value="">Set qty</span>{% endif %}</div>
     <div class="cs-cal-job-meta">
-        <span class="cs-cal-status cs-editable" data-field="cs_status" data-value="{{ it.cs_status or '' }}">{{ status_pill(it.status_label, it.status_class) }}{% if it.status_is_auto %} <span class="cs-cal-risk-auto">auto</span>{% endif %}</span>
+        <span class="cs-cal-status{{ ed }}" data-field="cs_status" data-value="{{ it.cs_status or '' }}">{{ status_pill(it.status_label, it.status_class) }}{% if it.status_is_auto %} <span class="cs-cal-risk-auto">auto</span>{% endif %}</span>
         {{ risk_chip(it) }}
     </div>
     <div class="cs-cal-people">
-        <span class="cs-editable cs-cal-owner" data-field="action_owner" data-value="{{ it.action_owner or '' }}"><span class="cs-cal-k">Owner</span>{{ it.action_owner or '—' }}</span>
+        <span class="cs-cal-owner{{ ed }}" data-field="action_owner" data-value="{{ it.action_owner or '' }}"><span class="cs-cal-k">Owner</span>{{ it.action_owner or '—' }}</span>
         <span><span class="cs-cal-k">CS</span>{{ it.cs_lead or '—' }}</span>
     </div>
-    <div class="cs-cal-na cs-editable {{ 'cs-cal-na--flag' if it.risk_class in ('atrisk', 'attention') else '' }}" data-field="next_action" data-value="{{ it.next_action or '' }}">{% if it.risk_class in ('atrisk', 'attention') %}<svg class="cs-cal-flag" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg><span class="cs-cal-na-txt">{{ it.next_action or '—' }}</span>{% else %}<span class="cs-cal-na-txt">Next: {{ it.next_action or '—' }}</span>{% endif %}</div>
+    <div class="cs-cal-na{{ ed }} {{ 'cs-cal-na--flag' if it.risk_class in ('atrisk', 'attention') else '' }}" data-field="next_action" data-value="{{ it.next_action or '' }}">{% if it.risk_class in ('atrisk', 'attention') %}<svg class="cs-cal-flag" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg><span class="cs-cal-na-txt">{{ it.next_action or '—' }}</span>{% else %}<span class="cs-cal-na-txt">Next: {{ it.next_action or '—' }}</span>{% endif %}</div>
 </div>
 {% endmacro %}

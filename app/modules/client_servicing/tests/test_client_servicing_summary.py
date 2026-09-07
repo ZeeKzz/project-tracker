@@ -16,8 +16,11 @@ def _lead(db_session):
 
 
 def _project(db_session, lead, name, status='briefed', due=None, **cs):
+    # project_value= in a seed now means the project's own value — the CS
+    # column it used to set was retired when the two were merged.
     p = Project(name=name, cs_lead_id=lead.id, created_by_id=lead.id,
-                project_status=status, first_output_deadline=due)
+                project_status=status, first_output_deadline=due,
+                value=cs.pop('project_value', None))
     db_session.add(p)
     db_session.flush()
     if cs:
@@ -35,11 +38,15 @@ def _seed_march_year(db_session):
     # March 2026 — LPO, not invoiced (bucketed by removal date)
     _project(db_session, lead, 'B confirmed', removal_date=date(2026, 3, 20),
              project_value=Decimal('50'), lpo='LPO-B')
-    # March 2026 — no LPO (bucketed by due date), stuck
-    _project(db_session, lead, 'C stuck', due=date(2026, 3, 25),
+    # March 2026 — no LPO, bucketed by its planned invoice month, stuck
+    _project(db_session, lead, 'C stuck', invoice_month_date=date(2026, 3, 1),
              project_value=Decimal('30'))
+    # A design deadline is NOT a billing date — this one is excluded, which
+    # is the whole point of dropping first_output_deadline from the chain.
+    _project(db_session, lead, 'D due date only', due=date(2026, 3, 25),
+             project_value=Decimal('999'))
     # No dates anywhere → excluded
-    _project(db_session, lead, 'D no dates', project_value=Decimal('999'))
+    _project(db_session, lead, 'D2 no dates', project_value=Decimal('888'))
     # Draft → excluded even though it has an invoice date
     _project(db_session, lead, 'E draft', status='draft',
              invoice_date=date(2026, 3, 1), project_value=Decimal('777'))
@@ -64,7 +71,7 @@ def test_year_summary_buckets_and_sums(db_session):
     may = rows[4]
     assert may['pipeline'] == 200 and may['invoiced'] == 200
 
-    assert total['pipeline'] == 380        # 180 + 200 (D and draft excluded)
+    assert total['pipeline'] == 380        # 180 + 200 (due-date-only, no-dates and draft all excluded)
     assert total['invoiced'] == 290
     assert total['stuck_amount'] == 30
 
@@ -82,3 +89,40 @@ def test_due_this_month_only_uninvoiced(db_session):
     due = summary_lib.due_this_month(2026, 3)
     names = sorted(d['project'] for d in due)
     assert names == ['B confirmed', 'C stuck']   # A invoiced, D/draft/May excluded
+
+
+def test_a_design_deadline_never_puts_a_project_in_a_month(db_session):
+    """first_output_deadline is the Projects page's output deadline. It used
+    to be the last fallback here, which parked uninvoiced work in whatever
+    month design happened to be due."""
+    lead = _lead(db_session)
+    _project(db_session, lead, 'Design deadline only', due=date(2026, 7, 14),
+             project_value=Decimal('400'))
+
+    rows, total = summary_lib.year_summary(2026)
+    assert rows[6]['pipeline'] == 0
+    assert total['pipeline'] == 0
+
+
+def test_the_planned_invoice_month_buckets_an_uninvoiced_project(db_session):
+    lead = _lead(db_session)
+    _project(db_session, lead, 'Planned for June', invoice_month_date=date(2026, 6, 1),
+             project_value=Decimal('500'), lpo='LPO-J')
+
+    rows, _ = summary_lib.year_summary(2026)
+    assert rows[5]['pipeline'] == 500
+    assert rows[5]['confirmed'] == 500
+    assert rows[5]['invoiced'] == 0
+
+
+def test_an_actual_invoice_date_beats_the_planned_month(db_session):
+    """Planned for June, actually invoiced in July — it counts in July."""
+    lead = _lead(db_session)
+    _project(db_session, lead, 'Slipped to July', invoice_month_date=date(2026, 6, 1),
+             invoice_date=date(2026, 7, 3), invoice_amount=Decimal('300'),
+             project_value=Decimal('300'), lpo='LPO-S')
+
+    rows, _ = summary_lib.year_summary(2026)
+    assert rows[5]['pipeline'] == 0
+    assert rows[6]['pipeline'] == 300
+    assert rows[6]['invoiced'] == 300

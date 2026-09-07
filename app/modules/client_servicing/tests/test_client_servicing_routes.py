@@ -259,3 +259,41 @@ def test_table_page_has_search_and_filter_toolbar(app, client, db_session):
     assert 'id="cs-filter-columns"' in body
     # The filter reads each row's data-sort-value, same hooks the sort uses.
     assert 'data-col-key="client" data-sort-value=' in body
+
+
+# --- Review lock -----------------------------------------------------------
+# CLIENT_SERVICING_REVIEW_ONLY narrows the module to admin/management while
+# it is under management review. The suite runs with the flag off (see
+# TestingConfig), so these two turn it on deliberately to cover both sides.
+# The role model above is unaffected either way.
+
+def test_review_lock_shuts_out_allowed_roles(app, client, db_session):
+    """With the lock on, roles that normally have the module get a 403 —
+    not a redirect or a stripped page. The route gate is the real boundary;
+    the dimmed sidebar item is only the visible half of it."""
+    for role in ('cs', 'project_owner', 'finance'):
+        user = _user(db_session, 'lock-' + role, role=role)
+        login_as(client, app, user, 'password123')
+        with app.test_request_context():
+            url = url_for('client_servicing.index')
+        app.config['CLIENT_SERVICING_REVIEW_ONLY'] = True
+        try:
+            resp = client.get(url)
+        finally:
+            app.config['CLIENT_SERVICING_REVIEW_ONLY'] = False
+        assert resp.status_code == 403, f'{role} got past the review lock'
+
+
+def test_review_lock_lets_management_through(app, client, db_session):
+    """The point of the lock — management still reviews the module."""
+    for role in ('admin', 'management'):
+        user = _user(db_session, 'lock-ok-' + role, role=role)
+        login_as(client, app, user, 'password123')
+        with app.test_request_context():
+            url = url_for('client_servicing.index')
+        app.config['CLIENT_SERVICING_REVIEW_ONLY'] = True
+        try:
+            resp = client.get(url)
+        finally:
+            app.config['CLIENT_SERVICING_REVIEW_ONLY'] = False
+        assert resp.status_code == 200, f'{role} was locked out of its own review'

@@ -107,7 +107,8 @@ def test_cancelled_project_with_nothing_to_invoice(app, client, db_session):
 
 def test_cancelled_project_already_invoiced_stores_the_date(app, client, db_session):
     user = _user(db_session, 'g')
-    project = _project(db_session, user, cancelled=True)
+    # Already has a value, so the close-out isn't asked for one.
+    project = _project(db_session, user, cancelled=True, value=Decimal('5000'))
     login_as(client, app, user, 'password123')
 
     resp = client.post(
@@ -123,7 +124,8 @@ def test_cancelled_project_already_invoiced_stores_the_date(app, client, db_sess
 
 def test_cancelled_project_not_invoiced_yet_is_pending(app, client, db_session):
     user = _user(db_session, 'h')
-    project = _project(db_session, user, cancelled=True)
+    # Already has a value, so the close-out isn't asked for one.
+    project = _project(db_session, user, cancelled=True, value=Decimal('5000'))
     login_as(client, app, user, 'password123')
 
     resp = client.post(_close_url(app, project), json={'invoice_needed': True})

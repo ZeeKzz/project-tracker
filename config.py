@@ -56,6 +56,13 @@ class Config:
     CF_ACCESS_CLIENT_ID = os.environ.get('CF_ACCESS_CLIENT_ID')
     CF_ACCESS_CLIENT_SECRET = os.environ.get('CF_ACCESS_CLIENT_SECRET')
 
+    # Client Servicing review lock — while on, the module is limited to admin
+    # and management for the management review. This is an operational switch,
+    # not the module's role model: that lives in the module's own access.py and
+    # is untouched. Set CLIENT_SERVICING_REVIEW_ONLY=false in .env to re-open
+    # the module to its full role set — no code change needed.
+    CLIENT_SERVICING_REVIEW_ONLY = os.environ.get('CLIENT_SERVICING_REVIEW_ONLY', 'true').lower() == 'true'
+
     # Dev-only tools — set DEV_TOOLS_ENABLED=true in .env on your local machine only.
     # NEVER set this on the production server — it exposes destructive data operations.
     DEV_TOOLS_ENABLED = os.environ.get('DEV_TOOLS_ENABLED', 'false').lower() == 'true'
@@ -68,4 +75,7 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get('TEST_DATABASE_URL')
     MAIL_ENABLED = False
     SECRET_KEY = os.environ.get('SECRET_KEY', 'test-secret-key')
+    # The review lock is temporary and operational, so the suite runs with it
+    # off and keeps covering every role the Client Servicing module is for.
+    CLIENT_SERVICING_REVIEW_ONLY = False
 

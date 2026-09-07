@@ -4,7 +4,7 @@
    whose invoicing answer decides its closed invoice state. #}
 {% if can_close %}
 <div class="modal-overlay hidden" id="cs-close-modal">
-    <div class="modal-box">
+    <div class="modal-box cs-close-box">
         <div class="modal-title">Close this project?</div>
         <p class="cs-close-subject" id="cs-close-subject"></p>
         <p class="cs-muted">It leaves the Table and Invoicing, keeps counting in the Monthly Summary, and stays on the Calendar as history. Closing is final.</p>
@@ -17,7 +17,7 @@
 </div>
 
 <div class="modal-overlay hidden" id="cs-closeout-modal">
-    <div class="modal-box">
+    <div class="modal-box cs-close-box">
         <div class="modal-title" id="cs-closeout-title">Does this project need invoicing?</div>
         <p class="cs-close-subject" id="cs-closeout-subject"></p>
 
@@ -33,6 +33,12 @@
 
         <div id="cs-closeout-step2" hidden>
             <p class="cs-muted">If it has been invoiced, give the invoice date.</p>
+            {# Shown by client_servicing_close.js only when the project has no
+               value yet — it needs one to appear on the Closed page and in
+               that month's total. #}
+            <label class="cs-inv-field" id="cs-closeout-value-field" hidden>Project value (AED)
+                <input type="number" min="0" step="0.01" id="cs-closeout-value">
+            </label>
             <label class="cs-inv-field">Invoice date
                 <input type="date" id="cs-closeout-invoice-date">
             </label>

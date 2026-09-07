@@ -8,7 +8,7 @@
         {% with active_nav = 'calendar' %}
         {% include "client_servicing/_sidebar.html" %}
         {% endwith %}
-        <main class="cs-main">
+        <div class="cs-main">
             <div class="client-servicing-page cs-cal-page">
                 {{ cal_header('month', kpis, month_label) }}
 
@@ -36,7 +36,7 @@
                             <div class="cs-cal-cell{% if not day.in_month %} cs-cal-cell--out{% endif %}{% if day.is_today %} cs-cal-cell--today{% endif %}{% if selected_day and day.date == selected_day.date %} cs-cal-cell--sel{% endif %}{% if day.installs %} cs-cal-cell--has{% endif %}"{% if day.installs %} data-date="{{ day.date.isoformat() }}"{% endif %}>
                                 <div class="cs-cal-dn"><span class="cs-cal-num">{{ day.date.day }}</span>{% if day.count %}<span class="cs-cal-cnt">{{ day.count }}</span>{% endif %}</div>
                                 {% for it in day.installs[:3] %}
-                                <div class="cs-cal-chip cs-cal-chip--{{ it.risk_class }}"><span class="cs-cal-rd cs-cal-rd--{{ it.risk_class }}"></span>{{ it.client }}</div>
+                                <div class="cs-cal-chip cs-cal-chip--{{ it.risk_class }}{{ ' cs-cal-chip--closed' if it.closed else '' }}"><span class="cs-cal-rd cs-cal-rd--{{ it.risk_class }}"></span>{{ it.client }}</div>
                                 {% endfor %}
                                 {% if day.count > 3 %}<div class="cs-cal-more">+{{ day.count - 3 }} more</div>{% endif %}
                             </div>
@@ -51,7 +51,7 @@
                     </div>
                 </div>
             </div>
-        </main>
+        </div>
     </div>
 </div>
 {% endblock %}

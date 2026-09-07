@@ -4,24 +4,17 @@ Route contract: the live url_map must match the commited baseline
 safety net - any step that drops, renames or unexpectedly adds a
 route fails here.
 
+The route set and the baseline path both come from regen_route_baseline,
+the script that writes the file, so the reader and the writer can never
+drift apart. Regenerate deliberately when routes change:
+  python -m app.modules.core.shared.tests.regen_route_baseline
 """
 
-import os
+from app.modules.core.shared.tests.regen_route_baseline import (
+    baseline_path as _baseline_path,
+    current_routes as _current_routes,
+)
 
-def _baseline_path(app):
-    # app.route_path is .../project-tracker/app; the baseline lives one level up.
-    return os.path.join(os.path.dirname(app.root_path), 'refactor', 'route_baseline.txt')
-
-def _current_routes(app):
-    routes = set()
-    for r in app.url_map.iter_rules():
-        # Static routes (app + per-blueprint) are infrastructure, not part of
-        # the contract — 2.4.3 adds one per module as assets move in.
-        if r.endpoint == 'static' or r.endpoint.endswith('.static'):
-            continue
-        methods = ','.join(sorted(m for m in r.methods if m not in {'HEAD', 'OPTIONS'}))
-        routes.add(f'{r.rule}\t{methods}\t{r.endpoint}')
-    return routes
 
 def test_route_contract_matches_baseline(app):
     with open(_baseline_path(app), encoding='utf-8') as f:

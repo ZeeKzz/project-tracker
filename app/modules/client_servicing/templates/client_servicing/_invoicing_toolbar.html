@@ -1,12 +1,28 @@
-{# Toolbar — search / filters / Export are visual only for now. The Day
-   thresholds button (admin/management) is live. #}
-<div class="cs-inv-toolbar">
-    <div class="cs-inv-search">Search projects…</div>
-    <div class="cs-inv-pill">Invoice month <span class="cs-inv-pill-val">· All</span></div>
-    <div class="cs-inv-pill">Validation <span class="cs-inv-pill-val">· All</span></div>
+{# Toolbar. The two selects are server-side (GET), so the Export link can
+   reuse exactly the same filtering; the search box filters the loaded rows
+   as you type, the same way the Table tab's search does — so Export
+   deliberately doesn't reflect it. #}
+<form class="cs-inv-toolbar" method="get" action="{{ url_for('client_servicing.invoicing') }}">
+    <input type="text" id="cs-inv-search" class="cs-inv-search-input"
+           placeholder="Search project, client, LPO…" autocomplete="off">
+    <select name="invoice_month" class="cs-inv-select" onchange="this.form.submit()">
+        <option value="">Invoice month · All</option>
+        {% for value, label in invoice_month_options %}
+        <option value="{{ value }}"{% if value == invoice_month %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="validation" class="cs-inv-select" onchange="this.form.submit()">
+        <option value="">Validation · All</option>
+        {% for code, label in validation_options %}
+        <option value="{{ code }}"{% if code == validation %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+        <option value="none"{% if validation == 'none' %} selected{% endif %}>Not set</option>
+    </select>
+    <noscript><button type="submit" class="cs-inv-ghost">Go</button></noscript>
     <div class="cs-inv-toolbar-spacer"></div>
+    <span class="cs-inv-count" id="cs-inv-count">{{ rows|length }} project{{ '' if rows|length == 1 else 's' }}</span>
     {% if can_edit_thresholds %}
     <button type="button" class="cs-inv-ghost" id="cs-inv-thresholds-btn">⚙ Day thresholds</button>
     {% endif %}
-    <div class="cs-inv-ghost">Export</div>
-</div>
+    <a class="cs-inv-ghost" href="{{ url_for('client_servicing.invoicing_export', invoice_month=invoice_month, validation=validation) }}">Export</a>
+</form>
