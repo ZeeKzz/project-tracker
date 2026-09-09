@@ -8,11 +8,12 @@ from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import (
     User, Client, Customer, Project, ProjectFile,
     DeliverableType, DeliverableTypeDiscipline,
-    DesignType, DesignDirection, ActivityLog, NotificationSound
+    DesignType, DesignDirection, ActivityLog, NotificationSound, OvpChampion
 )
 from app.modules.core.shared.lib.utils import log_activity
 from app.modules.core.shared.lib.profilepic import save_profile_pic, delete_profile_pic, AVATAR_FOLDER
 from app.modules.core.shared.lib.capabilities import can, require, require_api
+from app.modules.core.shared.lib.champions import current_champion, week_start_for
 from app.modules.core.shared.services.notifications import broadcast_update_email
 from werkzeug.security import generate_password_hash
 
@@ -84,6 +85,50 @@ def create_user():
     db.session.commit()
     log_activity('user_created', f'User "{user.name}" created with role {role}', user=current_user, entity_type='user', entity_name=user.name, entity_id=user.id)
     return jsonify({'success': True, 'user': {'id': user.id, 'name': user.name, 'role': user.role, 'team': user.team}})
+
+# ── OVP champion ──────────────────────────────────────────────────────────
+# The weekly-rotating designation. Set here manually; read by the Friction Log
+# write gate and, later, the Adoption panel.
+
+@admin_bp.route('/admin/api/ovp-champion', methods=['GET'])
+@login_required
+@admin_required
+def get_ovp_champion():
+    champion = current_champion()
+    recent = OvpChampion.query.order_by(OvpChampion.week_start.desc()).limit(8).all()
+    return jsonify({
+        'current': {'id': champion.id, 'name': champion.name} if champion else None,
+        'week_start': week_start_for().isoformat(),
+        'history': [{
+            'week_start': row.week_start.isoformat(),
+            'user': row.user.name if row.user else None,
+            'set_by': row.set_by.name if row.set_by else None,
+        } for row in recent],
+    })
+
+
+@admin_bp.route('/admin/api/ovp-champion', methods=['POST'])
+@login_required
+@admin_required
+def set_ovp_champion():
+    data = request.get_json() or {}
+    user = User.query.get(data.get('user_id')) if data.get('user_id') else None
+    if not user or not user.is_active:
+        return jsonify({'success': False, 'error': 'Pick an active user'}), 400
+
+    week_start = week_start_for()
+    row = OvpChampion.query.filter_by(week_start=week_start).first()
+    if row:
+        row.user_id = user.id
+        row.set_by_id = current_user.id
+    else:
+        db.session.add(OvpChampion(user_id=user.id, week_start=week_start, set_by_id=current_user.id))
+    db.session.commit()
+    log_activity('ovp_champion_set', f'{user.name} set as OVP champion for the week of {week_start}',
+                 user=current_user, entity_type='user', entity_name=user.name, entity_id=user.id)
+    return jsonify({'success': True, 'user': {'id': user.id, 'name': user.name},
+                    'week_start': week_start.isoformat()})
+
 
 SOUND_UPLOAD_FOLDER = os.path.join('app', 'static', 'sounds')
 ALLOWED_SOUND_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}

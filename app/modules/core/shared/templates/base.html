@@ -864,6 +864,18 @@
                 </div>
             </div>
             <div class="admin-section hidden" id="admin-section-accounts">
+                {# The weekly OVP champion. Reuses the add-user form's classes so it
+                   needs no styling of its own and follows both themes. #}
+                <div id="ovp-champion-block" class="add-user-form">
+                    <p class="accounts-group-label">OVP Champion &mdash; week of <span id="ovp-champion-week">&mdash;</span></p>
+                    <p class="accounts-group-label" id="ovp-champion-current">Not set</p>
+                    <select id="ovp-champion-select" class="form-input">
+                        <option value="">Select user...</option>
+                    </select>
+                    <div class="add-user-actions">
+                        <button type="button" id="ovp-champion-set" class="btn-primary">Set champion</button>
+                    </div>
+                </div>
                 <button type="button" id="add-user-toggle" class="accounts-add-btn">+ Add User</button>
                 {% if dev_tools_enabled %}
                 <button type="button" class="accounts-add-btn"

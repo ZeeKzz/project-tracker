@@ -52,6 +52,8 @@ ALL_CAPABILITIES = frozenset({
     'view_di_performance',
     'view_all_di',
     'edit_di_board',
+    # Signal tray
+    'write_friction_log',
     # Time tracking
     'view_time_reports',
 })
@@ -95,6 +97,7 @@ ROLE_CAPABILITIES = {
         'complete_preproduction', 'manage_project_files',
         'switch_dashboard_scope', 'view_team_snapshot',
         'view_di_performance', 'view_all_di',
+        'write_friction_log',
         'view_time_reports',
     },
 

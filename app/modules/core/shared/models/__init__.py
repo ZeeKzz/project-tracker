@@ -11,6 +11,7 @@ from .flags import BriefFlag, DecisionFlag, DecisionFlagMessage, BriefFlagMessag
 from .notes import ProjectNote, ProjectNoteReaction
 from .notifications import Notification, NotificationSound
 from .activity import ActivityLog, SidebarClick
+from .champions import OvpChampion
 from .blog import BlogPost, BlogComment
 from .feedback import FeatureRequest, FeatureRequestUpvote, FeatureRequestComment, BugReport, BugReportComment
 from .wiki import WikiSection, WikiArticle
@@ -69,6 +70,7 @@ __all__ = [
     'NotificationSound',
     'ActivityLog',
     'SidebarClick',
+    'OvpChampion',
     'BlogPost',
     'BlogComment',
     'FeatureRequest',

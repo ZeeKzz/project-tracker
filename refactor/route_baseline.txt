@@ -48,6 +48,8 @@
 /admin/api/drafts/<int:draft_id>	DELETE	admin.delete_draft_admin
 /admin/api/job-numbers	GET	admin.list_job_numbers
 /admin/api/job-numbers/<int:project_id>	DELETE	admin.clear_job_number
+/admin/api/ovp-champion	GET	admin.get_ovp_champion
+/admin/api/ovp-champion	POST	admin.set_ovp_champion
 /admin/api/projects	GET	admin.list_projects
 /admin/api/projects/<int:project_id>	DELETE	admin.delete_project
 /admin/api/sounds	GET	admin.list_sounds

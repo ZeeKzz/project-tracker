@@ -115,6 +115,12 @@ DEFAULT_ROLE_TITLES = {
     'designer': 'Pixel Architect',
     'team_lead': 'Design Captain',
     'management': 'The Big Picture',
+    'project_owner': 'Project Keeper',
+    'finance': 'The Ledger',
+    'digital_innovation': 'Systems Tinkerer',
+    'hr': 'Culture Keeper',
+    'production': 'The Fabricator',
+    'logistics': 'Route Master',
 }
 
 

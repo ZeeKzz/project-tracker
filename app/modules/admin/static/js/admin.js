@@ -36,7 +36,7 @@
             var sectionName = this.dataset.section;
             var section = document.getElementById('admin-section-' + sectionName);
             if (section) section.classList.remove('hidden');
-            if (sectionName === 'accounts') loadAccountsSection();
+            if (sectionName === 'accounts') { loadAccountsSection(); loadOvpChampion(); }
             if (sectionName === 'projects') loadProjectToolsSection();
             if (sectionName === 'activity') loadActivitySection();
             if (sectionName === 'sounds') loadSoundsSection();
@@ -201,6 +201,60 @@
         }
     });
 
+    // ── OVP champion ──────────────────────────────────────
+
+    var champSelect = document.getElementById('ovp-champion-select');
+    var champCurrent = document.getElementById('ovp-champion-current');
+    var champWeek = document.getElementById('ovp-champion-week');
+    var champSetBtn = document.getElementById('ovp-champion-set');
+
+    function loadOvpChampion() {
+        if (!champCurrent) return;
+        fetch('/admin/api/ovp-champion')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                champCurrent.textContent = data.current ? data.current.name : 'Not set';
+                if (champWeek) champWeek.textContent = data.week_start;
+                // The picker fills once per page load, from active accounts only.
+                if (champSelect && champSelect.options.length <= 1) {
+                    fetch('/admin/api/users')
+                        .then(function (r) { return r.json(); })
+                        .then(function (users) {
+                            users.filter(function (u) { return u.is_active; })
+                                .forEach(function (u) {
+                                    var opt = document.createElement('option');
+                                    opt.value = u.id;
+                                    opt.textContent = u.name;
+                                    champSelect.appendChild(opt);
+                                });
+                        });
+                }
+            })
+            .catch(function () { showToast('Could not load the OVP champion.', 'error'); });
+    }
+
+    if (champSetBtn) {
+        champSetBtn.addEventListener('click', function () {
+            var userId = champSelect ? champSelect.value : '';
+            if (!userId) return;
+            fetch('/admin/api/ovp-champion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: parseInt(userId, 10) })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        champCurrent.textContent = data.user.name;
+                        showToast('OVP champion set.', 'success');
+                    } else {
+                        showToast(data.error || 'Could not set the champion.', 'error');
+                    }
+                })
+                .catch(function () { showToast('Server error setting the champion.', 'error'); });
+        });
+    }
+
     // ── Accounts ─────────────────────────────────────────
 
     var accountsUserList = document.getElementById('accounts-user-list');
@@ -220,6 +274,12 @@
                 var activeUsers = users.filter(function (u) { return u.is_active; });
                 var deactivatedUsers = users.filter(function (u) { return !u.is_active; });
 
+                // Bespoke groups first, then designers split by team, then one
+                // group per remaining role taken from the capabilities map — a
+                // role added there appears here without touching this file.
+                var TEAM_GROUPED_ROLES = ['cs', 'admin', 'management', 'project_owner', 'designer', 'team_lead'];
+                var roleLabels = window.ROLE_LABELS || {};
+
                 var groups = [
                     { label: 'CS & Admin', filter: function (u) { return u.role === 'cs' || u.role === 'admin'; } },
                     { label: 'Management', filter: function (u) { return u.role === 'management'; } },
@@ -228,6 +288,14 @@
                     { label: '3D Team', filter: function (u) { return u.team === '3D'; } },
                     { label: 'Technical', filter: function (u) { return u.team === 'Technical'; } }
                 ];
+
+                Object.keys(roleLabels).forEach(function (role) {
+                    if (TEAM_GROUPED_ROLES.indexOf(role) !== -1) return;
+                    groups.push({
+                        label: roleLabels[role],
+                        filter: function (u) { return u.role === role; }
+                    });
+                });
 
                 function renderGroup(label, members, rowClass) {
                     if (members.length === 0) return;
@@ -245,9 +313,18 @@
                     });
                 }
 
+                var rendered = {};
                 groups.forEach(function (group) {
-                    renderGroup(group.label, activeUsers.filter(group.filter), 'account-user-row');
+                    var members = activeUsers.filter(group.filter);
+                    members.forEach(function (u) { rendered[u.id] = true; });
+                    renderGroup(group.label, members, 'account-user-row');
                 });
+
+                // Anyone no group matched — e.g. a designer with no team set.
+                // Without this they render nowhere and the account looks deleted.
+                renderGroup('Other', activeUsers.filter(function (u) {
+                    return !rendered[u.id];
+                }), 'account-user-row');
 
                 // Deactivated accounts, pulled out of their normal group into one
                 // muted list at the bottom so they can be found and reactivated.
