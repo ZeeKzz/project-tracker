@@ -21,11 +21,12 @@ from ._common import (
     _CREATE_REGION_ORDER,
     _parse_edit_date,
 )
+from app.modules.core.shared.lib.capabilities import can
 
 def _can_create_project(actor):
     """Who can start a new project — admin/cs/management/project_owner.
     Role-only; there's no project yet to scope against."""
-    return actor.role in ('admin', 'cs', 'management', 'project_owner')
+    return can('create_projects', actor)
 
 
 def _drop_unselected_brief_data(project):
@@ -70,10 +71,10 @@ def _create_mode_context(project, actor):
     # (its live version folds in extra checks that don't apply here).
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     can_manage_reference_files = (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
 
     return {
@@ -112,7 +113,7 @@ def overlay_create_draft():
     if project_id:
         candidate = Project.query.get(project_id)
         if candidate and candidate.project_status == 'draft' and (
-            candidate.created_by_id == actor.id or actor.role in ('admin', 'management')
+            candidate.created_by_id == actor.id or can('manage_projects', actor)
         ):
             draft = candidate
         elif candidate and candidate.project_status != 'draft':
@@ -242,7 +243,7 @@ def overlay_create_shell(project_id):
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
     if project.project_status != 'draft' or not (
-        project.created_by_id == actor.id or actor.role in ('admin', 'management')
+        project.created_by_id == actor.id or can('manage_projects', actor)
     ):
         abort(403)
 
@@ -253,7 +254,7 @@ def overlay_create_shell(project_id):
 def _can_finalize_create(project, actor):
     """The draft's creator, or admin/management. (The finalize routes also
     check project_status == 'draft' separately.)"""
-    return project.created_by_id == actor.id or actor.role in ('admin', 'management')
+    return project.created_by_id == actor.id or can('manage_projects', actor)
 
 
 def _validate_for_finalize(project):
@@ -361,7 +362,7 @@ def list_drafts():
     colliding with the legacy /projects/drafts route."""
     actor = _get_actor()
     query = Project.query.filter_by(project_status='draft')
-    if actor.role not in ('admin', 'management'):
+    if not can('manage_projects', actor):
         query = query.filter_by(created_by_id=actor.id)
     # Most-recently-worked-on first — the one they just left is the one they
     # most likely want back.
@@ -391,7 +392,7 @@ def delete_draft(project_id):
     actor = _get_actor()
     if project.project_status != 'draft':
         abort(404)
-    if not (project.created_by_id == actor.id or actor.role in ('admin', 'management')):
+    if not (project.created_by_id == actor.id or can('manage_projects', actor)):
         abort(403)
 
     # delete_app_file() logs and swallows its own NAS failures, so no

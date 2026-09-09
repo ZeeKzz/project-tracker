@@ -37,7 +37,7 @@
     </div>
 
     <!-- ── Admin / creator actions ── -->
-    {% set is_admin = actor.role == 'admin' %}
+    {% set is_admin = can('manage_feedback', actor) %}
     {% set is_creator = actor.id == feature.submitted_by_id %}
     {% if is_admin or is_creator %}
     <div class="fr-admin-bar">
@@ -70,7 +70,7 @@
                         <span class="blog-comment-author-name">{{ comment.author.name }}</span>
                         <span class="blog-comment-date">{{ comment.created_at | dubai_time }}</span>
                     </div>
-                    {% if current_user.role == 'admin' %}
+                    {% if can('manage_feedback', current_user) %}
                     <button class="blog-comment-delete fr-comment-delete" data-comment-id="{{ comment.id }}">Delete</button>
                     {% endif %}
                 </div>
@@ -96,7 +96,7 @@
                                 <span class="blog-comment-author-name">{{ reply.author.name }}</span>
                                 <span class="blog-comment-date">{{ reply.created_at | dubai_time }}</span>
                             </div>
-                            {% if current_user.role == 'admin' %}
+                            {% if can('manage_feedback', current_user) %}
                             <button class="blog-comment-delete fr-comment-delete" data-comment-id="{{ reply.id }}">Delete</button>
                             {% endif %}
                         </div>

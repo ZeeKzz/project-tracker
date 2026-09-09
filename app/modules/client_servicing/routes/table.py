@@ -5,7 +5,7 @@ edit.py, on the same blueprint.
 """
 from datetime import date
 
-from flask import render_template, abort
+from flask import render_template
 from flask_login import login_required
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -17,15 +17,9 @@ from app.modules.client_servicing.models import ClientServicing, ClientServicing
 from app.modules.client_servicing.lib.status import (
     effective_cs_status, cs_design_indicator, CS_STATUS_OPTIONS,
 )
-from app.modules.client_servicing.lib.access import (
-    can_access_client_servicing, can_close_projects, _effective_user,
-)
+from app.modules.core.shared.lib.capabilities import effective_user
+from app.modules.client_servicing.lib.access import can_close_projects, require_cs
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
-
-
-def _require_access():
-    if not can_access_client_servicing(_effective_user()):
-        abort(403)
 
 
 # Every reorderable/resizable column, in the default order — key must
@@ -68,9 +62,9 @@ TABLE_KEY = 'client_servicing:table'
 def _saved_layout():
     """The effective user's saved layout for this table ([] if none), fetched
     once per request and shared by _ordered_columns/_column_widths. Keyed on
-    _effective_user() so an admin emulating someone sees and saves that
+    effective_user() so an admin emulating someone sees and saves that
     person's layout."""
-    row = UserTableLayout.query.filter_by(user_id=_effective_user().id, table_key=TABLE_KEY).first()
+    row = UserTableLayout.query.filter_by(user_id=effective_user().id, table_key=TABLE_KEY).first()
     if not row or not row.layout:
         return []
     return [entry for entry in row.layout if isinstance(entry, dict) and entry.get('key')]
@@ -257,22 +251,22 @@ def _page_context():
         'project_owner_options': _person_options('project_owner'),
         'contacts_by_client': _contacts_by_client(client_ids),
         'to_close_out': [_close_out_row(p) for p in to_close_out],
-        'can_close': can_close_projects(_effective_user()),
+        'can_close': can_close_projects(effective_user()),
     }
 
 
 @client_servicing_bp.route('/table')
 @login_required
+@require_cs
 def table():
-    _require_access()
     return render_template('client_servicing/table.html', **_page_context())
 
 
 @client_servicing_bp.route('/table-rows')
 @login_required
+@require_cs
 def table_rows():
     """Full-refresh endpoint. The SSE ping handler (client_servicing.js)
     re-fetches this and swaps it into #client-servicing-table-body —
     same pattern as the Projects page's table_rows()."""
-    _require_access()
     return render_template('client_servicing/_table_rows.html', **_page_context())

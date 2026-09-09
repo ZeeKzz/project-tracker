@@ -12,9 +12,9 @@ from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
 
 from app.modules.core.shared.models import Project
-from app.modules.core.shared.lib.decorators import role_required
 from app.modules.core.shared.lib.users import active_users_query
 from app.modules.projects.lib.teams import assignable_teams_for
+from app.modules.core.shared.lib.capabilities import can
 
 from ._common import (
     project_overlay_bp,
@@ -38,7 +38,11 @@ from ._common import (
 def _is_assigned_designer(project, actor):
     """True if actor has a real assignment on this project — deliverable-level
     (DeliverableAssignment), project-level (ProjectDesigner), or Concept/KV
-    designer (C&CM). Same three surfaces notifications.py sweeps."""
+    designer (C&CM). Same three surfaces notifications.py sweeps.
+
+    Role literal on purpose: this answers "is this person assigned work here",
+    and an admin is not. can('claim_work') would say yes for every admin
+    through the wildcard, and this feeds the notification sweeps."""
     if actor.role not in ('designer', 'team_lead'):
         return False
     if any(pd.user_id == actor.id for pd in project.assigned_designers):
@@ -78,10 +82,10 @@ def _can_decide_edit_access_request(project, actor):
     approve someone else's request."""
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     return (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
 
 
@@ -90,10 +94,10 @@ def _can_cancel_project(project, actor):
     assigned Project Owner."""
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     return (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
 
 
@@ -103,7 +107,7 @@ def _can_toggle_hold(project, actor):
     existing behaviour; worth revisiting if that's an oversight."""
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     return (
-        actor.role == 'admin'
+        can('toggle_project_hold', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
     )
@@ -152,19 +156,19 @@ def _build_details_context(project, actor):
 
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
 
-    can_reassign_cs_lead = actor.role in ('admin', 'management')
-    can_manage_cs = actor.role in ('admin', 'management') or actor.id == project.cs_lead_id
+    can_reassign_cs_lead = can('manage_projects', actor)
+    can_manage_cs = can('manage_projects', actor) or actor.id == project.cs_lead_id
     can_manage_reference_files = (
         can_manage_cs
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
     can_edit_project = can_manage_reference_files
 
     can_assign_owner = (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
-        or actor.role == 'project_owner'
+        or can('claim_ownership', actor)
     )
 
     cs_lead_options = active_users_query().filter_by(role='cs').order_by(User.name).all() if can_reassign_cs_lead else []
@@ -175,9 +179,9 @@ def _build_details_context(project, actor):
         ~User.id.in_(secondary_cs_ids) if secondary_cs_ids else True
     ).order_by(User.name).all() if can_manage_cs else []
 
-    if actor.role in ('admin', 'management') or actor.id == project.cs_lead_id:
+    if can('manage_projects', actor) or actor.id == project.cs_lead_id:
         owner_options = active_users_query().filter_by(role='project_owner').order_by(User.name).all()
-    elif actor.role == 'project_owner':
+    elif can('claim_ownership', actor):
         owner_options = [actor]
     else:
         owner_options = []
@@ -186,7 +190,7 @@ def _build_details_context(project, actor):
     # comment above). can_override_project_status gates the bulk write, not a
     # stored override.
     status_label, status_class = derive_project_status(project)
-    can_override_project_status = actor.role == 'admin'
+    can_override_project_status = can('override_status', actor)
     # When the raw status last changed (None if it pre-dates ProjectStatusLog).
     status_started_at = project_status_started_at(project)
     # Client-approval moment — only shown separately once Handed to Production.
@@ -200,7 +204,7 @@ def _build_details_context(project, actor):
     for team in all_teams:
         assignment = assignments_by_team.get(team)
         can_manage = (
-            actor.role in ('admin', 'management')
+            can('manage_projects', actor)
             or actor.team in assignable_teams_for(team)
             or (assignment and assignment.user_id == actor.id)
         )
@@ -215,8 +219,8 @@ def _build_details_context(project, actor):
             'options': options,
         })
 
-    can_manage_concept_kv_full = actor.role in ('admin', 'management')
-    can_self_claim_concept_kv = actor.role in ('designer', 'team_lead')
+    can_manage_concept_kv_full = can('manage_projects', actor)
+    can_self_claim_concept_kv = can('claim_work', actor)
     can_manage_concept_kv = can_manage_concept_kv_full or can_self_claim_concept_kv
 
     if can_manage_concept_kv_full:
@@ -304,6 +308,9 @@ def _build_details_context(project, actor):
     # approved/denied; the button hides once approved and renders (in a
     # different state) only for an eligible open project and an assigned designer.
     edit_access_request = None
+    # Role literal on purpose: this picks a branch meant for designers, and
+    # admin is deliberately outside it. can('claim_work') would let admin in
+    # through the wildcard.
     if actor.role in ('designer', 'team_lead'):
         from app.modules.core.shared.models import ProjectEditAccessRequest
         edit_access_request = ProjectEditAccessRequest.query.filter_by(
@@ -450,10 +457,10 @@ def overlay_details_save(project_id):
 
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     can_edit_project = (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
     if not can_edit_project:
         return jsonify({'success': False, 'error': 'You do not have permission to edit this project.'}), 403
@@ -615,10 +622,10 @@ def overlay_start_project(project_id):
     actor = _get_actor()
 
     can_edit_project = (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in {a.user_id for a in project.secondary_cs_assignments}
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
     if not can_edit_project:
         return jsonify({'success': False, 'error': 'You do not have permission to start this project.'}), 403
@@ -698,7 +705,7 @@ def override_deliverable_status(project_id, deliverable_id):
 
     deliverable = Deliverable.query.filter_by(id=deliverable_id, project_id=project_id).first_or_404()
     actor = _get_actor()
-    if actor.role != 'admin' and not _has_edit_access_grant(deliverable.project, actor):
+    if not can('override_status', actor) and not _has_edit_access_grant(deliverable.project, actor):
         return jsonify({'success': False, 'error': 'You do not have permission to override this status.'}), 403
 
     data = request.get_json(silent=True) or {}
@@ -760,7 +767,7 @@ def override_project_status(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role != 'admin':
+    if not can('override_status', actor):
         return jsonify({'success': False, 'error': 'Admin only.'}), 403
 
     data = request.get_json(silent=True) or {}

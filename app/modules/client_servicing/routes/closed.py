@@ -7,13 +7,13 @@ edit.py's field endpoint rather than adding a second permission list.
 """
 from datetime import date
 
-from flask import render_template, request, abort
+from flask import render_template, request
 from flask_login import login_required
 
-from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
+from app.modules.core.shared.lib.capabilities import can, effective_user
+from app.modules.client_servicing.lib.access import require_cs
 from app.modules.client_servicing.lib import closed as closed_lib
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
-from app.modules.client_servicing.routes.edit import _FINANCE_EDIT_ROLES
 
 
 def _int_arg(name, default=0):
@@ -25,10 +25,9 @@ def _int_arg(name, default=0):
 
 @client_servicing_bp.route('/closed')
 @login_required
+@require_cs
 def closed():
-    actor = _effective_user()
-    if not can_access_client_servicing(actor):
-        abort(403)
+    actor = effective_user()
 
     today = date.today()
     year = _int_arg('year', today.year)
@@ -50,5 +49,5 @@ def closed():
         year=year, quarter=quarter, month=month,
         years=list(range(today.year - 3, today.year + 2)),
         months=[(m, date(2000, m, 1).strftime('%B')) for m in range(1, 13)],
-        can_edit_finance=getattr(actor, 'role', None) in _FINANCE_EDIT_ROLES,
+        can_edit_finance=can('edit_finance', actor),
     )

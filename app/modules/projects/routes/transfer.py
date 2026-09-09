@@ -25,7 +25,7 @@ from flask import Blueprint, request, jsonify, abort
 from flask_login import login_required, current_user
 
 from app.modules.core.shared.extensions import db
-from app.modules.core.shared.lib.decorators import role_required
+from app.modules.core.shared.lib.capabilities import effective_user, require
 from app.modules.core.shared.models import (
     Project, Customer, ProjectCustomer, ProjectRegion,
     Deliverable, DeliverableAssignment, DeliverableStatusLog,
@@ -130,11 +130,13 @@ def _notify_transfer(project, deliverable, target_customer, mode, actor):
 
 @transfer_bp.route('/projects/<int:project_id>/deliverables/<int:deliverable_id>/transfer', methods=['POST'])
 @login_required
-@role_required('admin', 'cs', 'management')
+@require('transfer_projects', real_user=True)
 def transfer_deliverable(project_id, deliverable_id):
     project = Project.query.get_or_404(project_id)
 
-    # CS leads can only transfer on their own projects (or ones they're secondary CS on)
+    # CS leads can only transfer on their own projects (or ones they're secondary CS on).
+    # Role literal on purpose: this picks the CS-lead branch, which admin and
+    # management are deliberately outside of.
     if current_user.role == 'cs':
         from app.modules.core.shared.models import ProjectSecondaryCS
         is_secondary = ProjectSecondaryCS.query.filter_by(
@@ -173,11 +175,7 @@ def transfer_deliverable(project_id, deliverable_id):
     )
     target_label = f'{target_customer.name} ({target_customer.region.upper()})'
 
-    # Emulation-aware actor
-    from flask import session
-    from app.modules.core.shared.models import User as UserModel
-    emulating_id = session.get('emulating_user_id')
-    actor = UserModel.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
+    actor = effective_user()
 
     target_pc = _get_or_create_project_customer(project, target_customer)
 

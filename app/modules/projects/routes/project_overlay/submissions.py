@@ -10,6 +10,7 @@ from flask_login import login_required
 from app.modules.core.shared.models import Project
 
 from ._common import project_overlay_bp, _get_actor, ensure_posm_channels
+from app.modules.core.shared.lib.capabilities import can
 
 def _build_submission_regions(project):
     """Groups a C&CM project's customers as Region -> Customer for the
@@ -184,7 +185,7 @@ def _build_draft_card_context(project, actor, resolved):
         sent_revision_event = next(
             (e for e in sent_submission.events if e.event_type == 'client_revision'), None)
     can_request_client_revision = (
-        actor.role in ('admin', 'cs', 'management')
+        can('review_submissions', actor)
         and sent_submission is not None
         and sent_revision_event is None
     )
@@ -299,8 +300,8 @@ def _build_draft_card_context(project, actor, resolved):
     return {
         'draft': draft,
         'cached_files': cached_files,
-        'can_manage_draft': actor.role in ('admin', 'designer', 'team_lead'),
-        'can_review': actor.role in ('admin', 'cs', 'management'),
+        'can_manage_draft': can('manage_drafts', actor),
+        'can_review': can('review_submissions', actor),
         'workflow_status': workflow_status,
         'is_being_edited': is_being_edited,
         'is_locked': is_locked,
@@ -654,7 +655,7 @@ def overlay_submissions_submit_for_review(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role not in ('admin', 'designer', 'team_lead'):
+    if not can('manage_drafts', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to submit this draft.'}), 403
     
     data = request.get_json() or {}
@@ -751,7 +752,7 @@ def overlay_submissions_edit_draft(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role not in ('admin', 'designer', 'team_lead'):
+    if not can('manage_drafts', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to edit this draft.'}), 403
 
     data = request.get_json() or {}
@@ -805,7 +806,7 @@ def overlay_submissions_flag_internal_revision(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role not in ('admin', 'cs', 'management'):
+    if not can('review_submissions', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to flag this submission.'}), 403
 
     data = request.get_json() or {}
@@ -928,7 +929,7 @@ def overlay_submissions_submit_to_client(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role not in ('admin', 'cs', 'management'):
+    if not can('review_submissions', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to submit to client.'}), 403
 
     data = request.get_json() or {}
@@ -1107,7 +1108,7 @@ def overlay_submissions_submit_summary(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role not in ('admin', 'cs', 'management'):
+    if not can('review_submissions', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to submit to client.'}), 403
 
     scope = request.args.get('scope', 'ckv')
@@ -1202,7 +1203,7 @@ def overlay_submissions_client_revision(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role not in ('admin', 'cs', 'management'):
+    if not can('review_submissions', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to request a client revision.'}), 403
 
     data = request.get_json() or {}
@@ -1346,7 +1347,7 @@ def overlay_submissions_approve(project_id):
 
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
-    if actor.role not in ('admin', 'cs', 'management'):
+    if not can('review_submissions', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to approve this submission.'}), 403
 
     data = request.get_json() or {}

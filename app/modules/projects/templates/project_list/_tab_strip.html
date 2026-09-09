@@ -15,6 +15,9 @@
     class="tab-strip-item{% if view == 'my' %} active{% endif %}">My Projects</a>
 <a href="{{ url_for('project_list.index', view='all') }}"
     class="tab-strip-item{% if view == 'all' %} active{% endif %}">
+    {# Role literal on purpose: this label list is narrower than view_all_projects
+   (project_owner gets the all-projects query but the Team Projects label).
+   Changing it would be a UI change, not a permission one. #}
     {% if effective_role in ('cs', 'admin', 'management') %}All Projects{% else %}Team Projects{% endif %}
 </a>
 <a href="{{ url_for('project_list.index', view='design_complete') }}"

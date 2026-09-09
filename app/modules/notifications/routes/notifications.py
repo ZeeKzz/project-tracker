@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, url_for
 from flask_login import login_required, current_user
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import Notification
+from app.modules.core.shared.lib.capabilities import effective_user
 from datetime import datetime
 
 notifications_bp = Blueprint('notifications', __name__)
@@ -14,12 +15,10 @@ def mark_read(notification_id):
     Mark a single notification as read.
     Returns JSON with the URL to navigate to (the related project).
     """
-    from flask import session
     notification = Notification.query.get_or_404(notification_id)
 
     # Emulation-aware auth check — same pattern as archive/restore routes
-    emulating_id = session.get('emulating_user_id')
-    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    notif_user_id = effective_user().id
 
     if notification.recipient_id != notif_user_id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
@@ -59,7 +58,6 @@ def mark_all_read():
 @notifications_bp.route('/notifications/<int:notification_id>/archive', methods=['POST'])
 @login_required
 def archive_notification(notification_id):
-    from flask import session
     # Fetch the notification or return 404 if it doesn't exist
     notification = Notification.query.get_or_404(notification_id)
 
@@ -67,8 +65,7 @@ def archive_notification(notification_id):
     # Emulation-aware auth check:
     # If admin is emulating another user, check against the emulated user's ID
     # Otherwise, check against the real logged-in user's ID
-    emulating_id = session.get('emulating_user_id')
-    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    notif_user_id = effective_user().id
 
     # Block access if this notification doesn't belong to the resolved user
     if notification.recipient_id != notif_user_id:
@@ -85,9 +82,7 @@ def archive_notification(notification_id):
 @notifications_bp.route('/notifications/archive-all', methods=['POST'])
 @login_required
 def archive_all():
-    from flask import session
-    emulating_id = session.get('emulating_user_id')
-    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    notif_user_id = effective_user().id
     Notification.query.filter_by(
         recipient_id=notif_user_id,
         is_archived=False
@@ -99,13 +94,11 @@ def archive_all():
 @notifications_bp.route('/notifications/delete-bulk', methods=['POST'])
 @login_required
 def delete_bulk():
-    from flask import session
     data = request.get_json()
     ids = data.get('ids', [])
     if not ids:
         return jsonify({'success': False, 'error': 'No IDs Provided'}), 400
-    emulating_id = session.get('emulating_user_id')
-    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    notif_user_id = effective_user().id
     Notification.query.filter(
         Notification.id.in_(ids),
         Notification.recipient_id == notif_user_id
@@ -122,9 +115,7 @@ def poll():
     Returns any unread, non-archived notifications created after that time.
     JS calls this every 30s and uses the results to fire desktop notifications + sound.
     """
-    from flask import session
-    emulating_id = session.get('emulating_user_id')
-    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    notif_user_id = effective_user().id
 
     since_str = request.args.get('since')
     query = Notification.query.filter_by(
@@ -165,14 +156,12 @@ def poll():
 @notifications_bp.route('/notifications/<int:notification_id>/restore', methods=['POST'])
 @login_required
 def restore_notification(notification_id):
-    from flask import session
 
     # Fetch the notification or return 404 if it doesn't exist
     notification = Notification.query.get_or_404(notification_id)
 
     # Emulation-aware auth check - same pattern as archive route
-    emulating_id = session.get('emulating_user_id')
-    notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    notif_user_id = effective_user().id
 
     # Block access if this notification doesn't belong to the resolved user
     if notification.recipient_id != notif_user_id:

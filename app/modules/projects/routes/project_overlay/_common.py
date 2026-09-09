@@ -8,17 +8,16 @@ the old file) so it still resolves to app/modules/projects/templates.
 """
 
 from flask import Blueprint
-from flask_login import current_user
+
+from app.modules.core.shared.lib.capabilities import can, effective_user
 
 project_overlay_bp = Blueprint('project_overlay', __name__, template_folder='../../templates')
 
 def _get_actor():
     """Emulation-aware actor: an admin viewing-as another user acts as that
-    user; everyone else acts as themselves."""
-    from app.modules.core.shared.models import User
-    from flask import session
-    emulating_id = session.get('emulating_user_id')
-    return User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
+    user; everyone else acts as themselves. Kept as the overlay's local name
+    for core/shared's effective_user()."""
+    return effective_user()
 
 def _can_manage_deliverables(project, actor):
     """Admin/management, the project's CS Lead / Secondary CS / Project Owner,
@@ -26,10 +25,10 @@ def _can_manage_deliverables(project, actor):
     edit-access grant."""
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     return (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
         or (project.project_status == 'draft' and actor.id == project.created_by_id)
         # An assigned designer with an approved edit-access grant.
         or _has_edit_access_grant(project, actor)
@@ -45,11 +44,11 @@ def _has_edit_access_grant(project, actor):
 def _can_manage_flags(actor):
     """Raise/reply to a Brief Flag. Role-only: any designer/CS/team_lead/
     management can flag or reply on any project they can see."""
-    return actor.role in ('admin', 'cs', 'designer', 'team_lead', 'management')
+    return can('raise_flags', actor)
 
 def _can_resolve_flag(flag, actor):
     """The flag's creator, or admin/management."""
-    return flag.created_by_id == actor.id or actor.role in ('admin', 'management')
+    return flag.created_by_id == actor.id or can('manage_flags', actor)
 
 def _build_ccm_deliverable_sections(project, with_catalog=False):
     """Group a C&CM project's deliverables as Region -> Customer -> Deliverables.

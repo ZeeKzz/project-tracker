@@ -55,7 +55,7 @@
                         {# Each detail gets its own tag color so they're visually distinct at a #}
                         {# glance, not just a run of same-looking text separated by gaps. #}
                         <span class="profile-tag profile-tag--title">{{ fun_title }}</span>
-                        <span class="profile-tag profile-tag--role">{{ profile_user.role | replace('_', ' ') | title }}</span>
+                        <span class="profile-tag profile-tag--role">{{ role_labels.get(profile_user.role, profile_user.role | replace('_', ' ') | title) }}</span>
                         {% if profile_user.favorite_food %}
                         <span class="profile-tag profile-tag--food">{{ profile_user.favorite_food }}</span>
                         {% endif %}
@@ -282,7 +282,7 @@ window.PROFILE_CUSTOMIZE = {
         {# Read-only: display only, never submitted as an editable value #}
         <div class="form-group">
             <label>Role</label>
-            <input type="text" class="form-input" value="{{ profile_user.role | replace('_', ' ') | title }}" disabled>
+            <input type="text" class="form-input" value="{{ role_labels.get(profile_user.role, profile_user.role | replace('_', ' ') | title) }}" disabled>
         </div>
         <div class="form-group">
             <label>Fun Title</label>

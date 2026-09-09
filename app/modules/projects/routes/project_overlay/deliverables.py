@@ -9,11 +9,11 @@ _build_details_context needs it too.
 """
 
 from flask import render_template, abort, request, jsonify
-from flask_login import login_required, current_user
+from flask_login import login_required
 
 from app.modules.core.shared.models import Project
-from app.modules.core.shared.lib.decorators import role_required
 from app.modules.projects.lib.teams import assignable_teams_for
+from app.modules.core.shared.lib.capabilities import can
 
 from ._common import (
     project_overlay_bp,
@@ -38,10 +38,10 @@ def _can_skip_preproduction(project, actor):
     one-helper-per-route-file convention."""
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     return (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
 
 
@@ -125,6 +125,9 @@ def _build_deliverable_focus_context(deliverables, actor, can_manage_project, ha
         row = []
         for team in _needed_teams(d):
             existing = assignment_by_team.get(team)
+            # Team rules, not gates: a lead manages their own team's row, a
+            # designer may only self-assign on it. Admin reaches 'manage' via
+            # can_manage_project above, so the wildcard must not apply here.
             if can_manage_project or (actor.role == 'team_lead' and actor.team in assignable_teams_for(team)):
                 mode = 'manage'
             elif actor.role == 'designer' and actor.team in assignable_teams_for(team):
@@ -145,13 +148,15 @@ def _build_deliverable_focus_context(deliverables, actor, can_manage_project, ha
         'assigned_ids': assigned_ids,
         'assign_by_deliverable': assign_by_deliverable,
         # Designer/Team Lead/Admin get the toggle; everyone else always sees All.
-        'can_toggle_focus': actor.role in ('designer', 'team_lead', 'admin'),
+        'can_toggle_focus': can('claim_work', actor),
         # Designer/Team Lead default to Focused (their own workload first);
-        # Admin's toggle doesn't filter, so it starts on All.
+        # Admin's toggle doesn't filter, so it starts on All. Role literal on
+        # purpose: can('claim_work') includes admin through the wildcard, which
+        # would flip this default for them.
         'default_focus': actor.role in ('designer', 'team_lead'),
         # Deliverable-level status override — admin, or a designer with an
         # approved edit-access grant. One shared option list for both brief types.
-        'can_override_status': actor.role == 'admin' or has_edit_access_grant,
+        'can_override_status': can('override_status', actor) or has_edit_access_grant,
         'deliverable_status_options': _DELIVERABLE_STATUS_OVERRIDE_OPTIONS,
     }
 
@@ -197,7 +202,7 @@ def overlay_deliverables(project_id):
     can_skip_preproduction = _can_skip_preproduction(project, actor)
     # Passed into _build_deliverable_focus_context below so its
     # can_override_status also reflects an edit-access grant, not just
-    # actor.role == 'admin' — see that function's docstring.
+    # override_status — see that function's docstring.
     has_edit_access_grant = _has_edit_access_grant(project, actor)
 
     # Brief Flags — one query for every open deliverable-scoped
@@ -757,6 +762,8 @@ def _can_write_deliverable_assignment(project, actor, team, target_designer_id, 
     caller's own assignment, never a teammate's."""
     if _can_manage_deliverables(project, actor):
         return True
+    # Team rule: a lead may act on their own team even without project-wide
+    # rights. Not a capability — it depends on actor.team, not the role alone.
     if actor.role == 'team_lead' and actor.team in assignable_teams_for(team):
         return True
     return False
@@ -813,6 +820,7 @@ def assign_deliverable_team(project_id):
     ).first()
 
     if data.get('self_toggle'):
+        # Self-toggle is the designer's own action on their own team.
         if actor.role != 'designer' or actor.team not in assignable_teams_for(team):
             return jsonify({'success': False, 'error': 'You do not have permission to assign this.'}), 403
         if existing and existing.designer_id == actor.id:
@@ -856,6 +864,7 @@ def assign_deliverable_team(project_id):
         return jsonify({'success': True, 'designer_id': None})
 
     target = User.query.get(designer_id)
+    # About the person being assigned, not the caller — validation, not a gate.
     if not target or target.role not in ('designer', 'team_lead') or target.team not in assignable_teams_for(team):
         return jsonify({'success': False, 'error': f'That person cannot be assigned to the {team} team.'}), 400
 
@@ -882,24 +891,24 @@ def set_project_owner(project_id):
     
     """
     from app.modules.core.shared.models import Project, User
-    from flask import request, jsonify, session
+    from flask import request, jsonify
     from app.modules.projects.services import mutations as project_mutations
 
     project = Project.query.get_or_404(project_id)
 
-    emulating_id = session.get('emulating_user_id')
-    actor = User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
+    actor = _get_actor()
 
     new_owner_id = request.form.get('user_id', type=int)
     if not new_owner_id:
         return jsonify({'success': False, 'error': 'Please select a Project Owner.'}), 400
 
-    is_self_claim = (actor.role == 'project_owner' and new_owner_id == actor.id)
+    is_self_claim = (can('claim_ownership', actor) and new_owner_id == actor.id)
 
-    if actor.role not in ('admin', 'management') and actor.id != project.cs_lead_id and not is_self_claim:
+    if not can('manage_projects', actor) and actor.id != project.cs_lead_id and not is_self_claim:
         return jsonify({'success': False, 'error': 'You are lacking permissions to perform this action.'}), 400
 
     new_owner = User.query.get(new_owner_id)
+    # About the person being assigned, not the caller.
     if not new_owner or new_owner.role != 'project_owner':
         return jsonify({'success': False, 'error': 'Selected user is not a Project Owner'}), 400
 
@@ -924,7 +933,7 @@ def reassign_cs_lead(project_id):
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
 
-    if actor.role not in ('admin', 'management'):
+    if not can('manage_projects', actor):
         return jsonify({'success': False, 'error': 'Only admin/management can reassign a CS lead.'}), 403
 
     new_cs_lead_id = (request.get_json(silent=True) or {}).get('new_cs_lead_id')
@@ -932,6 +941,7 @@ def reassign_cs_lead(project_id):
         return jsonify({'success': False, 'error': 'A new CS lead is required.'}), 400
 
     new_cs_lead = User.query.get(int(new_cs_lead_id))
+    # About the person being assigned, not the caller.
     if not new_cs_lead or new_cs_lead.role != 'cs':
         return jsonify({'success': False, 'error': 'CS lead not found.'}), 404
 
@@ -945,8 +955,8 @@ def add_secondary_cs(project_id):
     """Add a secondary CS. Permission matches _build_details_context's
     can_manage_cs exactly (admin/management, or this project's own CS
     Lead) — NOT the old projects_detail.py version of this route, which
-    gated on role_required('admin','cs','management') but then rejected
-    any non-lead 'management' user in the body anyway (role_required said
+    gated on the admin/cs/management role set but then rejected
+    any non-lead 'management' user in the body anyway (the gate said
     yes, the manual check said no). The template's picker/remove buttons
     are gated on can_manage_cs today, so the backend needs to agree with
     that gate exactly, not the old file's inconsistent one."""
@@ -957,7 +967,7 @@ def add_secondary_cs(project_id):
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
 
-    if actor.role not in ('admin', 'management') and actor.id != project.cs_lead_id:
+    if not can('manage_projects', actor) and actor.id != project.cs_lead_id:
         return jsonify({'success': False, 'error': 'You do not have permission to add a secondary CS.'}), 403
 
     user_id = request.form.get('user_id', type=int)
@@ -968,6 +978,7 @@ def add_secondary_cs(project_id):
         return jsonify({'success': False, 'error': 'The CS lead is already the primary CS on this project.'}), 400
 
     user = User.query.get(user_id)
+    # About the person being added, not the caller.
     if not user or user.role not in ('cs', 'admin', 'management'):
         return jsonify({'success': False, 'error': 'Only CS & Management members can be added as secondary CS.'}), 400
 
@@ -994,7 +1005,7 @@ def remove_secondary_cs(project_id, user_id):
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
 
-    if actor.role not in ('admin', 'management') and actor.id != project.cs_lead_id:
+    if not can('manage_projects', actor) and actor.id != project.cs_lead_id:
         return jsonify({'success': False, 'error': 'You do not have permission to remove a secondary CS.'}), 403
 
     assignment = ProjectSecondaryCS.query.filter_by(project_id=project_id, user_id=user_id).first()
@@ -1029,7 +1040,9 @@ def assign_concept_kv(project_id):
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
 
-    full_control = actor.role in ('admin', 'management')
+    full_control = can('manage_projects', actor)
+    # Role literal on purpose: self_claim_only selects the self-assign branch
+    # below, which admin must not enter. can('claim_work') would include them.
     self_claim_only = actor.role in ('designer', 'team_lead')
     if not full_control and not self_claim_only:
         return jsonify({'success': False, 'error': 'You do not have permission to assign this.'}), 403
@@ -1090,6 +1103,8 @@ def assign_lead(project_id):
     if not team:
         return jsonify({'success': False, 'error': 'Team is required.'}), 400
 
+    # Role literal on purpose: this restricts designers to their own team, and
+    # admin is not one of them.
     if actor.role in ('designer', 'team_lead') and actor.team not in assignable_teams_for(team):
         return jsonify({'success': False, 'error': 'You can only assign yourself to your own team.'}), 403
 
@@ -1102,7 +1117,7 @@ def assign_lead(project_id):
     if not is_self:
         # Handing the lead role to someone ELSE — only the current lead
         # may do this, unless the actor is admin/management.
-        if actor.role not in ('admin', 'management'):
+        if not can('manage_projects', actor):
             if not current_assignment or current_assignment.user_id != actor.id:
                 return jsonify({'success': False, 'error': 'Only the current lead can transfer ownership.'}), 403
         new_designer = User.query.get(target_id)

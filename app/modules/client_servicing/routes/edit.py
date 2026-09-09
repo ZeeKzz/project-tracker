@@ -19,7 +19,8 @@ from app.modules.core.shared.models import Project, User
 from app.modules.projects.services import mutations as project_mutations
 
 from app.modules.client_servicing.models import ClientServicing, ClientServicingScope
-from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
+from app.modules.core.shared.lib.capabilities import can, effective_user
+from app.modules.client_servicing.lib.access import require_cs
 from app.modules.client_servicing.lib.status import (
     effective_cs_status, cs_design_indicator, CS_STATUS_OPTIONS,
 )
@@ -144,13 +145,12 @@ _EDITABLE_FIELDS = {
     'validation_status': _parse_validation,
 }
 
-# Finance/master-control fields — editable by a NARROWER set than page
-# access (finance, CS, admin only), same gate as the Invoicing tab.
+# Finance/master-control fields — gated on edit_finance, a NARROWER
+# capability than page access, same gate as the Invoicing tab.
 _FINANCE_FIELDS = {
     'lpo_date', 'invoice_number', 'invoice_date',
     'invoice_amount', 'gr_received', 'invoice_uploaded', 'validation_status',
 }
-_FINANCE_EDIT_ROLES = {'admin', 'cs', 'finance'}
 
 
 def _display_value(field, value):
@@ -277,21 +277,20 @@ def _save_cs_risk(project, raw_value):
 
 @client_servicing_bp.route('/<int:project_id>', methods=['PATCH'])
 @login_required
+@require_cs
 def update_field(project_id):
-    # Resolved once and reused for both the permission check and every
-    # mutation call below — an admin previewing the page while emulating
-    # someone else should be gated, and have the resulting notification/
-    # activity-log entry attributed, as that person, not the real admin.
-    actor = _effective_user()
-    if not can_access_client_servicing(actor):
-        abort(403)
+    # Resolved once and reused for the finance check and every mutation call
+    # below — an admin previewing the page while emulating someone else has
+    # the resulting notification/activity-log entry attributed to that
+    # person, not to the real admin.
+    actor = effective_user()
 
     project = Project.query.get_or_404(project_id)
     data = request.get_json(silent=True) or {}
     field = data.get('field')
     raw_value = data.get('value')
 
-    if field in _FINANCE_FIELDS and getattr(actor, 'role', None) not in _FINANCE_EDIT_ROLES:
+    if field in _FINANCE_FIELDS and not can('edit_finance', actor):
         abort(403)
 
     if field == 'cs_status':

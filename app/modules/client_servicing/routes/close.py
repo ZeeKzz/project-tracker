@@ -15,21 +15,21 @@ from app.modules.core.shared.lib.utils import log_activity
 from app.modules.core.shared.models import Project
 
 from app.modules.client_servicing.models import ClientServicing
-from app.modules.client_servicing.lib.access import (
-    can_access_client_servicing, can_close_projects, _effective_user,
-)
+from app.modules.core.shared.lib.capabilities import effective_user
+from app.modules.client_servicing.lib.access import can_close_projects, require_cs
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 from app.modules.client_servicing.routes.edit import _FieldError, _parse_money
 
 
 @client_servicing_bp.route('/<int:project_id>/close', methods=['POST'])
 @login_required
+@require_cs
 def close_project(project_id):
     """Close one project. invoice_needed is None for a normal close and a
     bool for a cancelled one; an invoice_date alongside a True answer means
     it has already been invoiced."""
-    actor = _effective_user()
-    if not can_access_client_servicing(actor) or not can_close_projects(actor):
+    actor = effective_user()
+    if not can_close_projects(actor):
         abort(403)
 
     project = Project.query.get_or_404(project_id)

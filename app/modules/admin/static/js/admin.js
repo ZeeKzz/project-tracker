@@ -322,8 +322,15 @@
     }
 
     function renderAccountEdit(user) {
-        var roleOptions = ['cs', 'designer', 'team_lead', 'management', 'project_owner', 'finance', 'admin'].map(function (r) {
-            return '<option value="' + r + '"' + (user.role === r ? ' selected' : '') + '>' + r + '</option>';
+        // Roles come from ROLE_CAPABILITIES, handed over by base.html. The
+        // literal is a fallback for the case where that global is missing.
+        var roles = window.ROLE_LABELS || {
+            cs: 'Client Servicing', designer: 'Designer', team_lead: 'Team Lead',
+            management: 'Management', project_owner: 'Project Owner',
+            finance: 'Finance', admin: 'Admin'
+        };
+        var roleOptions = Object.keys(roles).map(function (r) {
+            return '<option value="' + r + '"' + (user.role === r ? ' selected' : '') + '>' + roles[r] + '</option>';
         }).join('');
         var teamOptions = ['2D', '3D', 'Technical'].map(function (t) {
             return '<option value="' + t + '"' + (user.team === t ? ' selected' : '') + '>' + t + '</option>';

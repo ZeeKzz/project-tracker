@@ -8,7 +8,7 @@
         <span class="blog-nav-dot"></span>
     </a>
     {% endfor %}
-    {% if actor.role == 'admin' %}
+    {% if can('manage_blog', actor) %}
     <div class="blog-admin-actions">
         <a href="{{ url_for('blog.editor_edit', post_id=post.id) }}" class="blog-admin-btn">Edit Post</a>
         <button class="blog-admin-btn blog-publish-btn" data-post-id="{{ post.id }}">
@@ -92,7 +92,7 @@
                         <span class="blog-comment-author-name">{{ comment.author.name }}</span>
                         <span class="blog-comment-date">{{ comment.created_at.strftime('%d %b %Y, %H:%M') }}</span>
                     </div>
-                    {% if actor.role == 'admin' %}
+                    {% if can('manage_blog', actor) %}
                     <button class="blog-comment-delete" data-comment-id="{{ comment.id }}">Delete</button>
                     {% endif %}
                 </div>
@@ -118,7 +118,7 @@
                                 <span class="blog-comment-author-name">{{ reply.author.name }}</span>
                                 <span class="blog-comment-date">{{ reply.created_at.strftime('%d %b %Y, %H:%M') }}</span>
                             </div>
-                            {% if actor.role == 'admin' %}
+                            {% if can('manage_blog', actor) %}
                             <button class="blog-comment-delete" data-comment-id="{{ reply.id }}">Delete</button>
                             {% endif %}
                         </div>

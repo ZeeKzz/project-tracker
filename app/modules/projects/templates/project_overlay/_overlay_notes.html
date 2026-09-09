@@ -22,7 +22,7 @@ non-blocking cleanup for later. #}
             <span class="overlay-visit-header-label">Site Visit &nbsp;|&nbsp;
                 {{ visit.start_at.strftime('%H:%M') }} - {{ visit.end_at.strftime('%H:%M') }} -
                 {{ visit.start_at.strftime('%A, %d %b %Y') }}</span>
-            {% if visit.user_id == actor.id or actor.role in ('admin', 'management') %}
+            {% if visit.user_id == actor.id or can('manage_projects', actor) %}
             <button type="button" class="overlay-file-action-btn overlay-file-action-btn--danger overlay-visit-delete"
                 data-visit-id="{{ visit.id }}">Delete</button>
             {% endif %}

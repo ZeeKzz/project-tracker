@@ -8,7 +8,7 @@ from flask import request, jsonify
 from flask_login import login_required, current_user
 
 from app.modules.core.shared.models import Project
-from app.modules.core.shared.lib.decorators import role_required
+from app.modules.core.shared.lib.capabilities import can, effective_user, require
 
 from ._common import project_overlay_bp
 
@@ -19,21 +19,20 @@ from ._common import project_overlay_bp
 
 @project_overlay_bp.route('/projects/<int:project_id>/upload-file', methods=['POST'])
 @login_required
-@role_required('admin', 'cs', 'management')
+@require('manage_project_files', real_user=True)
 def upload_project_file(project_id):
     """Handle reference file uploads for a project. CS and admin only."""
-    from app.modules.core.shared.models import ProjectFile, User
-    from flask import session, current_app
+    from app.modules.core.shared.models import ProjectFile
+    from flask import current_app
 
     project = Project.query.get_or_404(project_id)
-    emulating_id = session.get('emulating_user_id')
-    actor = User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
+    actor = effective_user()
 
     can_manage_files = (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in {a.user_id for a in project.secondary_cs_assignments}
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
     if not can_manage_files:
         return jsonify({'success': False, 'error': 'You are lacking permissions to perform this action.'}), 403
@@ -250,20 +249,18 @@ def preview_project_file(file_id):
 @login_required
 def delete_project_file(file_id):
     """Delete a reference file. Admin/Management (any project), this project's CS lead/secondary CS, or this projects project owner"""
-    from app.modules.core.shared.models import ProjectFile, User
-    from flask import session
+    from app.modules.core.shared.models import ProjectFile
 
     project_file = ProjectFile.query.get_or_404(file_id)
     project = Project.query.get(project_file.project_id)
 
-    emulating_id = session.get('emulating_user_id')
-    actor = User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
+    actor = effective_user()
 
     can_manage_files = (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in {a.user_id for a in project.secondary_cs_assignments}
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
     if not can_manage_files:
         return jsonify({'success': False, 'error': 'You are lacking permissions to perform this action.'}), 403
@@ -291,7 +288,7 @@ def delete_project_file(file_id):
 
 @project_overlay_bp.route('/projects/generate-job-number', methods=['GET'])
 @login_required
-@role_required('admin', 'cs', 'management', 'project_owner')
+@require('create_projects', real_user=True)
 def generate_job_number():
     FOC_PAD = 3 # Digits: 3 -> FOC-001 ... FOC-999. Change to 4 for FOC-1000+
 

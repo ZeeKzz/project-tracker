@@ -128,6 +128,13 @@
                         </div>
                         {% endmacro %}
 
+                        {# Every role test in this block is a literal on purpose.
+                           These gate which notification TOGGLES are worth showing
+                           someone, not what they may do — a person only sees the
+                           switches for notifications they can actually receive.
+                           can() would be wrong here: admin holds every capability
+                           through the wildcard and would see designer-only rows. #}
+
                         {# Designer / Team Lead #}
                         {% if current_user.role in ['designer', 'team_lead'] %}
                             {{ pref_row('New project for my team', 'new_project') }}

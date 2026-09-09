@@ -8,18 +8,13 @@ from datetime import date
 from flask import render_template, request, abort
 from flask_login import login_required
 
-from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
+from app.modules.client_servicing.lib.access import require_cs
 from app.modules.client_servicing.lib.calendar import (
     month_grid, agenda_groups, build_install, RISK_OPTIONS,
 )
 from app.modules.client_servicing.lib.status import CS_STATUS_OPTIONS
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 from app.modules.client_servicing.routes.table import _base_projects
-
-
-def _require_access():
-    if not can_access_client_servicing(_effective_user()):
-        abort(403)
 
 
 def _parse_month(raw):
@@ -65,8 +60,8 @@ def _selected_day(weeks, target):
 
 @client_servicing_bp.route('/calendar')
 @login_required
+@require_cs
 def calendar():
-    _require_access()
     today = date.today()
     if request.args.get('view') == 'agenda':
         groups, kpis = agenda_groups(_base_projects().all(), today)
@@ -96,9 +91,9 @@ def calendar():
 
 @client_servicing_bp.route('/calendar/day/<datestr>')
 @login_required
+@require_cs
 def calendar_day(datestr):
     """Drawer fragment for one day — fetched when the user clicks a day cell."""
-    _require_access()
     try:
         target = date.fromisoformat(datestr)
     except (TypeError, ValueError):

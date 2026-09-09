@@ -122,6 +122,8 @@ def get_next_action_owner(project):
         # is never actually empty in practice — flag.created_by is a defensive
         # fallback only, in case a flag is ever created some other way.
         last_author = flag.messages[-1].author if flag.messages else flag.created_by
+        # About the last author's role, not the viewer's — whose turn it is,
+        # not what anyone may do.
         cs_roles = ('cs', 'admin', 'management')
 
         if last_author.role in cs_roles:
@@ -257,6 +259,8 @@ def guidance_for_viewer(owner_info, viewer):
     this correctly reflects what a previewed CS/designer tab would show
     too, not just the real logged-in user.
     """
+    # Role literals on purpose: this picks the wording a designer sees when a
+    # CS owns the next action. Neither side is a permission check.
     if viewer.role in ('designer', 'team_lead') and owner_info['role'] == 'cs':
         return 'No action required'
     return owner_info['guidance']

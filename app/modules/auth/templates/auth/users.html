@@ -20,7 +20,7 @@
             <tr>
                 <td>{{ user.name }}</td>
                 <td>{{ user.email }}</td>
-                <td>{{ user.role | capitalize }}</td>
+                <td>{{ role_labels.get(user.role, user.role | replace('_', ' ') | title) }}</td>
                 <td>{{ user.team if user.team else '—' }}</td>
                 <td>
                     <form method="POST" action="{{ url_for('auth.reset_password', user_id=user.id) }}">

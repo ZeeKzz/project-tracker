@@ -4,10 +4,11 @@
 # These routes are called by polling.js on an interval — they return only
 # the minimal data needed to detect changes, keeping response times fast.
 
-from flask import Blueprint, jsonify, session, current_app
-from flask_login import login_required, current_user
+from flask import Blueprint, jsonify, current_app
+from flask_login import login_required
 from app.modules.core.shared.extensions import db
-from app.modules.core.shared.models import Project, User, ProjectDesigner, ProjectSecondaryCS, Client, Contact
+from app.modules.core.shared.models import Project, ProjectDesigner, ProjectSecondaryCS, Client, Contact
+from app.modules.core.shared.lib.capabilities import effective_user
 
 # Register this as a blueprint with the /api prefix.
 # All routes in this file will be under /api/...
@@ -349,23 +350,20 @@ def projects_poll():
       2. Detect if a status changed → update just that badge in-place
     """
     # Import inside the function to avoid circular imports at module load time
-    from app.modules.core.shared.models import User as UserModel
 
     # Resolve the effective user — same emulation-aware pattern used throughout the app.
     # If an admin is emulating someone, we behave as if we ARE that person.
-    emulating_id = session.get('emulating_user_id')
-    if emulating_id and current_user.role == 'admin':
-        effective_user = UserModel.query.get(emulating_id)
-    else:
-        effective_user = current_user
+    actor = effective_user()
 
-    role = effective_user.role
+    # Role picks which pair of tabs to build, not what the caller may do —
+    # a layout branch, not a gate.
+    role = actor.role
 
     # ── CS / Admin / Management ──────────────────────────────────────────────
     # These roles see two tabs: 'my' (their own projects) and 'all' (everything).
     # Admins treat 'my' and 'all' as the same — they see everything in both tabs.
     if role in ['cs', 'admin', 'management']:
-        if effective_user.role == 'admin':
+        if actor.role == 'admin':
             # Admin has no personal filter — they see all active projects
             my_projects = Project.query.filter(
                 Project.project_status != 'draft',    # drafts are hidden from dashboards
@@ -376,12 +374,12 @@ def projects_poll():
         else:
             # CS: 'my' tab shows projects where they are the lead OR a secondary CS
             secondary_ids = db.session.query(ProjectSecondaryCS.project_id).filter_by(
-                user_id=effective_user.id
+                user_id=actor.id
             ).subquery()
 
             my_projects = Project.query.filter(
                 db.or_(
-                    Project.cs_lead_id == effective_user.id,
+                    Project.cs_lead_id == actor.id,
                     Project.id.in_(secondary_ids)
                 ),
                 Project.project_status != 'draft',
@@ -405,7 +403,7 @@ def projects_poll():
         # Find all project IDs where this designer is explicitly assigned
         assigned_ids = db.session.query(
             ProjectDesigner.project_id
-        ).filter_by(user_id=effective_user.id).subquery()
+        ).filter_by(user_id=actor.id).subquery()
 
         my_projects = Project.query.filter(
             Project.id.in_(assigned_ids),
@@ -415,7 +413,7 @@ def projects_poll():
 
         # Team projects: any project that lists this designer's team
         # (uses string contains — same logic as the designer_dashboard function)
-        team = effective_user.team
+        team = actor.team
         team_projects = []
         if team:
             team_projects = Project.query.filter(
@@ -432,7 +430,7 @@ def projects_poll():
     # ── Team Lead ─────────────────────────────────────────────────────────────
     # Team leads see 'team' (all projects for their team) and 'my' (personally assigned).
     elif role == 'team_lead':
-        team = effective_user.team
+        team = actor.team
         team_projects = []
         if team:
             team_projects = Project.query.filter(
@@ -444,7 +442,7 @@ def projects_poll():
         # Personal assignment — same subquery pattern as the designer branch
         personal_ids = db.session.query(
             ProjectDesigner.project_id
-        ).filter_by(user_id=effective_user.id).subquery()
+        ).filter_by(user_id=actor.id).subquery()
 
         personal_projects = Project.query.filter(
             Project.id.in_(personal_ids),

@@ -13,8 +13,8 @@
 # for local testing) but each open SSE stream would occupy one entire sync
 # worker in production, defeating the point.
 
-from flask import Blueprint, Response, session
-from flask_login import login_required, current_user
+from flask import Blueprint, Response
+from flask_login import login_required
 from gevent.queue import Empty
 
 from app.modules.core.shared.services.sse_relay import (
@@ -24,6 +24,7 @@ from app.modules.core.shared.services.sse_relay import (
     subscribe_di_project, unsubscribe_di_project,
     subscribe_di_dashboard, unsubscribe_di_dashboard,
 )
+from app.modules.core.shared.lib.capabilities import effective_user
 
 sse_bp = Blueprint('sse', __name__, url_prefix='/sse')
 
@@ -102,7 +103,6 @@ def notifications_stream():
     # Emulation-aware actor pattern — an admin emulating
     # another user should get a live stream of THAT user's notifications,
     # matching what /notifications/poll already shows them.
-    emulating_id = session.get('emulating_user_id')
-    user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+    user_id = effective_user().id
     q = subscribe_user(user_id)
     return _sse_response(_event_stream(q, lambda: unsubscribe_user(user_id, q)))

@@ -4,15 +4,15 @@ Admin achievement management — Phase 7 of the achievement system.
 Mirrors app/routes/admin.py's conventions exactly, since this is another
 admin-only JSON API feeding a section of the same embedded admin panel in
 base.html (no separate page/template — see admin-section-sounds for the
-precedent this follows): local admin_required decorator (JSON 403, not an
+precedent this follows): local admin_required alias (JSON 403, not an
 HTML abort page, since every route here is called via fetch()), GET
 returns a plain list of dicts, POST creates, PATCH edits, DELETE removes.
 """
 import os
 import uuid
-from functools import wraps
 from flask import Blueprint, jsonify, url_for, request
 from flask_login import login_required, current_user
+from app.modules.core.shared.lib.capabilities import require_api
 from werkzeug.utils import secure_filename
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import Achievement, AchievementCategory, AchievementBorder, UserAchievement
@@ -21,18 +21,9 @@ from app.modules.core.shared.lib.utils import log_activity
 admin_achievements_bp = Blueprint('admin_achievements', __name__)
 
 
-def admin_required(f):
-    """
-    Duplicated from admin.py rather than imported — both are tiny, and
-    importing across sibling route modules for a 6-line decorator isn't
-    worth the coupling. If this ever needs to change, check admin.py too.
-    """
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'admin':
-            return jsonify({'success': False, 'error': 'Forbidden'}), 403
-        return f(*args, **kwargs)
-    return decorated
+# Gates on manage_achievements against the real logged-in user, so an admin
+# previewing as someone else keeps the badge tools.
+admin_required = require_api('manage_achievements', real_user=True)
 
 
 ACHIEVEMENT_UPLOAD_FOLDER = os.path.join('app', 'static', 'achievements')

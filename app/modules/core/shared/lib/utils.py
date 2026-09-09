@@ -50,13 +50,8 @@ def get_actor():
     Admin-only write routes (delete, publish, status change) should use
     current_user directly — they don't call this helper.
     """
-    from flask import session
-    from flask_login import current_user
-    from app.modules.core.shared.models import User
-    emulating_id = session.get('emulating_user_id')
-    if emulating_id and current_user.role == 'admin':
-        return User.query.get(emulating_id)
-    return current_user
+    from app.modules.core.shared.lib.capabilities import effective_user
+    return effective_user()
 
 def mark_project_activity_seen(project, user, kind):
     """Advance one of a user's two per-project unread watermarks — the

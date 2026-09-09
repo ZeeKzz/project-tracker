@@ -43,6 +43,24 @@ def _draft_folder(project_id, submission_id):
     return os.path.join(CACHE_ROOT, str(project_id), str(submission_id))
 
 
+def _resolve_cache_path(stored):
+    """Re-root a stored cache path onto THIS machine's CACHE_ROOT.
+
+    local_cache_path is saved absolute, from whichever host wrote it — so a row
+    created on the server ('/home/.../submission_drafts/..') won't exist on a
+    laptop, or vice versa. Everything after 'submission_drafts' is the portable
+    part (project/submission/filename); rejoin it to the local CACHE_ROOT.
+    Unchanged if the marker isn't present, so a plain filename still works."""
+    if not stored:
+        return stored
+    marker = 'submission_drafts/'
+    idx = stored.replace('\\', '/').find(marker)
+    if idx == -1:
+        return stored
+    rel = stored.replace('\\', '/')[idx + len(marker):]
+    return os.path.join(CACHE_ROOT, *rel.split('/'))
+
+
 def cache_submission_file(project_id, submission_id, file_bytes, original_filename):
     """
     Write an uploaded file's bytes into the draft's local cache folder.
@@ -67,12 +85,13 @@ def cache_submission_file(project_id, submission_id, file_bytes, original_filena
 def delete_cached_file(local_cache_path):
     """Delete one cached file. Safe to call if it's already gone (e.g. the
     whole draft was cleared out from under it) — never raises."""
-    if local_cache_path and os.path.isfile(local_cache_path):
+    path = _resolve_cache_path(local_cache_path)
+    if path and os.path.isfile(path):
         try:
-            os.remove(local_cache_path)
+            os.remove(path)
         except OSError as e:
             current_app.logger.warning(
-                f'Could not delete cached submission file {local_cache_path}: {e}'
+                f'Could not delete cached submission file {path}: {e}'
             )
 
 
@@ -113,6 +132,6 @@ def build_zip_bytes(entries):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         for entry in entries:
-            with open(entry['local_cache_path'], 'rb') as f:
+            with open(_resolve_cache_path(entry['local_cache_path']), 'rb') as f:
                 zf.writestr(entry['arcname'], f.read())
     return buffer.getvalue()

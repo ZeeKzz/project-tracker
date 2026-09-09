@@ -4,6 +4,7 @@ from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import Project, ProjectNote, User
 from app.modules.core.shared.lib.utils import log_activity, mark_project_activity_seen
 from app.modules.core.shared.lib.users import active_users_query
+from app.modules.core.shared.lib.capabilities import can, effective_user
 
 project_notes_bp = Blueprint('project_notes', __name__, template_folder='../templates')
 
@@ -53,22 +54,18 @@ def _save_chat_attachment(project, upload):
 
 
 def _get_actor():
-    # Emulation-aware: admin "viewing as" another user attributes actions to them.
-    from flask import session
-    from flask_login import current_user
-    from app.modules.core.shared.models import User
-    emulating_id = session.get('emulating_user_id')
-    return User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
+    """Emulation-aware actor. Local name for core/shared's effective_user()."""
+    return effective_user()
 
 
 def _can_manage_notes(project, actor):
     # Who's actually working on this project: CS lead, secondary CS, owner, designers, admin.
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     return (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
         or any(pd.user_id == actor.id for pd in project.assigned_designers)
     )
 
@@ -93,6 +90,8 @@ def _get_mentionable_users(project):
 
 
 def _is_designer(user):
+    # Role literal on purpose: this answers "is this person a designer",
+    # which admin is not. can('claim_work') includes admin via the wildcard.
     return user.role in ('designer', 'team_lead')
 
 def _overlapping_site_visit(visit_user, start_at, end_at, exclude_id=None):
@@ -221,7 +220,7 @@ def overlay_chat(project_id):
     project = Project.query.get_or_404(project_id)
     actor = _get_actor()
     notes = ProjectNote.query.filter_by(project_id=project.id).order_by(ProjectNote.created_at.asc()).all()
-    is_admin = actor.role in ('admin', 'management')
+    is_admin = can('manage_projects', actor)
     # At most one pinned note per project (enforced in toggle_pin_note).
     pinned_note = next((n for n in notes if n.is_pinned), None)
 
@@ -365,8 +364,9 @@ from datetime import datetime as _dt
 
 def _can_log_site_visit(actor):
     # Admin, management, project owners, or Technical-team designers/leads.
-    if actor.role in ('admin', 'management', 'project_owner'):
+    if can('log_site_visits', actor):
         return True
+    # Team rule, not a gate: Technical designers get it, other designers do not.
     return actor.role in ('designer', 'team_lead') and actor.team == 'Technical'
 
 
@@ -378,7 +378,7 @@ def delete_site_visit(project_id, visit_id):
     if visit.project_id != project_id:
         abort(404)
     actor = _get_actor()
-    if not (_can_log_site_visit(actor) or actor.role in ('admin', 'management')):
+    if not (_can_log_site_visit(actor) or can('manage_projects', actor)):
         abort(403)
 
     db.session.delete(visit)
@@ -454,7 +454,7 @@ def delete_note(project_id, note_id):
     if note.project_id != project_id:
         abort(404)
     actor = _get_actor()
-    is_admin = actor.role in ('admin', 'management')
+    is_admin = can('manage_projects', actor)
     is_author = note.author_id == actor.id
     if not (is_admin or is_author):
         abort(403)

@@ -1,6 +1,5 @@
 import os
 import uuid
-from functools import wraps
 from datetime import timezone, timedelta
 from flask import Blueprint, jsonify, session, url_for, request
 from flask_login import login_required, current_user
@@ -13,7 +12,7 @@ from app.modules.core.shared.models import (
 )
 from app.modules.core.shared.lib.utils import log_activity
 from app.modules.core.shared.lib.profilepic import save_profile_pic, delete_profile_pic, AVATAR_FOLDER
-from app.modules.core.shared.lib.decorators import role_required
+from app.modules.core.shared.lib.capabilities import can, require, require_api
 from app.modules.core.shared.services.notifications import broadcast_update_email
 from werkzeug.security import generate_password_hash
 
@@ -21,13 +20,9 @@ DUBAI_TZ = timezone(timedelta(hours=4))
 
 admin_bp = Blueprint('admin', __name__)
 
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'admin':
-            return jsonify({'success': False, 'error': 'Forbidden'}), 403
-        return f(*args, **kwargs)
-    return decorated
+# Every admin-panel API route gates on admin_panel, checked against the real
+# logged-in user so an admin previewing as someone else keeps their own tools.
+admin_required = require_api('admin_panel', real_user=True)
 
 @admin_bp.route('/admin/api/users', methods=['GET'])
 @login_required
@@ -43,6 +38,8 @@ def list_users():
 @admin_required
 def start_emulation(user_id):
     user = User.query.get_or_404(user_id)
+    # About the target account, not the caller: an admin account is never a
+    # valid emulation target.
     if user.role == 'admin':
      return jsonify({'success': False, 'error': 'Cannot emulate an admin account'}), 400
     if not user.is_active:
@@ -836,7 +833,7 @@ def delete_design_direction(dir_id):
 @login_required
 def quick_add_design_type():
     """CS, management and admin can quickly add a design type from the brief form."""
-    if current_user.role not in ('admin', 'cs', 'management'):
+    if not can('manage_reference_data', current_user):
         return jsonify({'error': 'Forbidden'}), 403
     data = request.get_json()
     name = (data.get('name') or '').strip()
@@ -854,7 +851,7 @@ def quick_add_design_type():
 @login_required
 def quick_add_design_direction():
     """CS, management and admin can quickly add a design direction from the brief form."""
-    if current_user.role not in ('admin', 'cs', 'management'):
+    if not can('manage_reference_data', current_user):
         return jsonify({'error': 'Forbidden'}), 403
     data = request.get_json()
     name = (data.get('name') or '').strip()
@@ -959,7 +956,7 @@ def broadcast_update():
 #
 # Backs the Admin Panel's Deliverable Types form (base.html's global
 # pt-add-del-form, wired up in admin.js). Keeps the
-# role_required('cs', 'admin', 'management') gate deliberately — not the
+# manage_reference_data gate deliberately — not the
 # stricter admin-only gate used elsewhere in this file — since narrowing it
 # would be a real permission regression for CS and management, who this
 # route has always allowed.
@@ -967,7 +964,7 @@ def broadcast_update():
 
 @admin_bp.route('/projects/deliverable-types/upload-image', methods=['POST'])
 @login_required
-@role_required('cs', 'admin', 'management')
+@require('manage_reference_data', real_user=True)
 def upload_deliverable_type_image():
     """Upload a reference image for a DeliverableType. This route only
     saves the file and hands back its filename; it doesn't touch the DB

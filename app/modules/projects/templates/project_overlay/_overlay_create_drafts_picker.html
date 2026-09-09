@@ -12,7 +12,7 @@
         <h3 class="modal-title">Resume a draft?</h3>
 
         <p class="overlay-submit-summary-intro">
-            {% if actor.role in ('admin', 'management') %}
+            {% if can('manage_projects', actor) %}
             There are open drafts below — yours and others'. Pick one to
             continue, delete it, or start a new project instead.
             {% else %}
@@ -29,7 +29,7 @@
                     <span class="overlay-create-draft-meta">
                         {{ 'C&CM' if d.brief_type == 'ccm' else 'Standard' if d.brief_type else 'No brief type yet' }}
                         {% if d.client_brand %} · {{ d.client_brand.name }}{% endif %}
-                        {% if actor.role in ('admin', 'management') and d.created_by_id != actor.id and d.creator %}
+                        {% if can('manage_projects', actor) and d.created_by_id != actor.id and d.creator %}
                         · Started by {{ d.creator.name }}
                         {% endif %}
                         {% if d.last_autosaved_at %} · Last edited {{ d.last_autosaved_at.strftime('%d %b %Y, %H:%M') }}{% endif %}

@@ -54,12 +54,11 @@
                 <label for="role">Role</label>
                 <select id="role" name="role" required>
                     <option value="">Select Role</option>
-                    <option value="cs">Client Servicing</option> 
-                    <option value="designer">Designer</option>
-                    <option value="team_lead">Team Lead</option>
-                    <option value="management">Management</option>
-                    <option value="project_owner">Project Owner</option>
-                    <option value="admin">Admin</option>
+                    {# Options come from ROLE_CAPABILITIES via role_labels, so a new
+                       role appears here the moment it is added to the map. #}
+                    {% for value, label in role_labels.items() %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
                 </select>
             </div>
 

@@ -124,14 +124,15 @@ can_request_client_revision (a sent deck with no revision already pending). #}
 
     {% if can_request_client_revision %}
     <div class="overlay-flag-revision-form is-hidden" id="overlay-client-revision-form">
-        {% if is_ckv_toggle_scope %}
-        <p class="overlay-field-empty">Revision applies to Concept &amp; KV together — this scope has no deliverable
-            list to split.</p>
-        {% else %}
         <div class="overlay-mark-approved-columns">
             <div class="overlay-mark-approved-col overlay-mark-approved-col--picker">
+                {% if is_ckv_toggle_scope %}
+                <p class="overlay-field-empty">Revision applies to Concept &amp; KV together — this scope has no deliverable
+                    list to split.</p>
+                {% else %}
                 {% set revisable_options = revisable_deliverables | map(attribute='deliverable') | list %}
                 {{ deliverable_picker('overlay-client-revision-picker', revisable_options, []) }}
+                {% endif %}
             </div>
             <div class="overlay-mark-approved-col overlay-mark-approved-col--note">
                 <div id="overlay-client-revision-message" contenteditable="true" data-rich-editor
@@ -139,7 +140,6 @@ can_request_client_revision (a sent deck with no revision already pending). #}
                     data-placeholder="Describe the revision the client requested…"></div>
             </div>
         </div>
-        {% endif %}
         <span class="overlay-flag-revision-error hidden" id="overlay-client-revision-error"></span>
         <div class="overlay-flag-revision-form-actions">
             <button type="button" class="overlay-file-action-btn overlay-file-action-btn--danger"

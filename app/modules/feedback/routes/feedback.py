@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import FeatureRequest, FeatureRequestUpvote, FeatureRequestComment, BugReport, BugReportComment
 from app.modules.core.shared.lib.utils import get_actor, log_activity
+from app.modules.core.shared.lib.capabilities import can
 from app.modules.core.shared.services.achievements import check_achievements
 
 feedback_bp = Blueprint('feedback', __name__, template_folder='../templates')
@@ -163,7 +164,7 @@ def add_fr_comment(feature_id):
 @feedback_bp.route('/feature-requests/comments/<int:comment_id>', methods=['DELETE'])
 @login_required
 def delete_fr_comment(comment_id):
-    if current_user.role != 'admin':
+    if not can('manage_feedback', current_user):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     comment = FeatureRequestComment.query.get_or_404(comment_id)
     db.session.delete(comment)
@@ -175,7 +176,7 @@ def delete_fr_comment(comment_id):
 @feedback_bp.route('/feature-requests/<int:feature_id>/status', methods=['PATCH'])
 @login_required
 def update_fr_status(feature_id):
-    if current_user.role != 'admin':
+    if not can('manage_feedback', current_user):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     feature    = FeatureRequest.query.get_or_404(feature_id)
     data       = request.get_json()
@@ -213,7 +214,7 @@ def update_fr_status(feature_id):
 def delete_feature(feature_id):
     feature = FeatureRequest.query.get_or_404(feature_id)
     actor   = get_actor()
-    if current_user.role != 'admin' and actor.id != feature.submitted_by_id:
+    if not can('manage_feedback', current_user) and actor.id != feature.submitted_by_id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     title = feature.title
     db.session.delete(feature)
@@ -315,7 +316,7 @@ def submit_bug():
 @feedback_bp.route('/bug-reports/<int:bug_id>/status', methods=['PATCH'])
 @login_required
 def update_bug_status(bug_id):
-    if current_user.role != 'admin':
+    if not can('manage_feedback', current_user):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     bug        = BugReport.query.get_or_404(bug_id)
     data       = request.get_json()
@@ -383,7 +384,7 @@ def add_bug_comment(bug_id):
 @feedback_bp.route('/bug-reports/comments/<int:comment_id>', methods=['DELETE'])
 @login_required
 def delete_bug_comment(comment_id):
-    if current_user.role != 'admin':
+    if not can('manage_feedback', current_user):
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     comment = BugReportComment.query.get_or_404(comment_id)
     db.session.delete(comment)
@@ -397,7 +398,7 @@ def delete_bug_comment(comment_id):
 def delete_bug(bug_id):
     bug   = BugReport.query.get_or_404(bug_id)
     actor = get_actor()
-    if current_user.role != 'admin' and actor.id != bug.submitted_by_id:
+    if not can('manage_feedback', current_user) and actor.id != bug.submitted_by_id:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     title = bug.title
     db.session.delete(bug)

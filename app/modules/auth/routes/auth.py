@@ -4,7 +4,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import User, NotificationSound
-from app.modules.core.shared.lib.decorators import role_required
+from app.modules.core.shared.lib.capabilities import require
 from app.modules.core.shared.services.achievements import check_achievements
 
 
@@ -17,7 +17,7 @@ auth = Blueprint('auth', __name__, template_folder='../templates')
 
 @auth.route('/register', methods=['GET', 'POST'])
 @login_required
-@role_required('admin')
+@require('manage_users', real_user=True)
 def register():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -190,7 +190,7 @@ def save_notification_prefs():
 
 @auth.route('/admin/users')
 @login_required
-@role_required('admin')
+@require('manage_users', real_user=True)
 def admin_users():
     users = User.query.order_by(User.name).all()
     # dev_tools_enabled is injected globally via context processor in app/__init__.py
@@ -199,7 +199,7 @@ def admin_users():
 
 @auth.route('/admin/users/<int:user_id>/reset-password', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_users', real_user=True)
 def reset_password(user_id):
     user = User.query.get_or_404(user_id)
     user.set_password('Vitamin2026!')

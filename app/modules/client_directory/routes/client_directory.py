@@ -10,7 +10,7 @@ from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import Client, Contact
-from app.modules.core.shared.lib.decorators import role_required
+from app.modules.core.shared.lib.capabilities import can, require
 
 # The url_prefix lives on the blueprint, so every route below is relative to
 # it — e.g. @route('/contacts') serves POST /directory/clients/contacts.
@@ -69,7 +69,7 @@ def index():
     # of that in the template/JS, so there's exactly one place to change if
     # the allowed role list ever changes, rather than current_user.role
     # checks scattered across the template and JS.
-    can_edit = current_user.role in ('admin', 'management', 'cs')
+    can_edit = can('edit_client_directory', current_user)
 
     return render_template(
         'client_directory/index.html',
@@ -82,7 +82,7 @@ def index():
 
 @client_directory_bp.route('/companies', methods=['POST'])
 @login_required
-@role_required('admin', 'management', 'cs')
+@require('edit_client_directory', real_user=True)
 def save_company():
     """
     POST /directory/clients/companies
@@ -101,8 +101,9 @@ def save_company():
     than a separate update/PATCH route - the directory page's Save button
     doesn't need to know or care which case it's in; it always POSTs here.
 
-    @role_required enforces server-side what the frontend also hides in the
-    UI via the can_edit flag from index() above - hiding the Edit/Add
+    The edit_client_directory gate enforces server-side what the frontend
+    also hides in the UI via the can_edit flag from index() above - hiding
+    the Edit/Add
     buttons is a convenience for Designers, not the actual security
     boundary. A Designer who somehow fired this request directly would
     still get a 403 here, same as any other write route in this app.
@@ -175,7 +176,7 @@ def save_company():
 
 @client_directory_bp.route('/contacts', methods=['POST'])
 @login_required
-@role_required('admin', 'management', 'cs')
+@require('edit_client_directory', real_user=True)
 def save_contact():
     """
     POST /directory/clients/contacts
@@ -186,7 +187,7 @@ def save_contact():
       - the brief form's "+ Add New Contact" / "Add new contact..." flow
         (create only)
 
-    Note this route is now @role_required('admin', 'management', 'cs')
+    Note this route is now gated on edit_client_directory
     where it used to be @login_required only. In practice this changes
     nothing for the brief-form call site - /projects/create itself is
     already gated to those same three roles, so a Designer could never

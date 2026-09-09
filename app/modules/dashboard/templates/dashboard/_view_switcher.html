@@ -32,7 +32,7 @@
    belongs to (if any) starts expanded on page load (via the `.hidden`
    class conditions below), so reloading mid-preview doesn't hide the
    picker for the person already being viewed. #}
-{% if effective_role in ('management', 'admin') %}
+{% if can('switch_dashboard_scope') %}
 <div class="dash-view-tabs">
     <a href="{{ url_for('projects.index', scope='my') }}"
        class="dash-tab-btn{% if scope_mode == 'my' %} active{% endif %}">My View</a>

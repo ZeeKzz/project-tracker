@@ -4,13 +4,14 @@
 
 from datetime import date, datetime
 from flask import Blueprint, render_template, session, request, jsonify, url_for, redirect
-from flask_login import login_required, current_user
+from flask_login import login_required
 from sqlalchemy import nullslast, func, case
 from sqlalchemy.orm import joinedload, selectinload
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import Project, ProjectSecondaryCS, ProjectDesigner, Deliverable, User as UserModel, Client, UserTableLayout, ProjectCustomer, DesignType, ProjectTableView, ProjectStatusLog, ProjectPosmChannel, ActivityLog, ProjectNote, ProjectActivitySeen, DeliverableAssignment
 from app.modules.core.shared.lib.status_vocabulary import derive_deliverable_status, derive_project_status, derive_customer_pipeline_status
 from app.modules.core.shared.services.status_tracking import bulk_project_status_started_at, bulk_project_client_approved_at
+from app.modules.core.shared.lib.capabilities import can, effective_user
 
 project_list_bp = Blueprint('project_list', __name__, url_prefix='/projects-new', template_folder='../templates')
 
@@ -30,11 +31,9 @@ def _serialize_person(u):
     return {'id': u.id, 'name': u.name, 'avatar_filename': u.avatar_filename}
 
 def _effective_user():
-    """Same emulation-aware-actor lookup every other route in this app uses"""
-    emulating_id = session.get('emulating_user_id')
-    if emulating_id and current_user.role == 'admin':
-        return UserModel.query.get(emulating_id)
-    return current_user
+    """Same emulation-aware-actor lookup every other route in this app uses.
+    Local name for core/shared's effective_user()."""
+    return effective_user()
 
 def _eager_load(query):
     """
@@ -432,7 +431,7 @@ def _base_query_for_view(view, user):
     # renamed from 'approved' (confusing next to the unrelated 'approved'
     # status value).
     if view == 'all':
-        if user.role in ('cs', 'admin', 'management', 'project_owner'):
+        if can('view_all_projects', user):
             query = Project.query.filter(
                 Project.project_status != 'draft',
                 Project.project_status != 'handed_to_production'
@@ -475,7 +474,7 @@ def _base_query_for_view(view, user):
         order_by = handed_at.desc()
 
     else:  # 'my' - default
-        if user.role in ('cs', 'admin', 'management', 'project_owner'):
+        if can('view_all_projects', user):
             # "My Projects" means projects this person is actually on —
             # cs_lead, secondary CS, or project owner — the same rule for
             # every role in this bucket, admin included. Admin/management
@@ -975,7 +974,7 @@ def _build_page_context(view, user):
 
     return dict(rows=rows, view=view, effective_role=user.role, today=date.today(), filter_options=filter_options,
                        active_filters=active_filters, filter_counts=filter_counts, view_total=view_total, table_key=table_key, saved_layout=saved_layout, active_filter_count=active_filter_count,
-                       saved_deliverable_layout=saved_deliverable_layout, saved_customer_layout=saved_customer_layout, is_admin=(user.role == 'admin'),
+                       saved_deliverable_layout=saved_deliverable_layout, saved_customer_layout=saved_customer_layout, is_admin=can('override_status', user),
                        sort_options=SORT_OPTIONS, sort_field=sort_field, sort_dir=sort_dir,
                        saved_views=saved_views, current_base_view=current_base_view, is_dirty=is_dirty,
                        group_options=GROUP_FIELDS, group_field=group_field, groups=groups, show_cancelled=_show_cancelled(),

@@ -7,25 +7,25 @@ one-row-per-(user, table_key) pattern the Projects page uses; TABLE_KEY
 Projects generic /layout route because UserTableLayout is a core/shared
 model — writing to it belongs with the table that owns the layout.
 """
-from flask import request, jsonify, abort
+from flask import request, jsonify
 from flask_login import login_required
 
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import UserTableLayout
 
-from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
+from app.modules.core.shared.lib.capabilities import effective_user
+from app.modules.client_servicing.lib.access import require_cs
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 from app.modules.client_servicing.routes.table import TABLE_KEY
 
 
 @client_servicing_bp.route('/layout', methods=['POST'])
 @login_required
+@require_cs
 def save_layout():
     # An admin previewing as someone else saves (and later sees) that
     # person's column layout, not the admin's.
-    actor = _effective_user()
-    if not can_access_client_servicing(actor):
-        abort(403)
+    actor = effective_user()
 
     data = request.get_json(silent=True) or {}
     layout = data.get('layout')

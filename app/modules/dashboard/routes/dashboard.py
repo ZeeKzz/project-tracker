@@ -8,6 +8,7 @@ from app.modules.core.shared.lib.utils import get_actor
 from app.modules.dashboard.lib.dashboard_logic import get_next_action_owner, get_project_rag, nearest_deadline, compute_clashes, guidance_for_viewer, needs_client_approval
 from app.modules.core.shared.lib.status_vocabulary import derive_project_status
 from app.modules.core.shared.lib.users import active_users_query
+from app.modules.core.shared.lib.capabilities import can
 
 # NOTE: registered blueprint name is 'projects' (not 'dashboard') — every
 # url_for call for this blueprint's routes uses that, e.g.
@@ -81,7 +82,6 @@ CARD_ORDER = {
 # untouched by it. It only changes what _scoped_projects considers "my
 # projects" for the DATA this page queries. Conflating the two would be a
 # mistake — don't reach for session['emulating_user_id'] here.
-_SCOPE_SWITCHER_ROLES = ('management', 'admin')
 class _ScopeUser:
     """
     Duck-types a real User for _scoped_projects()'s .id/.role checks (and
@@ -98,9 +98,9 @@ class _ScopeUser:
 def _resolve_dashboard_scope(user):
     """
     Reads the ?scope= query param and decides whose eyes to scope the
-    dashboard's data through. Only ever branches for user.role in
-    _SCOPE_SWITCHER_ROLES ('management', 'admin') — every other role gets
-    scope_mode=None and the real `user` object back unchanged, so
+    dashboard's data through. Only ever branches for holders of the
+    switch_dashboard_scope capability (management and admin) — every other role
+    gets scope_mode=None and the real `user` object back unchanged, so
     _scoped_projects() and everything downstream behaves EXACTLY as it did
     before this feature existed for them.
 
@@ -153,7 +153,7 @@ def _resolve_dashboard_scope(user):
     cs_leads = active_users_query().filter_by(role='cs').order_by(User.name.asc()).all()
     designers = active_users_query().filter(User.role.in_(['designer', 'team_lead'])).order_by(User.name.asc()).all()
 
-    if user.role not in _SCOPE_SWITCHER_ROLES:
+    if not can('switch_dashboard_scope', user):
         return None, user, cs_leads, designers
 
     # Default is 'all' for management/admin: they need to see overdue
@@ -220,6 +220,10 @@ def index():
     # so this had no visible effect before, but reading the real role off
     # scope_user is the correct fix rather than relying on that
     # coincidence staying true.
+    # layout_role is a layout selector, not a permission: it decides which
+    # dashboard template renders and how CARD_ORDER is keyed. Every role
+    # literal it feeds stays a literal — a capability would match several
+    # branches at once for admin.
     if (scope_mode or '').startswith('cs_'):
         layout_role = 'cs'
     elif (scope_mode or '').startswith('designer_'):
@@ -502,6 +506,9 @@ def _scoped_projects(user, active_only=True):
     if active_only:
         base = base.filter(Project.project_status.notin_(['approved', 'handed_to_production']))
 
+    # Role literals below pick which SLICE of projects a role sees, not
+    # whether they may see the dashboard at all. Each branch is exclusive, so a
+    # capability — which admin holds through the wildcard — would match several.
     if user.role in ('admin', 'management'):
         return base
 
@@ -518,9 +525,17 @@ def _scoped_projects(user, active_only=True):
         # matches Project.project_owner_id == user.id correctly.
         return base.filter(Project.project_owner_id == user.id)
 
-    # designer / team_lead
-    assigned_ids = db.session.query(ProjectDesigner.project_id).filter_by(user_id=user.id).subquery()
-    return base.filter(Project.id.in_(assigned_ids))
+    if user.role in ('designer', 'team_lead'):
+        assigned_ids = db.session.query(ProjectDesigner.project_id).filter_by(user_id=user.id).subquery()
+        return base.filter(Project.id.in_(assigned_ids))
+
+    # Any other role. Holding view_all_projects means the whole active list;
+    # without it the dashboard is deliberately empty rather than silently
+    # falling into the designer branch, which matches on assignments these
+    # roles never have and would return nothing while looking broken.
+    if can('view_all_projects', user):
+        return base
+    return base.filter(Project.id.in_([]))
 
 
 def _is_owner(owner_user, user):
@@ -2388,6 +2403,7 @@ def _compute_role_snapshot():
             # needs_client_approval not a flat project_status check
             #  — the flat check silently never matched a
             # CS's C&CM projects; see its docstring in dashboard_logic.py.
+            # About the user this tile describes, not the viewer.
             elif u.role == 'cs' and any(needs_client_approval(p) for p in scoped):
                 stat_key, stat_count = 'pending', sum(1 for p in scoped if needs_client_approval(p))
             else:
@@ -2428,6 +2444,7 @@ def _compute_role_snapshot():
             'rows': _stat_project_rows(scoped),
         }
 
+        # Which column this person's tile goes in — about them, not the viewer.
         if u.role == 'cs':
             tiles_cs.append(tile)
         elif u.team in tiles_by_team:
@@ -2571,7 +2588,7 @@ def api_escalation_history():
 @login_required
 def api_time_tracking_rows():
     actor = get_actor()
-    if actor.role not in ('admin', 'management'):
+    if not can('view_time_reports', actor):
         abort(403)
     from app.modules.time_tracking.logic import build_time_tracking_rows
     return render_template('dashboard/cards/_stat_avg_time_rows.html', time_tracking_rows=build_time_tracking_rows())

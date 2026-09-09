@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import BlogPost, BlogComment, User
 from app.modules.core.shared.lib.utils import get_actor, slugify
+from app.modules.core.shared.lib.capabilities import can
 from app.modules.core.shared.services.achievements import check_achievements
 from datetime import datetime
 import json, uuid, os
@@ -48,7 +49,7 @@ def _backup_post_media_to_nas(app, post_id):
 @blog_bp.route('/blog/upload-media', methods=['POST'])
 @login_required
 def upload_media():
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
 
     file = request.files.get('file')
@@ -83,7 +84,7 @@ def index():
     posts = BlogPost.query.filter_by(is_published=True)\
      .order_by(BlogPost.published_at.desc()).all()
 
-    if current_user.role == 'admin':
+    if can('manage_blog', current_user):
         posts = BlogPost.query.order_by(BlogPost.created_at.desc()).all()
 
     return render_template('blog/index.html', posts=posts)
@@ -93,7 +94,7 @@ def index():
 def get_post(post_id):
     post = BlogPost.query.get_or_404(post_id)
 
-    if not post.is_published and current_user.role != 'admin':
+    if not post.is_published and not can('manage_blog', current_user):
         abort(404)
 
     # Only top-level comments; replies are loaded via the backref
@@ -108,7 +109,7 @@ def get_post(post_id):
 def add_comment(post_id):
     post = BlogPost.query.get_or_404(post_id)
 
-    if not post.is_published and current_user.role != 'admin':
+    if not post.is_published and not can('manage_blog', current_user):
         abort(404)
 
     body = request.form.get('body', '').strip()
@@ -144,14 +145,14 @@ def add_comment(post_id):
 @blog_bp.route('/blog/editor')
 @login_required
 def editor():
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
     return render_template('blog/editor.html', post=None)
 
 @blog_bp.route('/blog/editor/<int:post_id>')
 @login_required
 def editor_edit(post_id):
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
     post = BlogPost.query.get_or_404(post_id)
     return render_template('blog/editor.html', post=post)
@@ -159,7 +160,7 @@ def editor_edit(post_id):
 @blog_bp.route('/blog/posts', methods=['POST'])
 @login_required
 def create_post():
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
 
     data = request.get_json()
@@ -183,7 +184,7 @@ def create_post():
 @blog_bp.route('/blog/posts/<int:post_id>', methods=['PUT'])
 @login_required
 def update_post(post_id):
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
 
     post = BlogPost.query.get_or_404(post_id)
@@ -212,7 +213,7 @@ def update_post(post_id):
 @blog_bp.route('/blog/posts/<int:post_id>/publish', methods=['POST'])
 @login_required
 def toggle_publish(post_id):
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
 
     post = BlogPost.query.get_or_404(post_id)
@@ -244,7 +245,7 @@ def toggle_publish(post_id):
 @blog_bp.route('/blog/comments/<int:comment_id>', methods=['DELETE'])
 @login_required
 def delete_comment(comment_id):
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
 
     comment = BlogComment.query.get_or_404(comment_id)
@@ -255,7 +256,7 @@ def delete_comment(comment_id):
 @blog_bp.route('/blog/posts/<int:post_id>', methods=['DELETE'])
 @login_required
 def delete_post(post_id):
-    if current_user.role != 'admin':
+    if not can('manage_blog', current_user):
         abort(403)
 
     post = BlogPost.query.get_or_404(post_id)

@@ -1,31 +1,20 @@
 import json, uuid, os
 from datetime import datetime
 from flask import (Blueprint, render_template, request, jsonify, abort, redirect, url_for, current_app)
-from flask_login import login_required, current_user
+from flask_login import login_required
 from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import WikiSection, WikiArticle
-from app.modules.core.shared.lib.decorators import role_required
+from app.modules.core.shared.lib.capabilities import can, require
 from app.modules.core.shared.lib.utils import slugify
 
 wiki_bp = Blueprint('wiki', __name__, template_folder='../templates')
-
-def _effective_user():
-    """Emulation-aware actor: the emulated user when an admin is emulating,
-    otherwise the logged-in user. Mirrors the app-wide effective_user."""
-    from flask import session
-    from app.modules.core.shared.models import User
-    emulating_id = session.get('emulating_user_id')
-    if emulating_id and current_user.role == 'admin':
-        return User.query.get(emulating_id) or current_user
-    return current_user
-
 
 # ------ Viewer ------
 
 @wiki_bp.route('/wiki')
 @login_required
 def index():
-    if _effective_user().role == 'admin':
+    if can('manage_wiki'):
         sections = WikiSection.query.order_by(WikiSection.sort_order).all()
     else:
         sections = (WikiSection.query.filter_by(is_published=True).order_by(WikiSection.sort_order).all())
@@ -35,7 +24,7 @@ def index():
 @login_required
 def get_article(article_id):
     article = WikiArticle.query.get_or_404(article_id)
-    if not article.is_published and _effective_user().role != 'admin':
+    if not article.is_published and not can('manage_wiki'):
         abort(403)
     blocks = json.loads(article.sections_json or '[]')
     return render_template('wiki/_article_content.html', article=article, blocks=blocks)
@@ -44,7 +33,7 @@ def get_article(article_id):
 
 @wiki_bp.route('/wiki/upload-image', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def upload_image():
     file = request.files.get('file')
     if not file:
@@ -73,7 +62,7 @@ _VIDEO_MAX_BYTES = 200 * 1024 * 1024
 
 @wiki_bp.route('/wiki/upload-video', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def upload_video():
     file = request.files.get('file')
     if not file:
@@ -115,21 +104,21 @@ def upload_video():
 # ------ Editor Sections ------
 @wiki_bp.route('/wiki/editor')
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def editor_dashboard(): 
     sections = WikiSection.query.order_by(WikiSection.sort_order).all()
     return render_template('wiki/editor_dashboard.html', sections=sections)
 
 @wiki_bp.route('/wiki/editor/section/new')
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def new_section():
     sections = WikiSection.query.order_by(WikiSection.sort_order).all()
     return render_template('wiki/editor_section.html', section=None)
 
 @wiki_bp.route('/wiki/editor/article/<int:article_id>/edit')
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def edit_article(article_id):
     article = WikiArticle.query.get_or_404(article_id)
     return render_template('wiki/editor_article.html', article=article, section=article.section)
@@ -137,7 +126,7 @@ def edit_article(article_id):
 
 @wiki_bp.route('/wiki/editor/article/save', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def save_article():
     article_id    = request.form.get('article_id', '').strip()
     section_id    = request.form.get('section_id', '').strip()
@@ -174,7 +163,7 @@ def save_article():
 
 @wiki_bp.route('/wiki/editor/article/<int:article_id>/toggle-publish', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def toggle_article_publish(article_id):
     article = WikiArticle.query.get_or_404(article_id)
     article.is_published = not article.is_published
@@ -184,7 +173,7 @@ def toggle_article_publish(article_id):
 
 @wiki_bp.route('/wiki/editor/article/<int:article_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def delete_article(article_id):
     article = WikiArticle.query.get_or_404(article_id)
     db.session.delete(article)
@@ -193,7 +182,7 @@ def delete_article(article_id):
 
 @wiki_bp.route('/wiki/editor/article/new')
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def new_article():
     section_id = request.args.get('section_id')
     section = WikiSection.query.get_or_404(int(section_id)) if section_id else None
@@ -202,7 +191,7 @@ def new_article():
 
 @wiki_bp.route('/wiki/editor/section/<int:section_id>/edit')
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def edit_section(section_id):
     section = WikiSection.query.get_or_404(section_id)
     return render_template('wiki/editor_section.html', section=section)
@@ -210,7 +199,7 @@ def edit_section(section_id):
 
 @wiki_bp.route('/wiki/editor/section/save', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def save_section():
     section_id     = request.form.get('section_id', '').strip()
     title          = request.form.get('title', '').strip()
@@ -241,7 +230,7 @@ def save_section():
 
 @wiki_bp.route('/wiki/editor/section/<int:section_id>/toggle-publish', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def toggle_section_publish(section_id):
     section = WikiSection.query.get_or_404(section_id)
     section.is_published = not section.is_published
@@ -251,7 +240,7 @@ def toggle_section_publish(section_id):
 
 @wiki_bp.route('/wiki/editor/section/<int:section_id>/delete', methods=['POST'])
 @login_required
-@role_required('admin')
+@require('manage_wiki', real_user=True)
 def delete_section(section_id):
     section = WikiSection.query.get_or_404(section_id)
     db.session.delete(section)

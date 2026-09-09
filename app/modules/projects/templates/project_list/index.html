@@ -24,7 +24,7 @@ base.html's <head> instead of here — see the comment there for why. #}
         <div class="project-list-toolbar">
             {# Role set here must match project_overlay.py's _can_create_project() —
             the button is just UI, that route function is the real gate. #}
-            {% if effective_role in ('admin', 'cs', 'management', 'project_owner') %}
+            {% if can('view_all_projects') %}
             <button type="button" class="project-toolbar-new-item" id="new-project-btn">+ New Project</button>
             {% endif %}
 

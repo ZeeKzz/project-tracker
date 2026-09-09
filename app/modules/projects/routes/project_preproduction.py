@@ -36,8 +36,9 @@ Design:
 """
 
 from flask import Blueprint, request, jsonify, render_template
-from flask_login import login_required, current_user
+from flask_login import login_required
 from app.modules.core.shared.lib.users import active_users_query
+from app.modules.core.shared.lib.capabilities import can, effective_user
 from app.modules.projects.lib.teams import assignable_teams_for
 from datetime import datetime
 
@@ -61,13 +62,8 @@ _STREAM_FIELDS = {
 
 
 def _get_actor():
-    """Same emulation-aware actor lookup as project_overlay.py — kept as
-    its own copy here rather than a cross-file import, matching this
-    codebase's existing one-helper-per-route-file convention."""
-    from app.modules.core.shared.models import User
-    from flask import session
-    emulating_id = session.get('emulating_user_id')
-    return User.query.get(emulating_id) if (emulating_id and current_user.role == 'admin') else current_user
+    """Emulation-aware actor. Local name for core/shared's effective_user()."""
+    return effective_user()
 
 
 def _can_manage_preproduction(project, actor):
@@ -75,7 +71,7 @@ def _can_manage_preproduction(project, actor):
     project's Project Owner, or its CS Lead. Skip to Pre-Production has
     its own, separately-scoped gate — see _can_skip_preproduction."""
     return (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.project_owner_id
         or actor.id == project.cs_lead_id
     )
@@ -90,10 +86,10 @@ def _can_skip_preproduction(project, actor):
     two in sync if this ever changes."""
     secondary_cs_ids = {a.user_id for a in project.secondary_cs_assignments}
     return (
-        actor.role in ('admin', 'management')
+        can('manage_projects', actor)
         or actor.id == project.cs_lead_id
         or actor.id in secondary_cs_ids
-        or (actor.role == 'project_owner' and actor.id == project.project_owner_id)
+        or (can('claim_ownership', actor) and actor.id == project.project_owner_id)
     )
 
 
@@ -254,7 +250,7 @@ def _build_preproduction_row(d, actor, can_act):
         # info only. Does not gate who can act — any designer can pick up
         # any stream and mark it done (see mark_stream_done).
         assignment = next((a for a in d.disciplines if a.team == cfg['team']), None)
-        can_mark_done = actor.role in ('designer', 'team_lead', 'admin', 'management')
+        can_mark_done = can('complete_preproduction', actor)
         stream_row = {
             'key': stream_key,
             'label': cfg['label'],
@@ -521,7 +517,7 @@ def mark_stream_done(deliverable_id):
     stream = data.get('stream')
     if stream not in _STREAM_FIELDS:
         return jsonify({'success': False, 'error': 'Invalid stream.'}), 400
-    if actor.role not in ('designer', 'team_lead', 'admin', 'management'):
+    if not can('complete_preproduction', actor):
         return jsonify({'success': False, 'error': 'You do not have permission to mark this done.'}), 403
 
     setattr(deliverable, _STREAM_FIELDS[stream]['status'], 'uploaded')

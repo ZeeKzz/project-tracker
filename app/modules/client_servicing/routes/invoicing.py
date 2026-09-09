@@ -15,16 +15,12 @@ from app.modules.core.shared.extensions import db
 from app.modules.core.shared.models import Project
 
 from app.modules.client_servicing.models import ClientServicing, ClientServicingSetting
-from app.modules.client_servicing.lib.access import can_access_client_servicing, _effective_user
+from app.modules.core.shared.lib.capabilities import can, effective_user
+from app.modules.client_servicing.lib.access import require_cs
 from app.modules.client_servicing.lib.months import format_month, month_input_value, parse_month
 from app.modules.client_servicing.routes.blueprint import client_servicing_bp
 from app.modules.client_servicing.routes.table import _open_projects
-from app.modules.client_servicing.routes.edit import _FINANCE_EDIT_ROLES
 from app.modules.client_servicing.lib import summary as summary_lib
-
-
-# Who may change the Days Pending colour thresholds.
-_THRESHOLD_ROLES = ('admin', 'management')
 
 # Stored validation value -> (pill label, status-pill colour modifier).
 # Unknown or unset renders as a blank cell.
@@ -134,10 +130,9 @@ def _rows(settings, projects):
 
 @client_servicing_bp.route('/invoicing')
 @login_required
+@require_cs
 def invoicing():
-    actor = _effective_user()
-    if not can_access_client_servicing(actor):
-        abort(403)
+    actor = effective_user()
     settings = ClientServicingSetting.current()
     invoice_month, validation = _filter_args()
     return render_template(
@@ -148,8 +143,8 @@ def invoicing():
         validation=validation,
         invoice_month_options=_invoice_month_options(),
         validation_options=[(code, label) for code, (label, _) in _VALIDATION.items()],
-        can_edit_thresholds=getattr(actor, 'role', None) in _THRESHOLD_ROLES,
-        can_edit_finance=getattr(actor, 'role', None) in _FINANCE_EDIT_ROLES,
+        can_edit_thresholds=can('edit_invoicing_thresholds', actor),
+        can_edit_finance=can('edit_finance', actor),
     )
 
 
@@ -183,12 +178,10 @@ _EXPORT_COLUMNS = [
 
 @client_servicing_bp.route('/invoicing/export.csv')
 @login_required
+@require_cs
 def invoicing_export():
     """The filtered By Project rows as CSV. Same gate and same filtering as
     the page; the toolbar's search box is client-side and not reflected here."""
-    if not can_access_client_servicing(_effective_user()):
-        abort(403)
-
     invoice_month, validation = _filter_args()
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -206,10 +199,8 @@ def invoicing_export():
 
 @client_servicing_bp.route('/invoicing/summary')
 @login_required
+@require_cs
 def invoicing_summary():
-    if not can_access_client_servicing(_effective_user()):
-        abort(403)
-
     today = date.today()
 
     def _arg(name, default):
@@ -242,7 +233,7 @@ def invoicing_summary():
 @client_servicing_bp.route('/invoicing/day-thresholds', methods=['POST'])
 @login_required
 def save_day_thresholds():
-    if getattr(_effective_user(), 'role', None) not in _THRESHOLD_ROLES:
+    if not can('edit_invoicing_thresholds', effective_user()):
         abort(403)
     data = request.get_json(silent=True) or {}
     try:

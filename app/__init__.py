@@ -153,14 +153,14 @@ def create_app(config=Config):
     @app.context_processor
     def inject_notifications():
         import json
-        from flask import session, url_for
+        from flask import url_for
         from flask_login import current_user
         from app.modules.core.shared.models import Notification, NotificationSound
+        from app.modules.core.shared.lib.capabilities import effective_user
 
         if current_user.is_authenticated:
             # Use the emulated user's ID when in emulation mode
-            emulating_id = session.get('emulating_user_id')
-            notif_user_id = emulating_id if (emulating_id and current_user.role == 'admin') else current_user.id
+            notif_user_id = effective_user().id
 
             active_notifications = Notification.query.filter_by(
                 recipient_id=notif_user_id,
@@ -308,25 +308,22 @@ def create_app(config=Config):
     from app.modules.client_servicing.lib.access import can_access_client_servicing
     app.jinja_env.globals['can_access_client_servicing'] = can_access_client_servicing
 
+    # Capability gate. Templates ask can('view_finance') instead of listing
+    # roles; role_labels drives every role picker from the same map.
+    from app.modules.core.shared.lib.capabilities import can, ROLE_LABELS
+    app.jinja_env.globals['can'] = can
+    app.jinja_env.globals['role_labels'] = ROLE_LABELS
+
     @app.context_processor
     def inject_effective_user():
-       from flask import session
-       if current_user.is_authenticated:
-             emulating_id = session.get('emulating_user_id')
-             if emulating_id and current_user.role == 'admin':
-                 effective_user = User.query.get(emulating_id)
-                 is_emulating = True
-             else:
-                effective_user = current_user
-                is_emulating = False
-             return {
-                 'effective_user': effective_user,
-                 'is_emulating': is_emulating
-             }
-       return {
-           'effective_user': current_user,
-           'is_emulating': False
-       }
+        from flask import session
+        from app.modules.core.shared.lib.capabilities import effective_user
+
+        is_emulating = bool(session.get('emulating_user_id')) and getattr(current_user, 'role', None) == 'admin'
+        return {
+            'effective_user': effective_user(),
+            'is_emulating': is_emulating,
+        }
     
 
     WIZARD_LAUNCH_DATE = datetime (2026, 7, 5)

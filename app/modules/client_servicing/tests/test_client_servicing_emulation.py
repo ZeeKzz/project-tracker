@@ -5,7 +5,7 @@ access check, saved layout, and edit-attribution — so an admin emulating
 a lower-role user (session['emulating_user_id'], the same mechanism
 Projects/Dashboard already use) could still open and use the page,
 since current_user is always the real, logged-in admin regardless of
-who's being emulated. lib/access.py's _effective_user() fixes that; these
+who's being emulated. The shared effective_user() fixes that; these
 tests lock the fix in and pin down the one deliberate exception (the
 Scope-management CRUD, which is genuinely admin-only and stays on
 current_user on purpose)."""
@@ -107,11 +107,10 @@ def test_quick_add_scope_403s_for_an_admin_emulating_a_designer(app, client, db_
 
 
 def test_admin_only_scope_crud_still_works_while_emulating_a_designer(app, client, db_session):
-    """Deliberate exception, not an oversight: list/create/rename/
-    deactivate are gated by @role_required('admin'), which — like every
-    other genuinely admin-only write route in this app — stays on
-    current_user on purpose, so an admin previewing the app as someone
-    else doesn't lose access to real admin tools mid-preview."""
+    """Deliberate exception, not an oversight: list/create/rename/deactivate
+    check can('manage_scopes', current_user) — the real logged-in user, not
+    the emulated one — so an admin previewing the app as someone else doesn't
+    lose access to real admin tools mid-preview."""
     admin = _user(db_session, 'f', role='admin')
     designer = _user(db_session, 'f2', role='designer')
     login_as(client, app, admin, 'password123')
