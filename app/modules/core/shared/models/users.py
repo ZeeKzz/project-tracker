@@ -38,6 +38,9 @@ class User(db.Model, UserMixin):
     # 'light' or 'dark', per-account theme choice (2.4.1). Null = no saved
     # preference yet — client falls back to localStorage, then light.
     theme_preference = db.Column(db.String(10), nullable=True)
+    # When this person last opened the Signal tray; the launcher bubble counts
+    # bug, feature and friction items newer than this.
+    signal_seen_at = db.Column(db.DateTime, nullable=True)
 
     def set_password(self, password):
         from werkzeug.security import generate_password_hash

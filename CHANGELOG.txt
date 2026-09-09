@@ -9,12 +9,19 @@ New Features:
 
 - Client servicing module added. 
 - Matches flow of the meetings: Dashboard summary -> Table Update -> Invoicing -> Calendar.
-- Added finance role and made accounts for finance team
-- Added HR role and made account for HR
+- Added finance role and made accounts for finance team.
+- Added HR role and made account for HR.
+- Global chat added.
+- Signal added! Report bugs, request features and the OVP champion can write any friction on the platform for a weekly review.
 
 Adjustments:
 
 - Added HTTPS for the local IP access, ensuring speed and security.
+- Adjusted admin panel UI/
+
+Bug Fixes:
+
+- Fixed Concept & KV feedback not loading the text box.
 
 =======================================================================================
 v2.4.1, v2.4.2, v2.4.3 - Dark Mode, Digital Innovation, Profile Pics & JS/CSS Refactor

@@ -69,6 +69,9 @@ class BugReport(db.Model):
     description     = db.Column(db.Text, nullable=False)
     submitted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     status          = db.Column(db.String(50), default='in_queue')
+    # 'high' | 'medium' | 'low'. Nullable: bugs filed before it existed have none,
+    # and the board shows those as unset rather than guessing.
+    severity        = db.Column(db.String(10), nullable=True)
     created_at      = db.Column(db.DateTime, default=datetime.utcnow)
 
     submitter = db.relationship('User', backref='bug_reports')

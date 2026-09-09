@@ -120,6 +120,10 @@
     --border-strong: var(--grey-mid);
     --scrim: rgba(245, 240, 232, 0.85); /* matches .modal-overlay's current backdrop */
 
+    /* Global trays — the unread bubble and the ink on the active launcher */
+    --tray-unread: #D9534F;
+    --tray-on-accent: #FFFFFF;
+
     /* Promoted neutral greys (2.4.1 dark-mode sweep) — exact light values preserved */
     --gray-f0f6ee: #F0F6EE;
     --gray-666666: #666666;
@@ -286,6 +290,10 @@
     --surface-hover: #2b251d;
 
     --scrim: rgba(20, 17, 13, 0.85);
+
+    /* Global trays — brighter red, dark ink on the lighter dark-mode accent */
+    --tray-unread: #FF7A7A;
+    --tray-on-accent: #14110D;
 
     --coral: #FF9A73;
     /* Dark tinted label tones (status pills, tinted action buttons) */
@@ -1333,6 +1341,12 @@ body.has-sidebar:has(.sidebar.sidebar--pinned) .main-content {
 /* =====================
    FOOTER
 ===================== */
+
+
+/* One block per department in the admin panel's OVP Champions control. */
+.ovp-champion-row {
+    margin-bottom: 0.75rem;
+}
 
 .footer {
     background-color: var(--white);
@@ -5928,9 +5942,11 @@ body:has(.sidebar.sidebar--pinned) .admin-panel {
 /* Fixed container — sits bottom-right above everything */
 #toast-container {
     position: fixed;
-    bottom: 1.5rem;
+    /* Clears the global tray dock, and layers above it — a toast must never
+       be hidden behind an open tray. Follows the dock when it lifts off a footer. */
+    bottom: calc(var(--tray-dock-bottom, 20px) + 68px);
     right: 1.5rem;
-    z-index: 9999;
+    z-index: 10020;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -5987,9 +6003,9 @@ body:has(.sidebar.sidebar--pinned) .admin-panel {
    ─────────────────────────────────────────────────────────────────────────── */
 #achievement-toast-container {
     position: fixed;
-    bottom: 5.5rem;   /* sits above #toast-container (1.5rem + toasts + gap) */
+    bottom: calc(var(--tray-dock-bottom, 20px) + 132px);   /* sits above #toast-container */
     right: 1.5rem;
-    z-index: 9999;
+    z-index: 10030;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;

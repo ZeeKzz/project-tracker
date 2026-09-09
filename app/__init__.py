@@ -62,6 +62,7 @@ def create_app(config=Config):
     from app.modules.admin.routes.admin import admin_bp
     from app.modules.blog.routes.blog import blog_bp
     from app.modules.feedback.routes.feedback import feedback_bp
+    from app.modules.feedback.routes.signal_tray import signal_tray_bp  # Signal tray boards + Friction Log
     from app.modules.wiki.routes.wiki import wiki_bp
     from app.modules.core.shared.routes.api import api_bp  # polling endpoints for live dashboard/detail updates
     from app.modules.profile.routes.profile import profile_bp  # profile view/edit routes
@@ -77,6 +78,7 @@ def create_app(config=Config):
     from app.modules.projects.routes.project_overlay import project_overlay_bp # Projects detail overlay
     from app.modules.projects.routes.project_preproduction import project_preproduction_bp # Pre-Production phase backend
     from app.modules.projects.routes.project_notes import project_notes_bp  # Project Notes & Site Visits
+    from app.modules.projects.routes.chat_tray import chat_tray_bp  # Global Chat tray
     from app.modules.projects.blueprint import project_assets  # projects module static assets
     from app.modules.profile.blueprint import profile_assets
     from app.modules.achievements.blueprint import achievements_assets
@@ -119,6 +121,7 @@ def create_app(config=Config):
     app.register_blueprint(admin_bp)
     app.register_blueprint(blog_bp)
     app.register_blueprint(feedback_bp)
+    app.register_blueprint(signal_tray_bp)
     app.register_blueprint(wiki_bp)
     app.register_blueprint(api_bp)  # /api/* poll routes
     app.register_blueprint(profile_bp)
@@ -134,6 +137,7 @@ def create_app(config=Config):
     app.register_blueprint(project_overlay_bp)
     app.register_blueprint(project_preproduction_bp)
     app.register_blueprint(project_notes_bp)
+    app.register_blueprint(chat_tray_bp)
     app.register_blueprint(project_assets)
     app.register_blueprint(profile_assets)
     app.register_blueprint(achievements_assets)

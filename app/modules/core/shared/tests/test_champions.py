@@ -1,14 +1,18 @@
 """The weekly OVP champion helpers and the Friction Log write gate.
 
-The gate is the interesting part: it is a capability OR a per-person weekly
-grant, so both halves need their own coverage.
+Each department rotates its own champion. The gate is the interesting part: it
+is a capability OR a per-person weekly grant, so both halves need coverage, and
+holding any one department is enough.
 """
 from datetime import timedelta
 
 from app.modules.core.shared.lib.champions import (
+    CHAMPION_DEPARTMENTS,
+    DEPARTMENT_KEYS,
     can_write_friction,
+    champion_for,
     champion_for_week,
-    current_champion,
+    current_champions,
     is_champion,
     week_start_for,
 )
@@ -23,8 +27,8 @@ def _user(db_session, tag, role='designer'):
     return user
 
 
-def _assign(db_session, user, week_start, set_by=None):
-    row = OvpChampion(user_id=user.id, week_start=week_start,
+def _assign(db_session, user, department, week_start, set_by=None):
+    row = OvpChampion(user_id=user.id, department=department, week_start=week_start,
                       set_by_id=set_by.id if set_by else None)
     db_session.add(row)
     db_session.flush()
@@ -37,44 +41,66 @@ def test_week_start_is_the_monday_of_that_week():
     assert week_start_for(monday + timedelta(days=4)) == monday
 
 
-def test_no_assignment_means_no_champion(app, db_session):
-    assert current_champion() is None
+def test_the_department_list_has_unique_keys_and_labels():
+    keys = [key for key, _ in CHAMPION_DEPARTMENTS]
+    labels = [label for _, label in CHAMPION_DEPARTMENTS]
+    assert len(keys) == len(set(keys))
+    assert len(labels) == len(set(labels))
+    assert DEPARTMENT_KEYS == keys
 
 
-def test_current_champion_resolves_this_week(app, db_session):
-    user = _user(db_session, 'this-week')
-    _assign(db_session, user, week_start_for())
-    assert current_champion().id == user.id
+def test_no_assignment_means_no_champions(app, db_session):
+    assert current_champions() == {}
 
 
-def test_current_champion_falls_back_to_the_most_recent(app, db_session):
-    """A missed rotation must not leave the designation empty."""
+def test_each_department_holds_its_own_champion(app, db_session):
+    cs = _user(db_session, 'cs-holder')
+    design = _user(db_session, 'design-holder')
+    _assign(db_session, cs, 'client_servicing', week_start_for())
+    _assign(db_session, design, 'design', week_start_for())
+
+    holders = current_champions()
+    assert holders['client_servicing'].id == cs.id
+    assert holders['design'].id == design.id
+    assert 'production' not in holders
+
+
+def test_a_department_falls_back_to_its_own_most_recent(app, db_session):
+    """A missed rotation must not leave that department empty — and must not
+    borrow another department's holder."""
     older = _user(db_session, 'older')
     recent = _user(db_session, 'recent')
-    _assign(db_session, older, week_start_for() - timedelta(weeks=3))
-    _assign(db_session, recent, week_start_for() - timedelta(weeks=1))
-    assert current_champion().id == recent.id
+    other = _user(db_session, 'other-dept')
+    _assign(db_session, older, 'production', week_start_for() - timedelta(weeks=3))
+    _assign(db_session, recent, 'production', week_start_for() - timedelta(weeks=1))
+    _assign(db_session, other, 'finance', week_start_for())
+
+    assert champion_for('production').id == recent.id
+    assert current_champions()['production'].id == recent.id
+    assert current_champions()['finance'].id == other.id
 
 
-def test_champion_for_week_reads_the_history(app, db_session):
+def test_champion_for_week_reads_the_history_without_a_fallback(app, db_session):
     user = _user(db_session, 'history')
     last_week = week_start_for() - timedelta(weeks=1)
-    _assign(db_session, user, last_week)
-    assert champion_for_week(last_week).id == user.id
-    assert champion_for_week(week_start_for()) is None
+    _assign(db_session, user, 'logistics', last_week)
+
+    assert champion_for_week(last_week)['logistics'].id == user.id
+    assert champion_for_week(week_start_for()) == {}
 
 
-def test_is_champion_is_true_only_for_the_holder(app, db_session):
+def test_is_champion_is_true_for_any_department_held(app, db_session):
     holder = _user(db_session, 'holder')
-    other = _user(db_session, 'other')
-    _assign(db_session, holder, week_start_for())
+    other = _user(db_session, 'not-holder')
+    _assign(db_session, holder, 'logistics', week_start_for())
+
     assert is_champion(holder)
     assert not is_champion(other)
 
 
-def test_the_champion_may_write_friction(app, db_session):
+def test_a_champion_of_any_department_may_write_friction(app, db_session):
     designer = _user(db_session, 'gate-designer')
-    _assign(db_session, designer, week_start_for())
+    _assign(db_session, designer, 'design', week_start_for())
     assert can_write_friction(designer)
 
 

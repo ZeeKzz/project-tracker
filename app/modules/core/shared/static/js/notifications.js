@@ -88,6 +88,8 @@ function helixShowBrowserNotification(message) {
     }
 
     function pollNotifications() {
+        // Doorbell for anything else riding the per-user stream (the tray bubbles).
+        document.dispatchEvent(new CustomEvent('helix:user-stream'));
         var since = localStorage.getItem('helix_last_poll') || new Date().toISOString();
 
         fetch('/notifications/poll?since=' + encodeURIComponent(since))

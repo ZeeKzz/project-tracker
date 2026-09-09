@@ -25,14 +25,6 @@ def _feature_dict(f):
 
 
 # ── Index ─────────────────────────────────────────────────────────────────────
-@feedback_bp.route('/feature-requests')
-@login_required
-def feature_requests():
-    features = FeatureRequest.query.order_by(FeatureRequest.created_at.desc()).all()
-    features_data = [_feature_dict(f) for f in features]
-    return render_template('feedback/feature_requests.html', features_data=features_data)
-
-
 # ── Load single feature (AJAX) ────────────────────────────────────────────────
 @feedback_bp.route('/feature-requests/<int:feature_id>')
 @login_required
@@ -77,7 +69,7 @@ def submit_feature():
         item_type='Feature Request',
         title=feature.title,
         submitted_by=actor,
-        url_path=f'/feature-requests#fr-{feature.id}'
+        url_path='/#signal-feature'
     )
 
     admin_user = UserModel.query.filter_by(role='admin').first()
@@ -244,14 +236,6 @@ def _bug_dict(b):
 
 
 # ── Index ─────────────────────────────────────────────────────────────────────
-@feedback_bp.route('/bug-reports')
-@login_required
-def bug_reports():
-    bugs      = BugReport.query.order_by(BugReport.created_at.desc()).all()
-    bugs_data = [_bug_dict(b) for b in bugs]
-    return render_template('feedback/bug_reports.html', bugs_data=bugs_data)
-
-
 # ── Load single bug (AJAX) ────────────────────────────────────────────────────
 @feedback_bp.route('/bug-reports/<int:bug_id>')
 @login_required
@@ -272,13 +256,17 @@ def submit_bug():
     data        = request.get_json()
     title       = (data.get('title') or '').strip()
     description = (data.get('description') or '').strip()
+    severity    = (data.get('severity') or '').strip().lower() or None
     if not title or not description:
         return jsonify({'success': False, 'error': 'Title and description required'}), 400
+    if severity not in (None, 'high', 'medium', 'low'):
+        return jsonify({'success': False, 'error': 'Invalid severity'}), 400
 
     actor = get_actor()
     bug   = BugReport(
         title=title,
         description=description,
+        severity=severity,
         submitted_by_id=actor.id,
         status='in_queue'
     )
@@ -291,7 +279,7 @@ def submit_bug():
         item_type='Bug Report',
         title=bug.title,
         submitted_by=actor,
-        url_path=f'/bug-reports#br-{bug.id}'
+        url_path='/#signal-bug'
     )
 
     admin_user = UserModel.query.filter_by(role='admin').first()

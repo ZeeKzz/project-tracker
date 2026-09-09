@@ -1,5 +1,6 @@
 import re as _re
 from html import unescape as _unescape
+from datetime import datetime as _datetime
 
 def slugify(text):
     """Convert a title to a URL-safe slug."""
@@ -52,6 +53,13 @@ def get_actor():
     """
     from app.modules.core.shared.lib.capabilities import effective_user
     return effective_user()
+
+# The instant the unread dots shipped. A user with no watermark row for a given
+# project is treated as having seen it at this fixed moment, not as never having
+# seen it — otherwise every project's entire history would light up unread on
+# rollout. Lives here, beside the watermark helper, because the Projects table
+# and the Chat tray both read it and must never disagree.
+ACTIVITY_SEEN_ROLLOUT_CUTOFF = _datetime(2026, 8, 27, 6, 15, 0)
 
 def mark_project_activity_seen(project, user, kind):
     """Advance one of a user's two per-project unread watermarks — the

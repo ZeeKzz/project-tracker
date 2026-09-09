@@ -12,6 +12,8 @@ from .notes import ProjectNote, ProjectNoteReaction
 from .notifications import Notification, NotificationSound
 from .activity import ActivityLog, SidebarClick
 from .champions import OvpChampion
+from .chat_tray import ChatTrayProject
+from .friction import FrictionLogEntry
 from .blog import BlogPost, BlogComment
 from .feedback import FeatureRequest, FeatureRequestUpvote, FeatureRequestComment, BugReport, BugReportComment
 from .wiki import WikiSection, WikiArticle
@@ -71,6 +73,8 @@ __all__ = [
     'ActivityLog',
     'SidebarClick',
     'OvpChampion',
+    'ChatTrayProject',
+    'FrictionLogEntry',
     'BlogPost',
     'BlogComment',
     'FeatureRequest',

@@ -39,3 +39,17 @@ def add_feedback_item(source_type, source_ref, title, description=None):
     db.session.add(item)
     db.session.flush()
     return item
+
+
+def declined_feature_ids():
+    """Feature-request ids this board has dismissed, as a set of ints.
+
+    The read half of the intake seam: another module asks "which of my
+    items did DI decline?" and gets plain ids back, never DiIntakeItem
+    rows. source_ref is a free-text column, so anything non-numeric is
+    skipped rather than raising."""
+    rows = (db.session.query(DiIntakeItem.source_ref)
+            .filter(DiIntakeItem.source_type == 'feature_request',
+                    DiIntakeItem.status == 'dismissed')
+            .all())
+    return {int(ref) for (ref,) in rows if ref and str(ref).isdigit()}

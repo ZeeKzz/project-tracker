@@ -1,0 +1,38 @@
+{# The two always-on tray launchers and the panel shell they share. Sits
+   outside #main-content so an SPA page swap never removes or rebinds it.
+   B2 (Chat) and B3 (Signal) mount their content into #tray-panel-body. #}
+<div id="tray-dock" class="tray-dock">
+    <button type="button" class="tray-launcher" data-tray="chat" data-title="Chat" aria-expanded="false">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <span class="tray-launcher__label">Chat</span>
+        <span class="tray-launcher__bubble" data-tray-bubble="chat" hidden>0</span>
+    </button>
+    <button type="button" class="tray-launcher" data-tray="signal" data-title="Signal" aria-expanded="false">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h4l3 8 4-16 3 8h4" />
+        </svg>
+        <span class="tray-launcher__label">Signal</span>
+        <span class="tray-launcher__bubble" data-tray-bubble="signal" hidden>0</span>
+    </button>
+</div>
+
+<aside id="tray-panel" class="tray-panel hidden" aria-hidden="true">
+    <header class="tray-panel__head">
+        <span class="tray-panel__title" id="tray-panel-title"></span>
+        <span class="tray-panel__spacer"></span>
+        {# Each tray drops its own header controls in here — Chat's "Add project", etc. #}
+        <div class="tray-panel__actions" id="tray-panel-actions"></div>
+        <button type="button" class="tray-panel__close" id="tray-panel-close" aria-label="Close tray">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+        </button>
+    </header>
+    {# The only scrolling region — the panel itself never grows past its cap. #}
+    <div class="tray-panel__body" id="tray-panel-body"></div>
+</aside>

@@ -201,58 +201,88 @@
         }
     });
 
-    // ── OVP champion ──────────────────────────────────────
+    // ── OVP champions ────────────────────────────────────
 
-    var champSelect = document.getElementById('ovp-champion-select');
-    var champCurrent = document.getElementById('ovp-champion-current');
+    var champRows = document.getElementById('ovp-champion-rows');
     var champWeek = document.getElementById('ovp-champion-week');
-    var champSetBtn = document.getElementById('ovp-champion-set');
 
     function loadOvpChampion() {
-        if (!champCurrent) return;
-        fetch('/admin/api/ovp-champion')
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                champCurrent.textContent = data.current ? data.current.name : 'Not set';
-                if (champWeek) champWeek.textContent = data.week_start;
-                // The picker fills once per page load, from active accounts only.
-                if (champSelect && champSelect.options.length <= 1) {
-                    fetch('/admin/api/users')
-                        .then(function (r) { return r.json(); })
-                        .then(function (users) {
-                            users.filter(function (u) { return u.is_active; })
-                                .forEach(function (u) {
-                                    var opt = document.createElement('option');
-                                    opt.value = u.id;
-                                    opt.textContent = u.name;
-                                    champSelect.appendChild(opt);
-                                });
-                        });
-                }
+        if (!champRows) return;
+        Promise.all([
+            fetch('/admin/api/ovp-champion').then(function (r) { return r.json(); }),
+            fetch('/admin/api/users').then(function (r) { return r.json(); })
+        ])
+            .then(function (results) {
+                var data = results[0] || {};
+                var users = (results[1] || []).filter(function (u) { return u.is_active; });
+                if (champWeek) champWeek.textContent = data.week_start || '—';
+                champRows.innerHTML = '';
+                (data.departments || []).forEach(function (dept) {
+                    champRows.appendChild(renderChampionRow(dept, users));
+                });
             })
-            .catch(function () { showToast('Could not load the OVP champion.', 'error'); });
+            .catch(function () { showToast('Could not load the OVP champions.', 'error'); });
     }
 
-    if (champSetBtn) {
-        champSetBtn.addEventListener('click', function () {
-            var userId = champSelect ? champSelect.value : '';
-            if (!userId) return;
+    function renderChampionRow(dept, users) {
+        var wrap = document.createElement('div');
+        wrap.className = 'ovp-champion-row';
+
+        // "carried over" marks a department nobody has rotated this week — the
+        // helper falls back to the last person set, so it is never empty.
+        var held = dept.current ? dept.current.name : 'not set';
+        var carried = dept.current && !dept.set_this_week ? ' (carried over)' : '';
+        var label = document.createElement('p');
+        label.className = 'accounts-group-label';
+        label.textContent = dept.label + ' — ' + held + carried;
+        wrap.appendChild(label);
+
+        var select = document.createElement('select');
+        select.className = 'form-input';
+        var blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = 'Select user...';
+        select.appendChild(blank);
+        users.forEach(function (u) {
+            var opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = u.name;
+            if (dept.current && dept.current.id === u.id) opt.selected = true;
+            select.appendChild(opt);
+        });
+        wrap.appendChild(select);
+
+        var actions = document.createElement('div');
+        actions.className = 'add-user-actions';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-primary';
+        btn.textContent = 'Set champion';
+        btn.addEventListener('click', function () {
+            if (!select.value) return;
             fetch('/admin/api/ovp-champion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: parseInt(userId, 10) })
+                body: JSON.stringify({
+                    department: dept.key,
+                    user_id: parseInt(select.value, 10)
+                })
             })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (data.success) {
-                        champCurrent.textContent = data.user.name;
-                        showToast('OVP champion set.', 'success');
+                        showToast(dept.label + ' champion set.', 'success');
+                        loadOvpChampion();
                     } else {
                         showToast(data.error || 'Could not set the champion.', 'error');
                     }
                 })
                 .catch(function () { showToast('Server error setting the champion.', 'error'); });
         });
+        actions.appendChild(btn);
+        wrap.appendChild(actions);
+
+        return wrap;
     }
 
     // ── Accounts ─────────────────────────────────────────

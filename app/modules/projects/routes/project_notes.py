@@ -213,31 +213,34 @@ def _build_chat_rows(notes, actor, is_admin):
     return rows
 
 
-@project_notes_bp.route('/projects/<int:project_id>/overlay/chat')
-@login_required
-def overlay_chat(project_id):
-    """Persistent chat drawer — every ProjectNote for this project, oldest first."""
-    project = Project.query.get_or_404(project_id)
-    actor = _get_actor()
+def render_project_chat(project, actor):
+    """The chat drawer's rendered content. Shared by the overlay drawer and the
+    global Chat tray, so there is one chat view rather than two.
+
+    Advances this user's "new chat" watermark — deliberately its own, separate
+    from the overlay's "new updates" one, so opening some other tab never
+    silently marks unread chat messages as read.
+    """
     notes = ProjectNote.query.filter_by(project_id=project.id).order_by(ProjectNote.created_at.asc()).all()
-    is_admin = can('manage_projects', actor)
     # At most one pinned note per project (enforced in toggle_pin_note).
     pinned_note = next((n for n in notes if n.is_pinned), None)
-
-    # Clears the Projects table's "new chat" dot for this project (26/27
-    # Aug 2026, per Ezekiel) — deliberately its own watermark, separate
-    # from overlay()'s "new updates" one in project_overlay.py, so opening
-    # some other tab never silently marks unread chat messages as read.
     mark_project_activity_seen(project, actor, 'chat')
 
     return render_template(
         'project_overlay/_overlay_chat.html',
         project=project,
-        chat_rows=_build_chat_rows(notes, actor, is_admin),
+        chat_rows=_build_chat_rows(notes, actor, can('manage_projects', actor)),
         pinned_note=pinned_note,
         can_manage_notes=_can_manage_notes(project, actor),
         actor=actor,
     )
+
+
+@project_notes_bp.route('/projects/<int:project_id>/overlay/chat')
+@login_required
+def overlay_chat(project_id):
+    """Persistent chat drawer — every ProjectNote for this project, oldest first."""
+    return render_project_chat(Project.query.get_or_404(project_id), _get_actor())
 
 
 @project_notes_bp.route('/projects/<int:project_id>/overlay/chat/mentionable')

@@ -1,0 +1,327 @@
+/* Signal tray — the two compact boards and the Friction Log inside the tray
+   shell. The item detail reuses feedback.css, which already loads globally. */
+
+.signal-tray {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.signal-tray__tabs {
+    flex-shrink: 0;
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.signal-tray__tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 13px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.signal-tray__tab:hover {
+    color: var(--text);
+}
+
+.signal-tray__tab.is-active {
+    color: var(--text);
+    border-bottom-color: var(--coral);
+}
+
+.signal-tray__tab.is-active svg {
+    stroke: var(--coral);
+}
+
+/* The only scrolling region — the tray panel itself never grows. */
+.signal-tray__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 14px 16px;
+}
+
+.signal-tray__toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.signal-tray__spacer {
+    flex-grow: 1;
+}
+
+.signal-tray__chip {
+    padding: 5px 11px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.signal-tray__chip:hover {
+    color: var(--text);
+}
+
+.signal-tray__chip.is-active {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+    color: var(--text);
+}
+
+.signal-tray__chip-n {
+    color: var(--text-faint);
+}
+
+.signal-tray__chip.is-active .signal-tray__chip-n {
+    color: var(--text-muted);
+}
+
+.signal-tray__new,
+.signal-tray__back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.signal-tray__new:hover,
+.signal-tray__back:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+
+.signal-tray__back {
+    margin-bottom: 12px;
+}
+
+.signal-tray__row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 4px;
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+}
+
+.signal-tray__row:hover {
+    background: var(--surface-hover);
+}
+
+.signal-tray__row:focus-visible {
+    outline: 2px solid var(--coral);
+    outline-offset: -2px;
+}
+
+/* Severity reads as a rank, so weight carries it rather than colour alone. */
+.signal-tray__sev {
+    width: 46px;
+    flex-shrink: 0;
+    text-align: center;
+    padding: 3px 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-faint);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.signal-tray__sev.is-high {
+    color: var(--tray-unread);
+    border-color: var(--tray-unread);
+}
+
+.signal-tray__sev.is-medium {
+    color: var(--coral);
+    border-color: var(--coral);
+}
+
+.signal-tray__sev.is-low {
+    color: var(--text-muted);
+}
+
+.signal-tray__vote {
+    width: 46px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 4px 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.signal-tray__vote:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+
+.signal-tray__vote.is-voted {
+    color: var(--coral);
+    border-color: var(--coral);
+}
+
+.signal-tray__row-mid {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.signal-tray__row-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.signal-tray__row-meta {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.signal-tray__row-right {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.signal-tray__pill {
+    padding: 3px 9px;
+    border-radius: 12px;
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.signal-tray__comments {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-faint);
+    font-size: 11px;
+}
+
+.signal-tray__empty {
+    margin: 24px auto;
+    color: var(--text-faint);
+    font-size: 12.5px;
+    text-align: center;
+}
+
+.signal-tray__form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 520px;
+}
+
+.signal-tray__label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* ── Friction Log ── */
+
+.signal-tray__intro {
+    margin: 0 0 12px;
+    padding: 9px 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.signal-tray__week {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 0 8px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.signal-tray__week-line {
+    flex-grow: 1;
+    height: 1px;
+    background: var(--border-subtle);
+}
+
+.signal-tray__week-tag {
+    color: var(--coral);
+}
+
+.signal-tray__entry {
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.signal-tray__entry-who {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.signal-tray__entry-body {
+    margin: 3px 0 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+}
+
+.signal-tray__composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.signal-tray__composer textarea {
+    flex-grow: 1;
+    resize: none;
+}

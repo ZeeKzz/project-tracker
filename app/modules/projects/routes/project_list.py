@@ -2,7 +2,7 @@
 # each viewing role, plus the JSON endpoints that power its filtering, sorting,
 # row expansion, and saved table views.
 
-from datetime import date, datetime
+from datetime import date
 from flask import Blueprint, render_template, session, request, jsonify, url_for, redirect
 from flask_login import login_required
 from sqlalchemy import nullslast, func, case
@@ -12,17 +12,9 @@ from app.modules.core.shared.models import Project, ProjectSecondaryCS, ProjectD
 from app.modules.core.shared.lib.status_vocabulary import derive_deliverable_status, derive_project_status, derive_customer_pipeline_status
 from app.modules.core.shared.services.status_tracking import bulk_project_status_started_at, bulk_project_client_approved_at
 from app.modules.core.shared.lib.capabilities import can, effective_user
+from app.modules.core.shared.lib.utils import ACTIVITY_SEEN_ROLLOUT_CUTOFF
 
 project_list_bp = Blueprint('project_list', __name__, url_prefix='/projects-new', template_folder='../templates')
-
-# Unread dots (26/27 Aug 2026, per Ezekiel) — hardcoded to (approximately)
-# the moment this feature shipped, same shape and same reasoning as
-# project_overlay.py's _EDIT_ACCESS_CUTOFF: a user with no ProjectActivitySeen
-# row for a given project is treated as having "seen" it at this fixed
-# instant, not as having never seen it — otherwise every project's entire
-# activity/chat history would light up unread the moment this ships. Only
-# genuinely new activity/chat from here forward ever shows a dot.
-_ACTIVITY_SEEN_ROLLOUT_CUTOFF = datetime(2026, 8, 27, 6, 15, 0)
 
 def _serialize_person(u):
     """Same architecture as dashboard.py's _serialize_person"""
@@ -171,12 +163,12 @@ def _has_unread_activity(last_activity_at, seen_at):
     on each row (see _serialize_row below): no activity of this kind has
     ever happened -> never unread. Activity exists but this user has no
     watermark row yet -> unread only if that activity happened after
-    _ACTIVITY_SEEN_ROLLOUT_CUTOFF (pre-existing history never lights up on
+    ACTIVITY_SEEN_ROLLOUT_CUTOFF (pre-existing history never lights up on
     rollout). Watermark set -> unread if the activity is newer than it.
     """
     if last_activity_at is None:
         return False
-    baseline = seen_at if seen_at is not None else _ACTIVITY_SEEN_ROLLOUT_CUTOFF
+    baseline = seen_at if seen_at is not None else ACTIVITY_SEEN_ROLLOUT_CUTOFF
     return last_activity_at > baseline
 
 
