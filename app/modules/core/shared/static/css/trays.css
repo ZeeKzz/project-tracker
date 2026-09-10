@@ -164,6 +164,20 @@
     color: var(--tray-on-accent);
 }
 
+/* The dark rules above out-rank the open state, so it needs its own — including
+   a hover variant, which out-ranks it too. */
+:root[data-theme="dark"] .tray-launcher.is-open,
+:root[data-theme="dark"] .tray-launcher.is-open:hover {
+    background: var(--coral);
+    border-color: var(--coral);
+    color: var(--tray-on-accent);
+}
+
+:root[data-theme="dark"] .tray-launcher.is-open .tray-launcher__bubble {
+    background: var(--tray-on-accent);
+    color: var(--coral);
+}
+
 :root[data-theme="dark"] .tray-panel {
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
 }
